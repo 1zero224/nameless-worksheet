@@ -1,0 +1,30 @@
+# 参考项目的只读克隆，不入库
+research/
+
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
+
+# 本地数据库
+.pgdata/
+pgdata/
+
+# 测试产物
+playwright-report/
+test-results/
+
+# 工具与系统
+.claude/
+.vscode/
+.idea/
+*.log
+Thumbs.db
+.DS_Store
