@@ -15,11 +15,13 @@ coverage/
 
 # 本地数据库
 .pgdata/
+.pgdata.pw
 pgdata/
 
 # 测试产物
 playwright-report/
 test-results/
+e2e/.state.json
 
 # 工具与系统
 .claude/

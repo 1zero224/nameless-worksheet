@@ -1,0 +1,17 @@
+worksheet.45.207.215.102.sslip.io {
+    encode zstd gzip
+    header {
+        -Server
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+    }
+    request_body {
+        max_size 1MB
+    }
+    reverse_proxy 172.19.0.1:18610 {
+        header_up X-Real-IP {remote_host}
+        flush_interval -1
+    }
+}

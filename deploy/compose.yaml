@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-worksheet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-nameless_worksheet}
+    command: ["postgres", "-c", "shared_buffers=128MB"]
+    volumes:
+      - ./pgdata:/var/lib/postgresql
+    mem_limit: 512m
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-worksheet} -d ${POSTGRES_DB:-nameless_worksheet}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: ghcr.io/1zero224/nameless-worksheet:${APP_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgres://${POSTGRES_USER:-worksheet}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-nameless_worksheet}
+      APP_ORIGIN: ${APP_ORIGIN:?APP_ORIGIN is required}
+      TRUST_PROXY: ${TRUST_PROXY:-172.19.0.0/16}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      REALTIME_RETENTION_HOURS: ${REALTIME_RETENTION_HOURS:-24}
+      REALTIME_REPLAY_LIMIT: ${REALTIME_REPLAY_LIMIT:-500}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WEB_DIST_DIR: /app/web-dist
+    ports:
+      - "172.19.0.1:18610:3000"
+    mem_limit: 512m
