@@ -12,6 +12,7 @@ import { LoginPage } from '@/pages/LoginPage.js';
 import { PlaceholderPage } from '@/pages/PlaceholderPage.js';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage.js';
 import { SettingsPage } from '@/pages/SettingsPage.js';
+import { WorksheetsPage } from '@/pages/WorksheetsPage.js';
 import { RealtimeClient } from '@/realtime/client.js';
 import { createRealtimeUrl, RealtimeProvider } from '@/realtime/context.js';
 
@@ -58,7 +59,7 @@ function AppRoutes() {
         >
           <Route index element={<PlaceholderPage title="首页" />} />
           <Route path="/my-tasks" element={<PlaceholderPage title="我的任务" />} />
-          <Route path="/worksheets" element={<PlaceholderPage title="工作表" />} />
+          <Route path="/worksheets" element={<WorksheetsPage />} />
           <Route path="/worksheets/:id" element={<PlaceholderPage title="工作表详情" />} />
           <Route path="/search" element={<PlaceholderPage title="资源检索" />} />
           <Route path="/references" element={<PlaceholderPage title="参考资料" />} />
