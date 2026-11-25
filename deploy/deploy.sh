@@ -43,7 +43,7 @@ set_tag() {
 set_tag "$NEW_TAG"
 docker compose pull app
 docker compose up -d db
-docker compose run --rm app node dist/cli.js migrate
+docker compose run --rm -T app node dist/cli.js migrate </dev/null
 docker compose up -d app
 
 echo "等待健康检查通过..."
