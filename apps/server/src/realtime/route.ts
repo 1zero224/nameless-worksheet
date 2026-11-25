@@ -55,6 +55,7 @@ export function registerRealtimeRoute(
         projectId: auth.projectId,
         sessionId: auth.sessionId,
         role: auth.role,
+        displayName: auth.displayName,
       });
     },
   );

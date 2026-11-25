@@ -3,6 +3,7 @@ import {
   CLOSE_PROTOCOL_ERROR,
   CLOSE_UNAUTHENTICATED,
   clientMessageSchema,
+  type PresencePeer,
   REALTIME_PROTOCOL,
   type RealtimeEventMessage,
   type Role,
@@ -16,6 +17,7 @@ import { isSessionValid } from '../auth/session.js';
 import type { Config } from '../config.js';
 import { type Db, schema } from '../db/index.js';
 import type { EventBus, StoredRealtimeEvent } from './bus.js';
+import { PresenceStore } from './presence.js';
 import type { ScopeRegistry } from './scopes.js';
 
 interface ScopeSubscriptionState {
@@ -28,6 +30,7 @@ interface ClientConnection {
   connId: string;
   socket: WebSocket;
   userId: string;
+  displayName: string;
   projectId: string;
   sessionId: string;
   role: Role;
@@ -44,6 +47,7 @@ export class RealtimeHub {
   private readonly bySession = new Map<string, Set<ClientConnection>>();
   private readonly byUser = new Map<string, Set<ClientConnection>>();
   private readonly byScope = new Map<string, Set<ClientConnection>>();
+  private readonly presence = new PresenceStore();
   private readonly unsubBus: () => void;
   private readonly heartbeatTimer: NodeJS.Timeout;
 
@@ -67,13 +71,14 @@ export class RealtimeHub {
 
   registerConnection(
     socket: WebSocket,
-    auth: { userId: string; projectId: string; sessionId: string; role: Role },
+    auth: { userId: string; displayName: string; projectId: string; sessionId: string; role: Role },
   ): string {
     const connId = randomBytes(12).toString('base64url');
     const conn: ClientConnection = {
       connId,
       socket,
       userId: auth.userId,
+      displayName: auth.displayName,
       projectId: auth.projectId,
       sessionId: auth.sessionId,
       role: auth.role,
@@ -184,7 +189,16 @@ export class RealtimeHub {
 
     const data = msg.data;
     if (data.t === 'presence') {
-      // 阶段 2 使用，阶段 1 忽略
+      if (data.scope.type !== 'worksheet') return;
+      const key = scopeKey(data.scope);
+      if (!conn.subscriptions.has(key)) return;
+      const updated = this.presence.updateFocus(key, conn.connId, data.focus);
+      if (!updated) return;
+      this.broadcastToScopeOthers(key, conn.connId, {
+        t: 'presence_update',
+        scope: data.scope,
+        peer: updated,
+      });
       return;
     }
 
@@ -308,6 +322,23 @@ export class RealtimeHub {
         this.send(conn, toStoredEventMessage(ev));
         sentMaxId = ev.id;
       }
+
+      // 工作表范围订阅成功后下发在线状态快照，并通知同表其他连接
+      if (scope.type === 'worksheet' && !conn.closed && conn.subscriptions.get(key) === state) {
+        const selfPeer: PresencePeer = {
+          connId: conn.connId,
+          userId: conn.userId,
+          displayName: conn.displayName,
+          focus: null,
+        };
+        const others = this.presence.join(key, selfPeer);
+        this.send(conn, { t: 'presence_snapshot', scope, peers: others });
+        this.broadcastToScopeOthers(key, conn.connId, {
+          t: 'presence_update',
+          scope,
+          peer: selfPeer,
+        });
+      }
     } catch {
       this.unsubscribeInternal(conn, key);
       this.send(conn, {
@@ -339,9 +370,26 @@ export class RealtimeHub {
     }
   }
 
+  private broadcastToScopeOthers(key: string, excludeConnId: string, msg: ServerMessage): void {
+    const conns = this.byScope.get(key);
+    if (!conns) return;
+    for (const c of conns) {
+      if (c.closed || c.connId === excludeConnId) continue;
+      this.send(c, msg);
+    }
+  }
+
   private unsubscribeInternal(conn: ClientConnection, key: string): void {
+    const state = conn.subscriptions.get(key);
     conn.subscriptions.delete(key);
     removeFromMapSet(this.byScope, key, conn);
+    if (state?.scope.type === 'worksheet' && this.presence.leave(key, conn.connId)) {
+      this.broadcastToScopeOthers(key, conn.connId, {
+        t: 'presence_leave',
+        scope: state.scope,
+        connId: conn.connId,
+      });
+    }
   }
 
   private removeConnection(conn: ClientConnection): void {
@@ -350,8 +398,15 @@ export class RealtimeHub {
     this.connections.delete(conn.connId);
     removeFromMapSet(this.bySession, conn.sessionId, conn);
     removeFromMapSet(this.byUser, conn.userId, conn);
-    for (const key of conn.subscriptions.keys()) {
+    for (const [key, state] of conn.subscriptions) {
       removeFromMapSet(this.byScope, key, conn);
+      if (state.scope.type === 'worksheet' && this.presence.leave(key, conn.connId)) {
+        this.broadcastToScopeOthers(key, conn.connId, {
+          t: 'presence_leave',
+          scope: state.scope,
+          connId: conn.connId,
+        });
+      }
     }
     conn.subscriptions.clear();
   }

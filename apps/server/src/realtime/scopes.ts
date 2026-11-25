@@ -1,4 +1,6 @@
 import { can, type Role } from '@nw/shared';
+import { and, eq, isNull } from 'drizzle-orm';
+import { type Db, schema } from '../db/index.js';
 
 export interface ScopeAuthInfo {
   userId: string;
@@ -22,12 +24,26 @@ export class ScopeRegistry {
   }
 }
 
-export function createDefaultScopeRegistry(): ScopeRegistry {
+export function createDefaultScopeRegistry(db: Db): ScopeRegistry {
   const registry = new ScopeRegistry();
   registry.register('project', (auth, scopeId) => scopeId === auth.projectId);
   registry.register(
     'diag',
     (auth, scopeId) => scopeId === auth.projectId && can(auth.role, 'diag.realtime'),
   );
+  registry.register('worksheet', async (auth, scopeId) => {
+    const [ws] = await db
+      .select({ id: schema.worksheets.id })
+      .from(schema.worksheets)
+      .where(
+        and(
+          eq(schema.worksheets.projectId, auth.projectId),
+          eq(schema.worksheets.id, scopeId),
+          isNull(schema.worksheets.deletedAt),
+        ),
+      )
+      .limit(1);
+    return Boolean(ws);
+  });
   return registry;
 }

@@ -68,7 +68,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   const pool = opts.pool ?? createPool(config.databaseUrl);
   const db = createDb(pool);
   const bus = new InProcessEventBus();
-  const scopeRegistry = createDefaultScopeRegistry();
+  const scopeRegistry = createDefaultScopeRegistry(db);
   const realtime = new RealtimeHub(db, bus, scopeRegistry, config, {
     heartbeatIntervalMs: opts.heartbeatIntervalMs,
   });
