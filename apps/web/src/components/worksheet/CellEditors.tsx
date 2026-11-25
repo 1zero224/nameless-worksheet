@@ -14,7 +14,17 @@ import {
   type UserListItem,
   type Work,
 } from '@nw/shared';
-import { Check, ExternalLink, MessageSquareText, Pencil, Plus, X } from 'lucide-react';
+import {
+  Check,
+  Download,
+  ExternalLink,
+  Link2,
+  MessageSquareText,
+  Paperclip,
+  Pencil,
+  Plus,
+  X,
+} from 'lucide-react';
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/api/client.js';
 import {
@@ -35,6 +45,67 @@ export interface ActiveCellConflict {
 export interface StageCellConflict {
   actorDisplayName: string;
   remoteCell: StageCell;
+}
+
+export interface CellEditSignal {
+  nonce: number;
+  initialChar?: string;
+}
+
+/** 阶段 3 工序格直挂附件角标数据结构（当前阶段 2 为空，保留无缝衔接接口） */
+export interface StageAttachmentSummary {
+  kind: 'r2' | 'link';
+  label: string;
+  url?: string;
+  onClick?: () => void;
+}
+
+/** 阶段 3 工序格右侧最新附件快捷角标槽位（点击阻止冒泡，直通下载或网盘） */
+export function StageAttachmentBadge({
+  attachment,
+}: {
+  attachment?: StageAttachmentSummary | null;
+}) {
+  if (!attachment) return null;
+
+  if (attachment.url && /^https?:\/\//i.test(attachment.url)) {
+    return (
+      <a
+        href={attachment.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        title={attachment.label}
+        className="inline-flex shrink-0 items-center gap-0.5 rounded bg-white/85 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 ring-1 ring-slate-200/90 transition-colors hover:bg-white hover:text-sky-700"
+      >
+        {attachment.kind === 'r2' ? (
+          <Download className="h-2.5 w-2.5" />
+        ) : (
+          <Link2 className="h-2.5 w-2.5" />
+        )}
+        <span>{attachment.label}</span>
+      </a>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        attachment.onClick?.();
+      }}
+      title={attachment.label}
+      className="inline-flex shrink-0 items-center gap-0.5 rounded bg-white/85 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 ring-1 ring-slate-200/90 transition-colors hover:bg-white hover:text-sky-700 cursor-pointer"
+    >
+      {attachment.kind === 'r2' ? (
+        <Download className="h-2.5 w-2.5" />
+      ) : (
+        <Link2 className="h-2.5 w-2.5" />
+      )}
+      <span>{attachment.label}</span>
+    </button>
+  );
 }
 
 function PeerOverlay({ peer }: { peer?: PresencePeer }) {
@@ -61,7 +132,7 @@ function PeerOverlay({ peer }: { peer?: PresencePeer }) {
   );
 }
 
-// ---- 内联文本/日期/链接单元格（支持 IME 保护与冲突浮条） ----
+// ---- 内联文本/日期/链接单元格（支持键盘导航、IME 保护与冲突浮条） ----
 
 export function InlineTextCell({
   taskId,
@@ -71,10 +142,12 @@ export function InlineTextCell({
   inputType = 'text',
   required = false,
   selected,
+  editSignal,
   peer,
   remoteConflict,
   onSelect,
   onEditingChange,
+  onMoveAfterCommit,
   onClearConflict,
   onAcceptRemote,
   onCommit,
@@ -86,10 +159,12 @@ export function InlineTextCell({
   inputType?: 'text' | 'date' | 'link';
   required?: boolean;
   selected: boolean;
+  editSignal?: CellEditSignal | null;
   peer?: PresencePeer;
   remoteConflict: ActiveCellConflict | null;
   onSelect: () => void;
   onEditingChange: (editing: boolean) => void;
+  onMoveAfterCommit?: (direction: 'down' | 'right' | 'left') => void;
   onClearConflict: () => void;
   onAcceptRemote: (val: string) => void;
   onCommit: (nextValue: string, baseValue: string, force: boolean) => Promise<void>;
@@ -103,6 +178,8 @@ export function InlineTextCell({
   const savingRef = useRef(false);
   const isComposingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const lastEditNonceRef = useRef<number>(0);
 
   const conflict = remoteConflict ?? localConflict;
 
@@ -113,18 +190,31 @@ export function InlineTextCell({
     }
   }, [value, editing, saveError, conflict]);
 
-  const enterEdit = () => {
+  const enterEdit = (initialChar?: string) => {
     if (editing) return;
-    setDraft(value);
+    setDraft(initialChar !== undefined && inputType !== 'date' ? initialChar : value);
     setBaseValue(value);
     setLocalConflict(null);
     setSaveError(null);
     setEditing(true);
     onEditingChange(true);
     requestAnimationFrame(() => {
-      inputRef.current?.focus();
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      if (initialChar !== undefined && inputType !== 'date') {
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
     });
   };
+
+  // 响应外部键盘 Enter / F2 / 直接键入字符触发编辑
+  useEffect(() => {
+    if (!editSignal || editSignal.nonce === lastEditNonceRef.current) return;
+    lastEditNonceRef.current = editSignal.nonce;
+    enterEdit(editSignal.initialChar);
+  });
 
   const cancelEdit = () => {
     setEditing(false);
@@ -133,9 +223,12 @@ export function InlineTextCell({
     setSaveError(null);
     onClearConflict();
     onEditingChange(false);
+    requestAnimationFrame(() => {
+      triggerRef.current?.focus();
+    });
   };
 
-  const commitValue = async (force: boolean) => {
+  const commitValue = async (force: boolean, moveAfter?: 'down' | 'right' | 'left') => {
     if (savingRef.current) return;
     const trimmed = draft.trim();
     if (required && !trimmed) {
@@ -145,6 +238,9 @@ export function InlineTextCell({
     if (!force && trimmed === baseValue && !conflict) {
       setEditing(false);
       onEditingChange(false);
+      if (moveAfter) {
+        onMoveAfterCommit?.(moveAfter);
+      }
       return;
     }
     savingRef.current = true;
@@ -156,6 +252,9 @@ export function InlineTextCell({
       onClearConflict();
       setEditing(false);
       onEditingChange(false);
+      if (moveAfter) {
+        onMoveAfterCommit?.(moveAfter);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.code === 'FIELD_CONFLICT') {
         const details = err.details as
@@ -176,17 +275,25 @@ export function InlineTextCell({
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    // 中文输入法组字期间禁止按 Enter 提前提交
-    if (e.key === 'Enter' && (isComposingRef.current || e.nativeEvent.isComposing)) {
+    // 中文输入法组字期间禁止按 Enter / Tab 提前提交
+    if (isComposingRef.current || e.nativeEvent.isComposing) {
       return;
     }
     if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       if (!conflict) {
-        void commitValue(false);
+        void commitValue(false, 'down');
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!conflict) {
+        void commitValue(false, e.shiftKey ? 'left' : 'right');
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       cancelEdit();
     }
   };
@@ -195,8 +302,8 @@ export function InlineTextCell({
     <div
       data-testid={`cell-${taskId}-${columnKey}`}
       className={cn(
-        'relative flex min-h-[38px] w-full items-center px-2 py-1 text-sm',
-        selected && !editing && 'ring-2 ring-inset ring-slate-900/70',
+        'relative flex min-h-[36px] w-full items-center px-2 text-[13px]',
+        selected && !editing && 'ring-2 ring-inset ring-sky-500',
         saveError && 'ring-2 ring-inset ring-red-500 bg-red-50/40',
       )}
     >
@@ -222,11 +329,12 @@ export function InlineTextCell({
             void commitValue(false);
           }}
           aria-label={`编辑 ${columnKey}`}
-          className="w-full rounded border border-slate-900 bg-white px-1.5 py-0.5 text-sm text-slate-900 outline-none"
+          className="-mx-2 h-[36px] w-[calc(100%+16px)] bg-white px-2 text-[13px] text-slate-900 ring-2 ring-inset ring-sky-500 outline-none"
         />
       ) : (
         <div className="flex w-full min-w-0 items-center justify-between gap-1">
           <button
+            ref={triggerRef}
             type="button"
             onClick={(e) => {
               e.stopPropagation();
@@ -234,16 +342,19 @@ export function InlineTextCell({
             }}
             onDoubleClick={(e) => {
               e.stopPropagation();
+              onSelect();
               enterEdit();
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' || e.key === 'F2') {
                 e.preventDefault();
+                e.stopPropagation();
+                onSelect();
                 enterEdit();
               }
             }}
             className={cn(
-              'min-h-[28px] min-w-0 flex-1 truncate text-left outline-none cursor-text',
+              'min-h-[32px] min-w-0 flex-1 truncate text-left outline-none cursor-text',
               value ? 'text-slate-900' : 'text-slate-400',
               columnKey === 'title' && 'font-medium',
             )}
@@ -356,7 +467,10 @@ export function WorkCellEditor({
   taskId,
   workId,
   works,
+  selected = false,
+  editSignal,
   peer,
+  onSelect,
   onFocusChange,
   onSelectWork,
   onRenameWork,
@@ -364,7 +478,10 @@ export function WorkCellEditor({
   taskId: string;
   workId: string | null;
   works: Work[];
+  selected?: boolean;
+  editSignal?: CellEditSignal | null;
   peer?: PresencePeer;
+  onSelect?: () => void;
   onFocusChange: (editing: boolean | null) => void;
   onSelectWork: (next: { workId?: string | null; workName?: string | null }) => Promise<void>;
   onRenameWork: (targetWorkId: string, newName: string) => Promise<void>;
@@ -373,6 +490,16 @@ export function WorkCellEditor({
   const [query, setQuery] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState('');
+  const lastEditNonceRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!editSignal || editSignal.nonce === lastEditNonceRef.current) return;
+    lastEditNonceRef.current = editSignal.nonce;
+    setOpen(true);
+    setQuery('');
+    setRenamingId(null);
+    onFocusChange(true);
+  });
 
   const currentWork = workId ? works.find((w) => w.id === workId) : null;
   const trimmed = query.trim();
@@ -388,6 +515,7 @@ export function WorkCellEditor({
         setOpen(next);
         setQuery('');
         setRenamingId(null);
+        if (next) onSelect?.();
         onFocusChange(next ? true : null);
       }}
     >
@@ -395,7 +523,11 @@ export function WorkCellEditor({
         <button
           type="button"
           data-testid={`cell-${taskId}-work`}
-          className="relative flex min-h-[38px] w-full items-center px-2 py-1 text-left text-sm hover:bg-slate-50 cursor-pointer"
+          onClick={() => onSelect?.()}
+          className={cn(
+            'relative flex min-h-[36px] w-full items-center px-2 text-left text-[13px] transition-colors hover:bg-slate-50 outline-none cursor-pointer',
+            selected && !open && 'ring-2 ring-inset ring-sky-500',
+          )}
         >
           <PeerOverlay peer={peer} />
           {currentWork ? (
@@ -403,7 +535,7 @@ export function WorkCellEditor({
               {currentWork.name}
             </span>
           ) : (
-            <span className="text-xs text-slate-400">选择作品</span>
+            <span className="text-xs text-slate-300">—</span>
           )}
         </button>
       </PopoverTrigger>
@@ -512,24 +644,51 @@ export function WorkCellEditor({
 export function PriorityCellEditor({
   taskId,
   priority,
+  selected = false,
+  editSignal,
   peer,
+  onSelectCell,
+  onFocusChange,
   onSelect,
 }: {
   taskId: string;
   priority: Priority;
+  selected?: boolean;
+  editSignal?: CellEditSignal | null;
   peer?: PresencePeer;
+  onSelectCell?: () => void;
+  onFocusChange?: (editing: boolean | null) => void;
   onSelect: (next: Priority) => Promise<void>;
 }) {
+  const [open, setOpen] = useState(false);
+  const lastEditNonceRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!editSignal || editSignal.nonce === lastEditNonceRef.current) return;
+    lastEditNonceRef.current = editSignal.nonce;
+    setOpen(true);
+    onFocusChange?.(true);
+  });
+
   return (
     <div
       data-testid={`cell-${taskId}-priority`}
-      className="relative flex min-h-[38px] w-full items-center px-2 py-1"
+      className={cn(
+        'relative flex min-h-[36px] w-full items-center px-2',
+        selected && !open && 'ring-2 ring-inset ring-sky-500',
+      )}
     >
       <PeerOverlay peer={peer} />
       <SelectField
         aria-label="优先级"
         variant="pill"
         size="xs"
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) onSelectCell?.();
+          onFocusChange?.(next ? true : null);
+        }}
         value={priority}
         onValueChange={(val) => void onSelect(val as Priority)}
         className={PRIORITY_STYLES[priority]}
@@ -550,7 +709,10 @@ export function PublishCellEditor({
   publishStatus,
   publishedAt,
   publishUrl,
+  selected = false,
+  editSignal,
   peer,
+  onSelect,
   onFocusChange,
   onSave,
 }: {
@@ -558,7 +720,10 @@ export function PublishCellEditor({
   publishStatus: PublishStatus;
   publishedAt: string | null;
   publishUrl: string | null;
+  selected?: boolean;
+  editSignal?: CellEditSignal | null;
   peer?: PresencePeer;
+  onSelect?: () => void;
   onFocusChange: (editing: boolean | null) => void;
   onSave: (patch: {
     publishStatus: PublishStatus;
@@ -572,6 +737,7 @@ export function PublishCellEditor({
   const [url, setUrl] = useState(publishUrl ?? '');
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const lastEditNonceRef = useRef<number>(0);
 
   const openPopover = (next: boolean) => {
     if (next) {
@@ -579,10 +745,17 @@ export function PublishCellEditor({
       setDate(publishedAt ?? '');
       setUrl(publishUrl ?? '');
       setErr(null);
+      onSelect?.();
     }
     setOpen(next);
     onFocusChange(next ? true : null);
   };
+
+  useEffect(() => {
+    if (!editSignal || editSignal.nonce === lastEditNonceRef.current) return;
+    lastEditNonceRef.current = editSignal.nonce;
+    openPopover(true);
+  });
 
   const handleSave = async () => {
     setSaving(true);
@@ -608,12 +781,16 @@ export function PublishCellEditor({
         <button
           type="button"
           data-testid={`cell-${taskId}-publish`}
-          className="relative flex min-h-[38px] w-full items-center justify-between gap-1 px-2 py-1 text-left text-xs hover:bg-slate-50 cursor-pointer"
+          onClick={() => onSelect?.()}
+          className={cn(
+            'relative flex min-h-[36px] w-full items-center justify-between gap-1 px-2 text-left text-xs transition-colors hover:bg-slate-50 outline-none cursor-pointer',
+            selected && !open && 'ring-2 ring-inset ring-sky-500',
+          )}
         >
           <PeerOverlay peer={peer} />
           <span
             className={cn(
-              'truncate rounded-full px-2 py-0.5 font-medium',
+              'truncate rounded-full px-2 py-0.5 text-[11px] font-medium',
               publishStatus === 'published'
                 ? 'bg-emerald-100 text-emerald-800'
                 : 'bg-slate-100 text-slate-600',
@@ -694,7 +871,7 @@ export function PublishCellEditor({
   );
 }
 
-// ---- 工序格 Popover（负责人多选+纯文本、4 状态、备注、并发冲突保护） ----
+// ---- 工序格 Popover（整格状态着色 + 附件快捷角标槽位 + 负责人多选 + 并发冲突保护） ----
 
 export function StageCellEditor({
   taskId,
@@ -703,8 +880,12 @@ export function StageCellEditor({
   cell,
   users,
   userMap,
+  selected = false,
+  editSignal,
+  attachment = null,
   peer,
   remoteConflict,
+  onSelect,
   onFocusChange,
   onClearConflict,
   onCommit,
@@ -715,8 +896,12 @@ export function StageCellEditor({
   cell: StageCell;
   users: UserListItem[];
   userMap: Map<string, string>;
+  selected?: boolean;
+  editSignal?: CellEditSignal | null;
+  attachment?: StageAttachmentSummary | null;
   peer?: PresencePeer;
   remoteConflict: StageCellConflict | null;
+  onSelect?: () => void;
   onFocusChange: (editing: boolean | null) => void;
   onClearConflict: () => void;
   onCommit: (payload: {
@@ -736,6 +921,7 @@ export function StageCellEditor({
   const [localConflict, setLocalConflict] = useState<StageCellConflict | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const lastEditNonceRef = useRef<number>(0);
 
   const conflict = remoteConflict ?? localConflict;
 
@@ -749,6 +935,7 @@ export function StageCellEditor({
       setLocalConflict(null);
       setErr(null);
       onClearConflict();
+      onSelect?.();
     } else {
       setLocalConflict(null);
       onClearConflict();
@@ -756,6 +943,12 @@ export function StageCellEditor({
     setOpen(next);
     onFocusChange(next ? true : null);
   };
+
+  useEffect(() => {
+    if (!editSignal || editSignal.nonce === lastEditNonceRef.current) return;
+    lastEditNonceRef.current = editSignal.nonce;
+    openPopover(true);
+  });
 
   const toggleUser = (userId: string) => {
     setAssignees((prev) =>
@@ -816,12 +1009,18 @@ export function StageCellEditor({
     a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name,
   );
   const statusStyle = STAGE_STATUS_STYLES[cell.status];
-  const summaryText =
+  const fullNamesText = displayNames.join('、');
+  const compactNamesText =
+    displayNames.length <= 2
+      ? fullNamesText
+      : `${displayNames[0]}、${displayNames[1]} +${displayNames.length - 2}`;
+
+  const tooltipText =
     cell.status === 'na'
-      ? '不适用'
-      : displayNames.length > 0
-        ? `${displayNames.join('、')} · ${STAGE_STATUS_LABELS[cell.status]}`
-        : STAGE_STATUS_LABELS[cell.status];
+      ? `${columnName}：不适用`
+      : fullNamesText
+        ? `${columnName}：${fullNamesText} · ${STAGE_STATUS_LABELS[cell.status]}${cell.note ? `（${cell.note}）` : ''}`
+        : `${columnName}：${STAGE_STATUS_LABELS[cell.status]} · 待认领${cell.note ? `（${cell.note}）` : ''}`;
 
   return (
     <Popover open={open} onOpenChange={openPopover}>
@@ -829,24 +1028,59 @@ export function StageCellEditor({
         <button
           type="button"
           data-testid={`cell-${taskId}-${columnId}`}
-          className="relative flex min-h-[38px] w-full items-center gap-1 px-1.5 py-1 text-left cursor-pointer"
+          data-stage-status={cell.status}
+          title={tooltipText}
+          onClick={() => onSelect?.()}
+          className={cn(
+            'relative flex min-h-[36px] w-full items-center justify-between gap-1.5 px-2.5 text-left text-[13px] transition-colors outline-none cursor-pointer',
+            statusStyle.fill,
+            selected && !open && 'ring-2 ring-inset ring-sky-500',
+          )}
         >
+          {/* 左侧 2px 状态细色条（进行中/已完成一眼辨识） */}
+          {statusStyle.accent && (
+            <span
+              aria-hidden="true"
+              className={cn(
+                'pointer-events-none absolute inset-y-0 left-0 w-[2px]',
+                statusStyle.accent,
+              )}
+            />
+          )}
           <PeerOverlay peer={peer} />
-          <span
-            className={cn(
-              'flex min-w-0 flex-1 items-center justify-between gap-1 rounded border px-2 py-1 text-xs font-medium',
-              statusStyle.cell,
+
+          {/* 左侧：状态指示器 + 负责人 */}
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            {cell.status === 'done' ? (
+              <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 stroke-[2.5]" />
+            ) : cell.status === 'na' ? null : (
+              <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', statusStyle.dot)} />
             )}
-          >
-            <span className="truncate" title={summaryText}>
-              {summaryText}
-            </span>
-            {cell.note && (
-              <span title={cell.note} className="shrink-0 opacity-75">
-                <MessageSquareText className="h-3 w-3" />
+
+            {cell.status === 'na' ? (
+              <span className="truncate text-xs text-slate-400">—</span>
+            ) : displayNames.length > 0 ? (
+              <span className={cn('truncate', statusStyle.text)}>{compactNamesText}</span>
+            ) : cell.status === 'not_started' ? (
+              <span className="truncate text-xs text-slate-400">待认领</span>
+            ) : (
+              <span className={cn('truncate text-xs opacity-80', statusStyle.text)}>
+                {STAGE_STATUS_LABELS[cell.status]}
               </span>
             )}
           </span>
+
+          {/* 右侧：附件快捷角标槽位（阶段 3）+ 备注图标 */}
+          {(attachment || cell.note) && (
+            <span className="flex shrink-0 items-center gap-1">
+              <StageAttachmentBadge attachment={attachment} />
+              {cell.note && (
+                <span title={cell.note} className="shrink-0 text-slate-400">
+                  <MessageSquareText className="h-3 w-3" />
+                </span>
+              )}
+            </span>
+          )}
         </button>
       </PopoverTrigger>
 
@@ -1003,6 +1237,15 @@ export function StageCellEditor({
             className="h-8 text-xs"
             maxLength={200}
           />
+        </div>
+
+        {/* 阶段 3 工序直挂附件预留槽位 */}
+        <div className="flex items-center justify-between rounded-md border border-dashed border-slate-200 bg-slate-50/70 px-2.5 py-1.5 text-[11px] text-slate-400">
+          <span className="inline-flex items-center gap-1.5">
+            <Paperclip className="h-3 w-3" />
+            本工序附件（阶段 3 接入）
+          </span>
+          <span>直挂新版 / 网盘</span>
         </div>
 
         <div className="flex justify-end gap-1.5">

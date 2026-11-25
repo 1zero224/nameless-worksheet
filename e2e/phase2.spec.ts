@@ -112,6 +112,17 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
     // 确认导航无“归档”入口（ADR-0004）
     await expect(pageA.getByRole('link', { name: '归档' })).toHaveCount(0);
 
+    // 验证首页右上角「管理看板列」弹窗可用
+    await pageA.getByRole('button', { name: '管理看板列' }).click();
+    await expect(pageA.getByRole('heading', { name: '管理看板列' })).toBeVisible();
+    await pageA.getByRole('button', { name: '关闭', exact: true }).click();
+
+    // 验证桌面端左侧栏可折叠再展开
+    await pageA.getByRole('button', { name: '折叠侧栏' }).click();
+    await expect(pageA.getByTestId('sidebar-worksheets')).toHaveCount(0);
+    await pageA.getByRole('button', { name: '展开侧栏' }).click();
+    await expect(pageA.getByTestId('sidebar-worksheets')).toBeVisible();
+
     // V1: 普通用户进入 /worksheets，新建工作表（标准视频模板）
     await pageA.goto('/worksheets');
     await pageA.getByRole('button', { name: '新建工作表' }).click();
@@ -133,40 +144,58 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
     await pageA.getByTestId('sidebar-worksheets').getByRole('link', { name: '演唱会视频' }).click();
     await expect(pageA.getByRole('heading', { name: '演唱会视频' })).toBeVisible();
 
-    // 新增不上看板工序列「压制」与自定义文本列「片源备注」
-    await pageA.getByRole('button', { name: '列设置' }).click();
+    // 新增不上看板工序列「压制」与自定义文本列「片源备注」（表头 + 原地新增）
+    await pageA.getByTestId('add-column-trigger').click();
     await pageA.getByLabel('列名', { exact: true }).fill('压制');
-    await pageA.getByLabel('看板列映射', { exact: true }).click();
+    await pageA.getByLabel('对应看板列', { exact: true }).click();
     await pageA.getByRole('option', { name: '不上看板', exact: true }).click();
     await pageA.getByRole('button', { name: '添加列' }).click();
     await expect(pageA.getByText('已新增列')).toBeVisible();
 
+    await pageA.getByTestId('add-column-trigger').click();
     await pageA.getByLabel('列名', { exact: true }).fill('片源备注');
-    await pageA.getByLabel('列类型', { exact: true }).click();
-    await pageA.getByRole('option', { name: '文本', exact: true }).click();
+    await pageA
+      .getByRole('radiogroup', { name: '列类型' })
+      .getByRole('button', { name: '文本', exact: true })
+      .click();
     await pageA.getByRole('button', { name: '添加列' }).click();
-    await pageA.getByRole('button', { name: '关闭', exact: true }).click();
+    await expect(pageA.getByTestId('worksheet-main-table')).toContainText('片源备注');
+
+    // 验证表头点击原地菜单（改名、隐藏、再通过字段显隐恢复）
+    await pageA.getByRole('button', { name: '片源备注' }).click();
+    await pageA.getByRole('button', { name: '隐藏此列' }).click();
+    await expect(pageA.getByTestId('worksheet-main-table')).not.toContainText('片源备注');
+    await pageA.getByTestId('field-visibility-trigger').click();
+    await pageA.getByRole('button', { name: '显示列 片源备注' }).click();
+    await expect(pageA.getByTestId('worksheet-main-table')).toContainText('片源备注');
+    await pageA.keyboard.press('Escape');
 
     // V2: 新建任务、填分工说明、新建作品、录入项目用户与纯文本负责人
     await pageA.getByLabel('新建任务标题').fill('5th 花絮 P1');
     await pageA.getByLabel('新建任务标题').press('Enter');
     await expect(pageA.getByTestId('worksheet-main-table')).toContainText('5th 花絮 P1');
 
-    // 在下方插入一行
+    // 在下方插入一行（行操作菜单 -> 贴合网格原地插入行）
     const row1 = pageA.locator('tr[data-task-row]').first();
     const task1Id = (await row1.getAttribute('data-task-row')) ?? '';
     expect(task1Id).toBeTruthy();
 
     await row1.hover();
-    await pageA.getByRole('button', { name: '在 5th 花絮 P1 下方插入行' }).click();
+    await pageA.getByRole('button', { name: '行操作 5th 花絮 P1' }).click();
+    await pageA.getByRole('menuitem', { name: '在下方插入一行' }).click();
     await pageA.getByPlaceholder('输入新任务标题回车确认').fill('5th 花絮 P2');
     await pageA.getByRole('button', { name: '插入', exact: true }).click();
     await expect(pageA.getByTestId('worksheet-main-table')).toContainText('5th 花絮 P2');
 
-    // 编辑分工说明（P1 00:00–13:00）
+    // 键盘方向键导航：选中标题格 -> ArrowRight 到作品 -> ArrowRight 到分工说明 -> Enter 编辑并提交
+    const titleCell1 = pageA.getByTestId(`cell-${task1Id}-title`);
+    await titleCell1.getByRole('button').click();
+    await pageA.keyboard.press('ArrowRight');
+    await pageA.keyboard.press('ArrowRight');
     const divCell = pageA.getByTestId(`cell-${task1Id}-divisionNote`);
-    await divCell.getByRole('button').dblclick();
+    await pageA.keyboard.press('Enter');
     const divInput = divCell.locator('input');
+    await expect(divInput).toBeVisible();
     await divInput.fill('P1 00:00–13:00');
     await divInput.press('Enter');
     await expect(divCell).toContainText('P1 00:00–13:00');
@@ -186,7 +215,8 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
     await stagePopover.getByPlaceholder('输入纯文本名字（如外援小王）').fill('外援小王');
     await stagePopover.getByRole('button', { name: '添加', exact: true }).click();
     await stagePopover.getByRole('button', { name: '保存', exact: true }).click();
-    await expect(stageCell1).toContainText(`${USER_A_NAME}、外援小王 · 进行中`);
+    await expect(stageCell1).toContainText(`${USER_A_NAME}、外援小王`);
+    await expect(stageCell1).toHaveAttribute('data-stage-status', 'in_progress');
 
     // V3: 新建一条“全工序完成但未发布”任务 -> 不应折叠；将 P2 标为已发布 -> 移入顶部已发布折叠区
     await pageA.getByLabel('新建任务标题').fill('待发全完任务');
@@ -211,7 +241,8 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
 
     // V4: 删除「待发全完任务」，由另一用户在修改记录中一键恢复
     await rowDone.hover();
-    await pageA.getByRole('button', { name: '删除任务 待发全完任务' }).click();
+    await pageA.getByRole('button', { name: '行操作 待发全完任务' }).click();
+    await pageA.getByRole('menuitem', { name: '删除任务' }).click();
     await expect(pageA.getByTestId('worksheet-main-table')).not.toContainText('待发全完任务');
 
     const ctxB = await browser.newContext();

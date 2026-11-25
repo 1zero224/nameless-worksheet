@@ -68,27 +68,39 @@ export const WORKSHEET_COLOR_STYLES: Record<
 
 export const STAGE_STATUS_STYLES: Record<
   StageStatus,
-  { cell: string; dot: string; badge: string }
+  { cell: string; fill: string; accent: string; dot: string; badge: string; text: string }
 > = {
   not_started: {
     cell: 'bg-slate-50 text-slate-600 border-slate-200',
+    fill: 'bg-white hover:bg-slate-50/90',
+    accent: '',
     dot: 'bg-slate-300',
     badge: 'bg-slate-100 text-slate-700',
+    text: 'text-slate-700',
   },
   in_progress: {
     cell: 'bg-sky-50 text-sky-800 border-sky-200',
+    fill: 'bg-sky-50/90 hover:bg-sky-100/70',
+    accent: 'bg-sky-500',
     dot: 'bg-sky-500',
     badge: 'bg-sky-100 text-sky-800',
+    text: 'text-sky-900 font-medium',
   },
   done: {
     cell: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    fill: 'bg-emerald-50/90 hover:bg-emerald-100/70',
+    accent: 'bg-emerald-500',
     dot: 'bg-emerald-500',
     badge: 'bg-emerald-100 text-emerald-800',
+    text: 'text-emerald-900 font-medium',
   },
   na: {
     cell: 'bg-slate-100/60 text-slate-400 border-slate-200/60',
+    fill: 'bg-slate-100/80 hover:bg-slate-100',
+    accent: '',
     dot: 'bg-slate-200',
     badge: 'bg-slate-100 text-slate-400',
+    text: 'text-slate-400',
   },
 };
 

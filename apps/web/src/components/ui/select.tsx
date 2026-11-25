@@ -131,6 +131,8 @@ export interface SelectFieldProps {
   id?: string;
   value: string;
   onValueChange: (value: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   options: SelectOption[];
   placeholder?: string;
   disabled?: boolean;
@@ -147,6 +149,8 @@ export function SelectField({
   id,
   value,
   onValueChange,
+  open,
+  onOpenChange,
   options,
   placeholder,
   disabled,
@@ -188,6 +192,8 @@ export function SelectField({
 
   return (
     <RadixSelect.Root
+      open={open}
+      onOpenChange={onOpenChange}
       value={toRadixValue(value)}
       onValueChange={(next) => onValueChange(fromRadixValue(next))}
       disabled={disabled}

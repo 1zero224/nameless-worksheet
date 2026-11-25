@@ -7,12 +7,14 @@ import {
   type UserListItem,
 } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Check, Hand, X } from 'lucide-react';
+import { ArrowRight, Check, Columns3, Hand, SlidersHorizontal, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
+import { SidebarExpandButton } from '@/app/AppShell.js';
 import { useMe } from '@/app/AuthContext.js';
+import { BoardColumnsModal } from '@/components/board/BoardColumnsModal.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import {
   PRIORITY_STYLES,
@@ -36,6 +38,9 @@ export function HomePage() {
   );
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
+
+  // 管理看板列弹窗
+  const [boardColsModalOpen, setBoardColsModalOpen] = useState(false);
 
   // 正在认领的 (taskId:columnId) 集合，防连点
   const [claimingKeys, setClaimingKeys] = useState<Set<string>>(new Set());
@@ -188,31 +193,44 @@ export function HomePage() {
       .join('、');
 
   return (
-    <div className="space-y-4">
-      {/* 标题行 */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">首页</h1>
-          <p className="text-xs text-slate-500">跨工作表任务流转看板，实时同步</p>
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      {/* 极简顶栏（44px） */}
+      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <SidebarExpandButton />
+          <h1 className="truncate text-[15px] font-semibold text-slate-900">首页</h1>
+          <span className="hidden text-xs text-slate-400 sm:inline">· 跨工作表任务流转看板</span>
         </div>
-        <Link
-          to="/worksheets"
-          className="text-xs font-medium text-slate-600 hover:text-slate-900 hover:underline"
-        >
-          配置工作表与看板列 →
-        </Link>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setBoardColsModalOpen(true)}
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+          >
+            <Columns3 className="h-3.5 w-3.5 text-slate-400" />
+            管理看板列
+          </button>
+          <Link
+            to="/worksheets"
+            className="hidden h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:inline-flex"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            工作表总览
+          </Link>
+        </div>
       </div>
 
-      {/* 顶部“我进行中的任务”条 */}
+      {/* 顶部紧凑“我进行中的任务”横条 */}
       {board && (
         <section
           data-testid="my-in-progress-bar"
-          className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-2xs"
+          className="shrink-0 border-b border-slate-200/80 bg-sky-50/35 px-3 py-1.5"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-900">我进行中的任务</span>
-              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">
+              <span className="text-xs font-semibold text-slate-800">我进行中的任务</span>
+              <span className="rounded-full bg-sky-100 px-1.5 py-0 text-[11px] font-medium text-sky-800">
                 {board.myInProgress.length}
               </span>
               {board.myInProgress.length === 0 && (
@@ -226,12 +244,12 @@ export function HomePage() {
               {board.myPendingCount > 0
                 ? `另有 ${board.myPendingCount} 项已认领待开始 · 前往我的任务`
                 : '前往我的任务'}
-              <ArrowRight className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
 
           {board.myInProgress.length > 0 && (
-            <div className="mt-2.5 flex flex-wrap gap-2">
+            <div className="mt-1.5 flex gap-2 overflow-x-auto pb-0.5">
               {board.myInProgress.map((item) => {
                 const wsColor =
                   WORKSHEET_COLOR_STYLES[item.worksheetColor] ?? WORKSHEET_COLOR_STYLES.sky;
@@ -239,53 +257,44 @@ export function HomePage() {
                   <div
                     key={`${item.taskId}:${item.stageColumnId}`}
                     data-testid={`my-in-progress-item-${item.taskId}-${item.stageColumnId}`}
-                    className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-xs"
+                    className="flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200/90 bg-white px-2.5 py-1 text-xs shadow-2xs"
                   >
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-medium',
-                        wsColor.badge,
-                      )}
-                    >
-                      <span className={cn('h-1.5 w-1.5 rounded-full', wsColor.dot)} />
-                      {item.worksheetName}
-                    </span>
+                    <span className={cn('h-2 w-2 shrink-0 rounded-full', wsColor.dot)} />
+                    <span className="text-[11px] text-slate-500">{item.worksheetName}</span>
                     {item.workName && (
-                      <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-700">
+                      <span className="rounded bg-indigo-50 px-1.5 py-0.25 text-[11px] font-medium text-indigo-700">
                         {item.workName}
                       </span>
                     )}
                     <span className="font-medium text-slate-900">{item.taskTitle}</span>
-                    <span className="rounded bg-sky-100 px-1.5 py-0.5 font-medium text-sky-800">
+                    <span className="rounded bg-sky-100 px-1.5 py-0.25 text-[11px] font-medium text-sky-800">
                       {item.stageColumnName}
                     </span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-6 px-2 text-xs"
-                        disabled={markDoneMutation.isPending}
-                        onClick={() => markDoneMutation.mutate(item)}
-                      >
-                        <Check className="mr-0.5 h-3 w-3" />
-                        完成
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-2 text-xs"
-                        onClick={() =>
-                          setDetailTarget({
-                            worksheetId: item.worksheetId,
-                            taskId: item.taskId,
-                          })
-                        }
-                      >
-                        详情
-                      </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="h-5 px-1.5 text-[11px]"
+                      disabled={markDoneMutation.isPending}
+                      onClick={() => markDoneMutation.mutate(item)}
+                    >
+                      <Check className="mr-0.5 h-3 w-3" />
+                      完成
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-5 px-1.5 text-[11px]"
+                      onClick={() =>
+                        setDetailTarget({
+                          worksheetId: item.worksheetId,
+                          taskId: item.taskId,
+                        })
+                      }
+                    >
+                      详情
+                    </Button>
                   </div>
                 );
               })}
@@ -294,17 +303,17 @@ export function HomePage() {
         </section>
       )}
 
-      {/* 筛选栏 */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+      {/* 紧凑单行筛选栏 */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200/80 bg-slate-50/40 px-3 py-1.5">
         <SelectField
           aria-label="按工作表筛选"
-          size="sm"
+          size="xs"
           value={worksheetFilter}
           onValueChange={(val) => {
             setWorksheetFilter(val);
             setWorkFilter(null);
           }}
-          className="w-40"
+          className="w-36"
           options={[
             { value: '', label: '全部工作表' },
             ...(board?.worksheets ?? []).map((ws) => ({
@@ -317,7 +326,7 @@ export function HomePage() {
 
         <SelectField
           aria-label="按作品筛选"
-          size="sm"
+          size="xs"
           value={workFilter ? `${workFilter.worksheetId}:${workFilter.workId}` : ''}
           onValueChange={(val) => {
             if (!val) {
@@ -327,7 +336,7 @@ export function HomePage() {
               if (wsId && wId) setWorkFilter({ worksheetId: wsId, workId: wId });
             }
           }}
-          className="w-40"
+          className="w-36"
           options={[
             { value: '', label: '全部作品' },
             ...availableWorks.map((w) => ({
@@ -342,9 +351,9 @@ export function HomePage() {
           onClick={() => setOnlyMissing((v) => !v)}
           aria-pressed={onlyMissing}
           className={cn(
-            'rounded-full border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
+            'rounded-md border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
             onlyMissing
-              ? 'border-amber-600 bg-amber-600 text-white'
+              ? 'border-amber-500 bg-amber-50 text-amber-900'
               : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
           )}
         >
@@ -356,9 +365,9 @@ export function HomePage() {
           onClick={() => setOnlyMine((v) => !v)}
           aria-pressed={onlyMine}
           className={cn(
-            'rounded-full border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
+            'rounded-md border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
             onlyMine
-              ? 'border-slate-900 bg-slate-900 text-white'
+              ? 'border-sky-500 bg-sky-50 text-sky-900'
               : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
           )}
         >
@@ -368,7 +377,7 @@ export function HomePage() {
         {activeWorkObj && (
           <span
             data-testid="active-work-filter-chip"
-            className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-medium text-indigo-800"
+            className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800"
           >
             作品：{activeWorkObj.name}
             <button
@@ -383,11 +392,16 @@ export function HomePage() {
         )}
       </div>
 
-      {/* 看板主体（横向滚动容器，保证 390px 不产生页面级溢出） */}
+      {/* 看板主体（撑满剩余高度，各列独立纵向滚动） */}
       {isLoading || !board ? (
-        <div className="py-12 text-center text-sm text-slate-500">正在加载看板…</div>
+        <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+          正在加载看板…
+        </div>
       ) : (
-        <div data-testid="board-columns" className="flex gap-4 overflow-x-auto pb-4">
+        <div
+          data-testid="board-columns"
+          className="flex min-h-0 flex-1 gap-3 overflow-x-auto bg-slate-50/50 p-3"
+        >
           {board.boardColumns.map((bc) => {
             const colCards = cardsByBoardCol.get(bc.id) ?? [];
             return (
@@ -395,16 +409,16 @@ export function HomePage() {
                 key={bc.id}
                 data-testid={`board-col-${bc.id}`}
                 data-board-column-name={bc.name}
-                className="flex w-72 shrink-0 flex-col rounded-lg border border-slate-200 bg-slate-100/80 p-2.5 sm:w-80"
+                className="flex h-full min-h-0 w-72 shrink-0 flex-col rounded-lg border border-slate-200/80 bg-slate-100/70 sm:w-[300px]"
               >
-                <div className="mb-2.5 flex items-center justify-between px-1">
-                  <h2 className="text-sm font-semibold text-slate-800">{bc.name}</h2>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600 shadow-2xs">
+                <div className="flex shrink-0 items-center justify-between px-3 py-2">
+                  <h2 className="text-[13px] font-semibold text-slate-800">{bc.name}</h2>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200/70">
                     {colCards.length}
                   </span>
                 </div>
 
-                <div className="flex flex-1 flex-col gap-2.5">
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-2.5">
                   {colCards.length === 0 ? (
                     <div className="rounded-md border border-dashed border-slate-300/80 py-8 text-center text-xs text-slate-400">
                       暂无任务
@@ -418,13 +432,13 @@ export function HomePage() {
                         <div
                           key={`${card.taskId}:${card.boardColumnId}`}
                           data-testid={`board-card-${card.taskId}-${card.boardColumnId}`}
-                          className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs transition-shadow hover:shadow-sm"
+                          className="rounded-lg border border-slate-200/90 bg-white p-2.5 shadow-2xs transition-colors hover:border-slate-300"
                         >
                           {/* 顶部标签行 */}
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span
                               className={cn(
-                                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                                'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.25 text-[11px] font-medium',
                                 wsColor.badge,
                               )}
                             >
@@ -447,7 +461,7 @@ export function HomePage() {
                                         },
                                   );
                                 }}
-                                className="rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100 cursor-pointer"
+                                className="rounded bg-indigo-50 px-1.5 py-0.25 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100 cursor-pointer"
                               >
                                 {card.workName}
                               </button>
@@ -456,7 +470,7 @@ export function HomePage() {
                             {card.priority !== 'normal' && (
                               <span
                                 className={cn(
-                                  'rounded-full px-1.5 py-0.5 text-[11px] font-medium',
+                                  'rounded-full px-1.5 py-0.25 text-[11px] font-medium',
                                   PRIORITY_STYLES[card.priority],
                                 )}
                               >
@@ -474,9 +488,9 @@ export function HomePage() {
                                 taskId: card.taskId,
                               })
                             }
-                            className="mt-2 block w-full text-left cursor-pointer"
+                            className="mt-1.5 block w-full text-left cursor-pointer"
                           >
-                            <div className="text-sm font-medium text-slate-900 hover:underline">
+                            <div className="text-[13px] font-medium text-slate-900 hover:text-sky-700">
                               {card.taskTitle}
                             </div>
                             {card.divisionNote && (
@@ -490,7 +504,7 @@ export function HomePage() {
                           <div className="mt-2 flex items-center justify-between text-xs">
                             <span
                               className={cn(
-                                'rounded px-1.5 py-0.5 font-medium',
+                                'rounded px-1.5 py-0.5 text-[11px] font-medium',
                                 STAGE_STATUS_STYLES[card.stageStatus].badge,
                               )}
                             >
@@ -502,7 +516,7 @@ export function HomePage() {
 
                           {/* 缺人标签区（点击原子抢占认领） */}
                           {card.missingStages.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1">
+                            <div className="mt-1.5 flex flex-wrap gap-1">
                               {card.missingStages.map((ms) => {
                                 const claimKey = `${card.taskId}:${ms.columnId}`;
                                 const claiming = claimingKeys.has(claimKey);
@@ -525,24 +539,27 @@ export function HomePage() {
                             </div>
                           )}
 
-                          {/* 底部迷你进度点 */}
+                          {/* 底部迷你进度点 + 阶段 3 快捷附件下载槽位 */}
                           {card.stageProgress.length > 0 && (
-                            <div className="mt-2.5 flex items-center gap-1.5 border-t border-slate-100 pt-2">
-                              {card.stageProgress.map((sp) => (
-                                <span
-                                  key={sp.columnId}
-                                  title={`${sp.name}：${STAGE_STATUS_LABELS[sp.status]}`}
-                                  className="inline-flex items-center gap-1 text-[10px] text-slate-500"
-                                >
+                            <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-1.5">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {card.stageProgress.map((sp) => (
                                   <span
-                                    className={cn(
-                                      'h-2 w-2 rounded-full',
-                                      STAGE_STATUS_STYLES[sp.status].dot,
-                                    )}
-                                  />
-                                  <span>{sp.name}</span>
-                                </span>
-                              ))}
+                                    key={sp.columnId}
+                                    title={`${sp.name}：${STAGE_STATUS_LABELS[sp.status]}`}
+                                    className="inline-flex items-center gap-1 text-[10px] text-slate-500"
+                                  >
+                                    <span
+                                      className={cn(
+                                        'h-1.5 w-1.5 rounded-full',
+                                        STAGE_STATUS_STYLES[sp.status].dot,
+                                      )}
+                                    />
+                                    <span>{sp.name}</span>
+                                  </span>
+                                ))}
+                              </div>
+                              {/* 阶段 3 预留：本列工序最新附件一键下载角标槽位 */}
                             </div>
                           )}
                         </div>
@@ -555,6 +572,9 @@ export function HomePage() {
           })}
         </div>
       )}
+
+      {/* 右上角「管理看板列」弹窗 */}
+      <BoardColumnsModal open={boardColsModalOpen} onOpenChange={setBoardColsModalOpen} />
 
       {/* 任务详情侧栏 */}
       <TaskDetailDrawer
