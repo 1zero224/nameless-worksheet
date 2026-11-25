@@ -36,11 +36,10 @@ const SYSTEM_TOGGLEABLE: Array<{
   key: Exclude<keyof SystemColumnsConfig, 'title'>;
   label: string;
 }> = [
-  { key: 'work', label: '作品' },
-  { key: 'divisionNote', label: '分工说明' },
   { key: 'priority', label: '优先级' },
   { key: 'publish', label: '发布信息' },
   { key: 'files', label: '文件' },
+  { key: 'divisionNote', label: '分工说明' },
 ];
 
 function SortableColumnItem({

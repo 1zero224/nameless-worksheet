@@ -31,19 +31,16 @@ const SYSTEM_TOGGLEABLE: Array<{
   key: Exclude<keyof SystemColumnsConfig, 'title'>;
   label: string;
 }> = [
-  { key: 'work', label: '作品' },
-  { key: 'divisionNote', label: '分工说明' },
   { key: 'priority', label: '优先级' },
   { key: 'publish', label: '发布信息' },
   { key: 'files', label: '文件' },
+  { key: 'divisionNote', label: '分工说明' },
 ];
 
 export function isSystemColumnHidden(
   sys: SystemColumnsConfig | undefined,
   key: Exclude<keyof SystemColumnsConfig, 'title'>,
 ): boolean {
-  // 大标题横幅已表达归属，因此「作品」列默认隐藏，用户仍可在此手动开启
-  if (key === 'work') return sys?.work?.hidden !== false;
   return Boolean(sys?.[key]?.hidden);
 }
 

@@ -86,7 +86,6 @@ import {
   PublishCellEditor,
   type StageCellConflict,
   StageCellEditor,
-  WorkCellEditor,
 } from '@/components/worksheet/CellEditors.js';
 import { ChangeLogDrawer } from '@/components/worksheet/ChangeLogDrawer.js';
 import { ColumnHeaderMenu } from '@/components/worksheet/ColumnHeaderMenu.js';
@@ -136,7 +135,6 @@ interface EditRequestState {
 }
 
 interface WorksheetGridContextValue {
-  works: Work[];
   users: UserListItem[];
   userMap: Map<string, string>;
   selectedCell: { taskId: string; columnKey: string } | null;
@@ -167,7 +165,6 @@ interface WorksheetGridContextValue {
       force: boolean;
     },
   ) => Promise<void>;
-  renameWork: (targetWorkId: string, newName: string) => Promise<void>;
   openDetail: (taskId: string) => void;
 }
 
@@ -210,29 +207,6 @@ function TitleGridCell({ row }: { row: { original: TaskDetail } }) {
       onCommit={(nextVal, baseVal, force) =>
         ctx.patchTask(task.id, { title: nextVal }, { title: baseVal }, force)
       }
-    />
-  );
-}
-
-function WorkGridCell({ row }: { row: { original: TaskDetail } }) {
-  const ctx = useWorksheetGrid();
-  const task = row.original;
-  return (
-    <WorkCellEditor
-      taskId={task.id}
-      workId={task.workId}
-      works={ctx.works}
-      selected={ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === 'work'}
-      editSignal={getEditSignalFor(ctx.editRequest, task.id, 'work')}
-      peer={ctx.peerByCell.get(`${task.id}:work`)}
-      onSelect={() => ctx.selectCell(task.id, 'work')}
-      onFocusChange={(ed) =>
-        ed === null
-          ? ctx.setEditingFocus(task.id, 'work', false)
-          : ctx.setEditingFocus(task.id, 'work', ed)
-      }
-      onSelectWork={(next) => ctx.patchTask(task.id, next, { workId: task.workId }, true)}
-      onRenameWork={ctx.renameWork}
     />
   );
 }
@@ -1489,38 +1463,6 @@ export function WorksheetDetailPage() {
       }),
     );
 
-    // 「作品」列默认隐藏（大标题横幅已表达归属），仍可在「字段显隐」手动开启
-    if (!isSystemColumnHidden(sys, 'work')) {
-      defs.push(
-        columnHelper.display({
-          id: 'work',
-          header: '作品',
-          meta: {
-            width: previewWidths.work ?? sys.work?.width ?? 130,
-            isSystem: true,
-            systemKey: 'work' as const,
-          },
-          cell: WorkGridCell,
-        }),
-      );
-    }
-
-    if (!isSystemColumnHidden(sys, 'divisionNote')) {
-      defs.push(
-        columnHelper.display({
-          id: 'divisionNote',
-          header: '分工说明',
-          meta: {
-            width: previewWidths.divisionNote ?? sys.divisionNote?.width ?? 170,
-            isSystem: true,
-            systemKey: 'divisionNote' as const,
-            isTextCell: true,
-          },
-          cell: DivisionNoteGridCell,
-        }),
-      );
-    }
-
     for (const col of wsColumns) {
       if (col.hidden) continue;
       defs.push(
@@ -1579,6 +1521,22 @@ export function WorksheetDetailPage() {
             systemKey: 'files' as const,
           },
           cell: FilesGridCell,
+        }),
+      );
+    }
+
+    if (!isSystemColumnHidden(sys, 'divisionNote')) {
+      defs.push(
+        columnHelper.display({
+          id: 'divisionNote',
+          header: '分工说明',
+          meta: {
+            width: previewWidths.divisionNote ?? sys.divisionNote?.width ?? 170,
+            isSystem: true,
+            systemKey: 'divisionNote' as const,
+            isTextCell: true,
+          },
+          cell: DivisionNoteGridCell,
         }),
       );
     }
@@ -1815,7 +1773,6 @@ export function WorksheetDetailPage() {
 
   const gridContextValue = useMemo<WorksheetGridContextValue>(
     () => ({
-      works: allWorks,
       users,
       userMap,
       selectedCell,
@@ -1831,11 +1788,9 @@ export function WorksheetDetailPage() {
       acceptRemoteField,
       patchTask,
       patchStage,
-      renameWork,
       openDetail: setDetailTaskId,
     }),
     [
-      allWorks,
       users,
       userMap,
       selectedCell,
@@ -1851,7 +1806,6 @@ export function WorksheetDetailPage() {
       acceptRemoteField,
       patchTask,
       patchStage,
-      renameWork,
     ],
   );
 

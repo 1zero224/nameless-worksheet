@@ -190,11 +190,19 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
     await pageA.getByRole('button', { name: '插入', exact: true }).click();
     await expect(pageA.getByTestId('worksheet-main-table')).toContainText('5th 花絮 P2');
 
-    // 键盘方向键导航：默认隐藏作品列，标题格 ArrowRight 直接到分工说明 -> Enter 编辑并提交
+    // 键盘方向键导航：标题格 ArrowRight 直接到第一道工序列（时轴），分工说明已移至最末列
     const titleCell1 = pageA.getByTestId(`cell-${task1Id}-title`);
     await titleCell1.getByRole('button').click();
     await pageA.keyboard.press('ArrowRight');
+    const stageCell1 = row1.locator('td').nth(2).locator('button').first();
+    await expect(stageCell1).toHaveClass(/ring-sky-500/);
+
+    // 分工说明位于最后一个数据列（倒数第 2 个 th，右侧仅剩 + 列头）
+    const lastDataHeader = pageA.getByTestId('worksheet-main-table').locator('thead th').nth(-2);
+    await expect(lastDataHeader).toContainText('分工说明');
+
     const divCell = pageA.getByTestId(`cell-${task1Id}-divisionNote`);
+    await divCell.getByRole('button').click();
     await expect(divCell).toHaveClass(/ring-sky-500/);
     await pageA.keyboard.press('Enter');
     const divInput = divCell.locator('input');
@@ -255,17 +263,17 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
     );
     await pageA.getByRole('button', { name: '关闭侧栏' }).click();
 
-    // 验证「作品」列仍可在「字段显隐」中手动开启并关闭
+    // 验证「作品」列已移除，且「分工说明」可在「字段显隐」中隐藏与恢复
     await pageA.getByTestId('field-visibility-trigger').click();
     const fieldPopover = pageA.locator('[data-radix-popper-content-wrapper]');
-    await fieldPopover.getByRole('button', { name: '作品', exact: true }).click();
-    await expect(pageA.getByTestId('col-header-work')).toBeVisible();
-    await fieldPopover.getByRole('button', { name: '作品', exact: true }).click();
-    await expect(pageA.getByTestId('col-header-work')).toHaveCount(0);
+    await expect(fieldPopover.getByRole('button', { name: '作品', exact: true })).toHaveCount(0);
+    await fieldPopover.getByRole('button', { name: '分工说明', exact: true }).click();
+    await expect(pageA.getByTestId('col-header-divisionNote')).toHaveCount(0);
+    await fieldPopover.getByRole('button', { name: '分工说明', exact: true }).click();
+    await expect(pageA.getByTestId('col-header-divisionNote')).toBeVisible();
     await pageA.keyboard.press('Escape');
 
-    // 编辑第一道工序列（时轴）：默认隐藏作品列后位于 td.nth(3)，同时选项目用户「小爱」+ 纯文本「外援小王」并设进行中
-    const stageCell1 = row1.locator('td').nth(3).locator('button').first();
+    // 编辑第一道工序列（时轴，位于 td.nth(2)）：同时选项目用户「小爱」+ 纯文本「外援小王」并设进行中
     await stageCell1.click();
     const stagePopover = pageA.locator('[data-radix-popper-content-wrapper]');
     await stagePopover.getByRole('button', { name: '进行中', exact: true }).click();
