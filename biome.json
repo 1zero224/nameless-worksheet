@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/drizzle/meta", "!docs", "!pnpm-lock.yaml"]
+    "includes": ["**", "!**/drizzle/meta", "!docs", "!.claude/skills", "!pnpm-lock.yaml"]
   },
   "formatter": {
     "enabled": true,
