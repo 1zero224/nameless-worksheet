@@ -6,6 +6,7 @@ export class ApiError extends Error {
     readonly code: ErrorCode,
     message: string,
     readonly fields?: Record<string, string>,
+    readonly details?: unknown,
   ) {
     super(message);
   }
@@ -67,12 +68,13 @@ export async function apiFetch<T>(
     const code: ErrorCode = errBody?.error?.code ?? 'INTERNAL';
     const message = errBody?.error?.message ?? '请求失败，请稍后再试';
     const fields = errBody?.error?.fields;
+    const details = errBody?.error?.details;
 
     if (res.status === 401 && code === 'UNAUTHENTICATED' && !opts.skipAuthRedirect) {
       onUnauthenticatedFn();
     }
 
-    throw new ApiError(res.status, code, message, fields);
+    throw new ApiError(res.status, code, message, fields, details);
   }
 
   return data as T;

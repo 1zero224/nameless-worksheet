@@ -17,3 +17,4 @@ minimumReleaseAgeExclude:
   - "@biomejs/cli-linux-x64@2.6.8"
   - "@biomejs/cli-win32-arm64@2.6.8"
   - "@biomejs/cli-win32-x64@2.6.8"
+  - lucide-react@1.79.0

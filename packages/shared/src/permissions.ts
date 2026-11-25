@@ -5,7 +5,7 @@ export const PERMISSIONS = {
   'users.manage': { admin: true, user: false },
   'invites.manage': { admin: true, user: false },
   'diag.realtime': { admin: true, user: false },
-  'worksheets.manage': { admin: true, user: false },
+  'worksheets.manage': { admin: true, user: true },
   'data.import': { admin: true, user: false },
   'data.export': { admin: true, user: false },
   'storage.manage': { admin: true, user: false },

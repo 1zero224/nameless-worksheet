@@ -6,6 +6,7 @@ export class AppError extends Error {
     readonly code: ErrorCode,
     message?: string,
     readonly fields?: Record<string, string>,
+    readonly details?: unknown,
   ) {
     super(message ?? DEFAULT_MESSAGES[code]);
     this.statusCode = ERROR_CODES[code];
@@ -17,6 +18,7 @@ export class AppError extends Error {
         code: this.code,
         message: this.message,
         ...(this.fields ? { fields: this.fields } : {}),
+        ...(this.details !== undefined ? { details: this.details } : {}),
       },
     };
   }

@@ -1,3 +1,4 @@
+import { can } from '@nw/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp, scrubTokenUrl } from '../src/app.js';
 import { runInit, runResetLink } from '../src/cli.js';
@@ -167,10 +168,10 @@ describe('T5 路由访问声明、V2 未登录拦截与 V4 普通用户权限拦
     const dummyId = '00000000-0000-7000-8000-000000000001';
 
     for (const r of routes) {
-      const url = r.url.replace(':id', dummyId);
+      const url = r.url.replace(/:[a-zA-Z0-9_]+/g, dummyId);
       const isWrite = r.method !== 'GET' && r.method !== 'HEAD';
       const res = await env.app.inject({
-        method: r.method as 'GET' | 'POST' | 'PATCH' | 'DELETE',
+        method: r.method as 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
         url,
         headers: isWrite ? { origin: TEST_ORIGIN, 'content-type': 'application/json' } : {},
         payload: isWrite ? '{}' : undefined,
@@ -180,21 +181,27 @@ describe('T5 路由访问声明、V2 未登录拦截与 V4 普通用户权限拦
     }
   });
 
-  it('V4: 普通用户调用每一个带权限键的接口均返回 403', async () => {
+  it('V4: 普通用户调用无权访问的权限键接口均返回 403，worksheets.manage 对普通用户开放', async () => {
     await env.app.ready();
+    expect(can('user', 'worksheets.manage')).toBe(true);
     const { projectA } = await createTwoProjects(env.app.ctx.db);
     const routes = env.app.ctx
       .getRegisteredRoutes()
-      .filter((r) => typeof r.access === 'object' && 'permission' in r.access);
+      .filter(
+        (r) =>
+          typeof r.access === 'object' &&
+          'permission' in r.access &&
+          !can('user', r.access.permission),
+      );
 
     expect(routes.length).toBeGreaterThan(4);
     const dummyId = '00000000-0000-7000-8000-000000000001';
 
     for (const r of routes) {
-      const url = r.url.replace(':id', dummyId);
+      const url = r.url.replace(/:[a-zA-Z0-9_]+/g, dummyId);
       const isWrite = r.method !== 'GET' && r.method !== 'HEAD';
       const res = await env.app.inject({
-        method: r.method as 'GET' | 'POST' | 'PATCH' | 'DELETE',
+        method: r.method as 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
         url,
         headers: {
           cookie: projectA.user.cookie,
