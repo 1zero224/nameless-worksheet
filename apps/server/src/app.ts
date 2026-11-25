@@ -19,6 +19,8 @@ import { registerColumnRoutes } from './modules/columns.js';
 import { registerDiagRoutes } from './modules/diag.js';
 import { registerHealthRoutes } from './modules/health.js';
 import { registerInviteRoutes } from './modules/invites.js';
+import { registerStageRoutes } from './modules/stages.js';
+import { registerTaskRoutes } from './modules/tasks.js';
 import { registerUserRoutes } from './modules/users.js';
 import { registerWorksheetRoutes } from './modules/worksheets.js';
 import { type EventBus, InProcessEventBus } from './realtime/bus.js';
@@ -157,6 +159,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   registerBoardColumnRoutes(app, { db, bus });
   registerWorksheetRoutes(app, { db, bus });
   registerColumnRoutes(app, { db, bus });
+  registerTaskRoutes(app, { db, bus });
+  registerStageRoutes(app, { db, bus });
   registerChangeLogRoutes(app, { db });
   registerDiagRoutes(app, { db, bus });
   registerRealtimeRoute(app, { db, config, realtime });
