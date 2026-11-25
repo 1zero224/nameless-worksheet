@@ -20,7 +20,8 @@ import {
   WORKSHEET_COLOR_STYLES,
 } from '@/components/ui/colors.js';
 import { useToast } from '@/components/ui/overlays.js';
-import { Button, cn, Select } from '@/components/ui/primitives.js';
+import { Button, cn } from '@/components/ui/primitives.js';
+import { SelectField } from '@/components/ui/select.js';
 import { useRealtimeScope } from '@/realtime/context.js';
 
 export function HomePage() {
@@ -295,28 +296,30 @@ export function HomePage() {
 
       {/* 筛选栏 */}
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-        <Select
+        <SelectField
           aria-label="按工作表筛选"
+          size="sm"
           value={worksheetFilter}
-          onChange={(e) => {
-            setWorksheetFilter(e.target.value);
+          onValueChange={(val) => {
+            setWorksheetFilter(val);
             setWorkFilter(null);
           }}
-          className="h-8 w-36 py-1 text-xs"
-        >
-          <option value="">全部工作表</option>
-          {(board?.worksheets ?? []).map((ws) => (
-            <option key={ws.id} value={ws.id}>
-              {ws.name}
-            </option>
-          ))}
-        </Select>
+          className="w-40"
+          options={[
+            { value: '', label: '全部工作表' },
+            ...(board?.worksheets ?? []).map((ws) => ({
+              value: ws.id,
+              label: ws.name,
+              dotClass: (WORKSHEET_COLOR_STYLES[ws.color] ?? WORKSHEET_COLOR_STYLES.sky).dot,
+            })),
+          ]}
+        />
 
-        <Select
+        <SelectField
           aria-label="按作品筛选"
+          size="sm"
           value={workFilter ? `${workFilter.worksheetId}:${workFilter.workId}` : ''}
-          onChange={(e) => {
-            const val = e.target.value;
+          onValueChange={(val) => {
             if (!val) {
               setWorkFilter(null);
             } else {
@@ -324,15 +327,15 @@ export function HomePage() {
               if (wsId && wId) setWorkFilter({ worksheetId: wsId, workId: wId });
             }
           }}
-          className="h-8 w-40 py-1 text-xs"
-        >
-          <option value="">全部作品</option>
-          {availableWorks.map((w) => (
-            <option key={w.id} value={`${w.worksheetId}:${w.id}`}>
-              {w.name}
-            </option>
-          ))}
-        </Select>
+          className="w-40"
+          options={[
+            { value: '', label: '全部作品' },
+            ...availableWorks.map((w) => ({
+              value: `${w.worksheetId}:${w.id}`,
+              label: w.name,
+            })),
+          ]}
+        />
 
         <button
           type="button"

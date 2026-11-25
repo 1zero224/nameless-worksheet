@@ -15,16 +15,8 @@ import { useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { useMe } from '@/app/AuthContext.js';
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Dialog,
-  Input,
-  Label,
-  Select,
-} from '@/components/ui/primitives.js';
+import { Alert, Badge, Button, Card, Dialog, Input, Label } from '@/components/ui/primitives.js';
+import { SelectField } from '@/components/ui/select.js';
 import { useRealtimeScope } from '@/realtime/context.js';
 
 function statusBadgeVariant(status: InviteStatus) {
@@ -177,18 +169,20 @@ export function AdminUsersPage() {
                       {u.loginName ?? '-'}
                     </td>
                     <td className="py-2.5 pr-3">
-                      <Select
+                      <SelectField
                         aria-label={`调整 ${u.displayName} 的角色`}
+                        size="sm"
                         value={u.role}
-                        className="w-28 py-1 text-xs"
+                        className="w-28"
                         disabled={roleMutation.isPending}
-                        onChange={(e) =>
-                          roleMutation.mutate({ userId: u.id, role: e.target.value as Role })
+                        onValueChange={(val) =>
+                          roleMutation.mutate({ userId: u.id, role: val as Role })
                         }
-                      >
-                        <option value="admin">{ROLE_LABELS.admin}</option>
-                        <option value="user">{ROLE_LABELS.user}</option>
-                      </Select>
+                        options={[
+                          { value: 'admin', label: ROLE_LABELS.admin },
+                          { value: 'user', label: ROLE_LABELS.user },
+                        ]}
+                      />
                     </td>
                     <td className="py-2.5 pr-3 text-xs text-slate-500">
                       {formatDate(u.createdAt)}
@@ -218,29 +212,28 @@ export function AdminUsersPage() {
         >
           <div>
             <Label htmlFor="invRole">角色</Label>
-            <Select
+            <SelectField
               id="invRole"
               value={invRole}
-              onChange={(e) => setInvRole(e.target.value as Role)}
-            >
-              <option value="user">{ROLE_LABELS.user}</option>
-              <option value="admin">{ROLE_LABELS.admin}</option>
-            </Select>
+              onValueChange={(val) => setInvRole(val as Role)}
+              options={[
+                { value: 'user', label: ROLE_LABELS.user },
+                { value: 'admin', label: ROLE_LABELS.admin },
+              ]}
+            />
           </div>
 
           <div>
             <Label htmlFor="invDays">有效期</Label>
-            <Select
+            <SelectField
               id="invDays"
-              value={invDays}
-              onChange={(e) => setInvDays(Number(e.target.value) as 1 | 7 | 30)}
-            >
-              {INVITE_EXPIRY_DAYS.map((d) => (
-                <option key={d} value={d}>
-                  {d} 天
-                </option>
-              ))}
-            </Select>
+              value={String(invDays)}
+              onValueChange={(val) => setInvDays(Number(val) as 1 | 7 | 30)}
+              options={INVITE_EXPIRY_DAYS.map((d) => ({
+                value: String(d),
+                label: `${d} 天`,
+              }))}
+            />
           </div>
 
           <div>

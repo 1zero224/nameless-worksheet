@@ -136,12 +136,14 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
     // 新增不上看板工序列「压制」与自定义文本列「片源备注」
     await pageA.getByRole('button', { name: '列设置' }).click();
     await pageA.getByLabel('列名', { exact: true }).fill('压制');
-    await pageA.getByLabel('看板列映射', { exact: true }).selectOption('none');
+    await pageA.getByLabel('看板列映射', { exact: true }).click();
+    await pageA.getByRole('option', { name: '不上看板', exact: true }).click();
     await pageA.getByRole('button', { name: '添加列' }).click();
     await expect(pageA.getByText('已新增列')).toBeVisible();
 
     await pageA.getByLabel('列名', { exact: true }).fill('片源备注');
-    await pageA.getByLabel('列类型', { exact: true }).selectOption('text');
+    await pageA.getByLabel('列类型', { exact: true }).click();
+    await pageA.getByRole('option', { name: '文本', exact: true }).click();
     await pageA.getByRole('button', { name: '添加列' }).click();
     await pageA.getByRole('button', { name: '关闭', exact: true }).click();
 

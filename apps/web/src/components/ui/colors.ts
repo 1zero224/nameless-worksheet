@@ -93,9 +93,15 @@ export const STAGE_STATUS_STYLES: Record<
 };
 
 export const PRIORITY_STYLES: Record<Priority, string> = {
-  normal: 'bg-slate-100 text-slate-600',
-  high: 'bg-amber-100 text-amber-800',
-  urgent: 'bg-red-100 text-red-700',
+  normal: 'bg-slate-100 text-slate-600 border-slate-200/80',
+  high: 'bg-amber-50 text-amber-800 border-amber-200/90',
+  urgent: 'bg-red-50 text-red-700 border-red-200/90',
+};
+
+export const PRIORITY_DOT_STYLES: Record<Priority, string> = {
+  normal: 'bg-slate-400',
+  high: 'bg-amber-500',
+  urgent: 'bg-red-500',
 };
 
 const PEER_PALETTE = [

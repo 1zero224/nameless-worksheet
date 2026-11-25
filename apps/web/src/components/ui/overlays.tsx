@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import {
   Dialog as RadixDialog,
   DropdownMenu as RadixDropdown,
@@ -23,7 +23,7 @@ export const PopoverTrigger = RadixPopover.Trigger;
 export function PopoverContent({
   className,
   align = 'start',
-  sideOffset = 4,
+  sideOffset = 6,
   children,
   ...props
 }: RadixPopover.PopoverContentProps) {
@@ -35,7 +35,7 @@ export function PopoverContent({
         collisionPadding={8}
         {...props}
         className={cn(
-          'z-50 rounded-lg border border-slate-200 bg-white p-3 shadow-lg outline-none',
+          'nw-floating-surface z-[70] rounded-xl border border-slate-200/90 bg-white/98 p-3 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.16),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-slate-950/5 backdrop-blur-md outline-none',
           className,
         )}
       >
@@ -49,11 +49,12 @@ export function PopoverContent({
 
 export const DropdownMenu = RadixDropdown.Root;
 export const DropdownMenuTrigger = RadixDropdown.Trigger;
+export const DropdownMenuGroup = RadixDropdown.Group;
 
 export function DropdownMenuContent({
   className,
   align = 'end',
-  sideOffset = 4,
+  sideOffset = 6,
   children,
   ...props
 }: RadixDropdown.DropdownMenuContentProps) {
@@ -62,9 +63,10 @@ export function DropdownMenuContent({
       <RadixDropdown.Content
         align={align}
         sideOffset={sideOffset}
+        collisionPadding={8}
         {...props}
         className={cn(
-          'z-50 min-w-[140px] rounded-md border border-slate-200 bg-white p-1 shadow-lg outline-none',
+          'nw-floating-surface z-[70] min-w-[160px] overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 p-1 text-slate-800 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.16),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-slate-950/5 backdrop-blur-md outline-none',
           className,
         )}
       >
@@ -74,15 +76,66 @@ export function DropdownMenuContent({
   );
 }
 
-export function DropdownMenuItem({ className, ...props }: RadixDropdown.DropdownMenuItemProps) {
+export function DropdownMenuItem({
+  className,
+  variant = 'default',
+  ...props
+}: RadixDropdown.DropdownMenuItemProps & { variant?: 'default' | 'destructive' }) {
   return (
     <RadixDropdown.Item
       {...props}
       className={cn(
-        'flex cursor-pointer select-none items-center gap-2 rounded px-2.5 py-1.5 text-sm text-slate-700 outline-none hover:bg-slate-100 focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none transition-colors duration-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
+        variant === 'destructive'
+          ? 'text-red-600 data-[highlighted]:bg-red-50 data-[highlighted]:text-red-700'
+          : 'text-slate-700 data-[highlighted]:bg-slate-100/90 data-[highlighted]:text-slate-950',
         className,
       )}
     />
+  );
+}
+
+export function DropdownMenuCheckboxItem({
+  className,
+  children,
+  ...props
+}: RadixDropdown.DropdownMenuCheckboxItemProps) {
+  return (
+    <RadixDropdown.CheckboxItem
+      {...props}
+      className={cn(
+        'relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-8 pl-2.5 text-sm text-slate-700 outline-none transition-colors duration-100 data-[highlighted]:bg-slate-100/90 data-[highlighted]:text-slate-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
+        className,
+      )}
+    >
+      <span className="truncate">{children}</span>
+      <span className="pointer-events-none absolute right-2 flex h-4 w-4 items-center justify-center text-slate-900">
+        <RadixDropdown.ItemIndicator>
+          <Check className="h-3.5 w-3.5 stroke-[2.25]" />
+        </RadixDropdown.ItemIndicator>
+      </span>
+    </RadixDropdown.CheckboxItem>
+  );
+}
+
+export function DropdownMenuLabel({ className, ...props }: RadixDropdown.DropdownMenuLabelProps) {
+  return (
+    <RadixDropdown.Label
+      {...props}
+      className={cn(
+        'px-2.5 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-slate-400 select-none',
+        className,
+      )}
+    />
+  );
+}
+
+export function DropdownMenuSeparator({
+  className,
+  ...props
+}: RadixDropdown.DropdownMenuSeparatorProps) {
+  return (
+    <RadixDropdown.Separator {...props} className={cn('-mx-1 my-1 h-px bg-slate-100', className)} />
   );
 }
 

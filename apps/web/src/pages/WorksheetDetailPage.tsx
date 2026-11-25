@@ -34,6 +34,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import {
+  ArrowUpDown,
   ChevronDown,
   ChevronRight,
   Columns3,
@@ -62,7 +63,8 @@ import { useMe } from '@/app/AuthContext.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import { peerColorForUser, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import { useToast } from '@/components/ui/overlays.js';
-import { Button, cn, Input, Select } from '@/components/ui/primitives.js';
+import { Button, cn, Input } from '@/components/ui/primitives.js';
+import { SelectField } from '@/components/ui/select.js';
 import {
   type ActiveCellConflict,
   InlineTextCell,
@@ -1508,50 +1510,54 @@ export function WorksheetDetailPage() {
               />
             </div>
 
-            <Select
+            <SelectField
               aria-label="按作品筛选"
+              size="sm"
               value={workFilter}
-              onChange={(e) => setWorkFilter(e.target.value)}
-              className="h-8 w-32 py-1 text-xs"
-            >
-              <option value="">全部作品</option>
-              {data.works.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </Select>
+              onValueChange={setWorkFilter}
+              className="w-36"
+              options={[
+                { value: '', label: '全部作品' },
+                ...data.works.map((w) => ({ value: w.id, label: w.name })),
+              ]}
+            />
 
-            <Select
+            <SelectField
               aria-label="按负责人筛选"
+              size="sm"
               value={assigneeFilter}
-              onChange={(e) => setAssigneeFilter(e.target.value)}
-              className="h-8 w-32 py-1 text-xs"
-            >
-              <option value="">全部负责人</option>
-              {users.map((u) => (
-                <option key={`u:${u.id}`} value={`u:${u.id}`}>
-                  {u.displayName}
-                </option>
-              ))}
-              {textAssigneeOptions.map((name) => (
-                <option key={`t:${name}`} value={`t:${name}`}>
-                  {name}（文本）
-                </option>
-              ))}
-            </Select>
+              onValueChange={setAssigneeFilter}
+              className="w-36"
+              options={[
+                { value: '', label: '全部负责人' },
+                ...users.map((u) => ({
+                  value: `u:${u.id}`,
+                  label: u.displayName,
+                  group: '项目用户',
+                })),
+                ...textAssigneeOptions.map((name) => ({
+                  value: `t:${name}`,
+                  label: name,
+                  group: '纯文本负责人',
+                })),
+              ]}
+            />
 
-            <Select
+            <SelectField
               aria-label="本地排序"
+              size="sm"
+              align="end"
+              leadingIcon={<ArrowUpDown className="h-3.5 w-3.5" />}
               value={localSort}
-              onChange={(e) => setLocalSort(e.target.value as LocalSort)}
-              className="h-8 w-36 py-1 text-xs"
-            >
-              <option value="manual">默认手动顺序</option>
-              <option value="title">按标题排序</option>
-              <option value="priority">按优先级排序</option>
-              <option value="work">按作品排序</option>
-            </Select>
+              onValueChange={(v) => setLocalSort(v as LocalSort)}
+              className="w-40"
+              options={[
+                { value: 'manual', label: '默认手动顺序' },
+                { value: 'title', label: '按标题排序' },
+                { value: 'priority', label: '按优先级排序' },
+                { value: 'work', label: '按作品排序' },
+              ]}
+            />
           </div>
 
           {isFilteredOrSorted && (

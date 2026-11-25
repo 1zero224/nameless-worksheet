@@ -30,9 +30,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
-import { STAGE_STATUS_STYLES, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
+import {
+  PRIORITY_DOT_STYLES,
+  STAGE_STATUS_STYLES,
+  WORKSHEET_COLOR_STYLES,
+} from '@/components/ui/colors.js';
 import { Sheet, useToast } from '@/components/ui/overlays.js';
-import { Button, cn, Input, Label, Select } from '@/components/ui/primitives.js';
+import { Button, cn, Input, Label } from '@/components/ui/primitives.js';
+import { SelectField } from '@/components/ui/select.js';
 
 export function TaskDetailDrawer({
   worksheetId,
@@ -284,17 +289,16 @@ export function TaskDetailDrawer({
             </div>
             <div>
               <Label htmlFor="detail-priority">优先级</Label>
-              <Select
+              <SelectField
                 id="detail-priority"
                 value={task.priority}
-                onChange={(e) => patchTaskMutation.mutate({ priority: e.target.value })}
-              >
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {PRIORITY_LABELS[p]}
-                  </option>
-                ))}
-              </Select>
+                onValueChange={(val) => patchTaskMutation.mutate({ priority: val })}
+                options={PRIORITIES.map((p) => ({
+                  value: p,
+                  label: PRIORITY_LABELS[p],
+                  dotClass: PRIORITY_DOT_STYLES[p],
+                }))}
+              />
             </div>
           </div>
 
@@ -323,17 +327,16 @@ export function TaskDetailDrawer({
                 <Label htmlFor="detail-publish-status" className="text-xs">
                   发布状态
                 </Label>
-                <Select
+                <SelectField
                   id="detail-publish-status"
                   value={task.publishStatus}
-                  onChange={(e) => patchTaskMutation.mutate({ publishStatus: e.target.value })}
-                >
-                  {PUBLISH_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {PUBLISH_STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </Select>
+                  onValueChange={(val) => patchTaskMutation.mutate({ publishStatus: val })}
+                  options={PUBLISH_STATUSES.map((s) => ({
+                    value: s,
+                    label: PUBLISH_STATUS_LABELS[s],
+                    dotClass: s === 'published' ? 'bg-emerald-500' : 'bg-slate-400',
+                  }))}
+                />
               </div>
               <div>
                 <Label htmlFor="detail-published-at" className="text-xs">
@@ -563,21 +566,20 @@ function DetailStageCard({
     <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-slate-900">{columnName}</span>
-        <select
+        <SelectField
           aria-label={`${columnName} 状态`}
+          variant="pill"
+          size="sm"
+          align="end"
           value={cell.status}
-          onChange={(e) => onSave({ status: e.target.value as StageStatus })}
-          className={cn(
-            'rounded-md border px-2 py-1 text-xs font-medium outline-none cursor-pointer',
-            statusStyle.cell,
-          )}
-        >
-          {STAGE_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {STAGE_STATUS_LABELS[s]}
-            </option>
-          ))}
-        </select>
+          onValueChange={(val) => onSave({ status: val as StageStatus })}
+          className={statusStyle.cell}
+          options={STAGE_STATUSES.map((s) => ({
+            value: s,
+            label: STAGE_STATUS_LABELS[s],
+            dotClass: STAGE_STATUS_STYLES[s].dot,
+          }))}
+        />
       </div>
 
       {/* 负责人芯片 */}

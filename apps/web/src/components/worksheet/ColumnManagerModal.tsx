@@ -28,7 +28,8 @@ import { type FormEvent, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { ConfirmDialog, ModalDialog, useToast } from '@/components/ui/overlays.js';
-import { Alert, Button, cn, Input, Label, Select } from '@/components/ui/primitives.js';
+import { Alert, Button, cn, Input, Label } from '@/components/ui/primitives.js';
+import { SelectField } from '@/components/ui/select.js';
 
 const SYSTEM_TOGGLEABLE: Array<{
   key: Exclude<keyof SystemColumnsConfig, 'title'>;
@@ -102,25 +103,25 @@ function SortableColumnItem({
       </span>
 
       {col.type === 'stage' && (
-        <select
+        <SelectField
           aria-label={`${col.name} 看板列映射`}
+          size="xs"
+          align="end"
           value={col.boardColumnId ?? ''}
-          onChange={(e) =>
-            onUpdate(col.id, { boardColumnId: e.target.value ? e.target.value : null })
-          }
-          className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-        >
-          <option value="">不上看板</option>
-          {boardColumns.map((bc) => {
-            const occupied = usedBoardIds.has(bc.id) && col.boardColumnId !== bc.id;
-            return (
-              <option key={bc.id} value={bc.id} disabled={occupied}>
-                看板：{bc.name}
-                {occupied ? '（已占用）' : ''}
-              </option>
-            );
-          })}
-        </select>
+          onValueChange={(val) => onUpdate(col.id, { boardColumnId: val ? val : null })}
+          className="w-36"
+          options={[
+            { value: '', label: '不上看板' },
+            ...boardColumns.map((bc) => {
+              const occupied = usedBoardIds.has(bc.id) && col.boardColumnId !== bc.id;
+              return {
+                value: bc.id,
+                label: `看板：${bc.name}${occupied ? '（已占用）' : ''}`,
+                disabled: occupied,
+              };
+            }),
+          ]}
+        />
       )}
 
       <button
@@ -378,37 +379,35 @@ export function ColumnManagerModal({
                 <Label htmlFor="new-col-type" className="text-xs">
                   列类型
                 </Label>
-                <Select
+                <SelectField
                   id="new-col-type"
                   value={newColType}
-                  onChange={(e) => setNewColType(e.target.value as ColumnType)}
-                >
-                  {COLUMN_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {COLUMN_TYPE_LABELS[t]}
-                    </option>
-                  ))}
-                </Select>
+                  onValueChange={(val) => setNewColType(val as ColumnType)}
+                  options={COLUMN_TYPES.map((t) => ({
+                    value: t,
+                    label: COLUMN_TYPE_LABELS[t],
+                  }))}
+                />
               </div>
               {newColType === 'stage' && (
                 <div>
                   <Label htmlFor="new-col-board" className="text-xs">
                     看板列映射
                   </Label>
-                  <Select
+                  <SelectField
                     id="new-col-board"
                     value={newBoardColId}
-                    onChange={(e) => setNewBoardColId(e.target.value)}
-                  >
-                    <option value="auto">按同名自动匹配</option>
-                    <option value="none">不上看板</option>
-                    {boardColumns.map((bc) => (
-                      <option key={bc.id} value={bc.id} disabled={usedBoardIds.has(bc.id)}>
-                        {bc.name}
-                        {usedBoardIds.has(bc.id) ? '（已占用）' : ''}
-                      </option>
-                    ))}
-                  </Select>
+                    onValueChange={setNewBoardColId}
+                    options={[
+                      { value: 'auto', label: '按同名自动匹配' },
+                      { value: 'none', label: '不上看板' },
+                      ...boardColumns.map((bc) => ({
+                        value: bc.id,
+                        label: `${bc.name}${usedBoardIds.has(bc.id) ? '（已占用）' : ''}`,
+                        disabled: usedBoardIds.has(bc.id),
+                      })),
+                    ]}
+                  />
                 </div>
               )}
             </div>

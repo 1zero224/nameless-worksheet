@@ -16,6 +16,7 @@ import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import { STAGE_STATUS_STYLES, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import { useToast } from '@/components/ui/overlays.js';
 import { Button, Card, cn } from '@/components/ui/primitives.js';
+import { SelectField } from '@/components/ui/select.js';
 import { useRealtimeScope } from '@/realtime/context.js';
 
 export function MyTasksPage() {
@@ -126,25 +127,26 @@ export function MyTasksPage() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <select
+          <SelectField
             aria-label={`${item.taskTitle} ${item.stageColumnName} 状态`}
+            variant="pill"
+            size="sm"
+            align="end"
             value={item.stageStatus}
             disabled={updateStatusMutation.isPending}
-            onChange={(e) =>
+            onValueChange={(next) =>
               updateStatusMutation.mutate({
                 item,
-                nextStatus: e.target.value as StageStatus,
+                nextStatus: next as StageStatus,
               })
             }
-            className={cn(
-              'rounded-md border px-2 py-1 text-xs font-medium outline-none cursor-pointer',
-              STAGE_STATUS_STYLES[item.stageStatus].cell,
-            )}
-          >
-            <option value="not_started">{STAGE_STATUS_LABELS.not_started}</option>
-            <option value="in_progress">{STAGE_STATUS_LABELS.in_progress}</option>
-            <option value="done">{STAGE_STATUS_LABELS.done}</option>
-          </select>
+            className={STAGE_STATUS_STYLES[item.stageStatus].cell}
+            options={(['not_started', 'in_progress', 'done'] as const).map((s) => ({
+              value: s,
+              label: STAGE_STATUS_LABELS[s],
+              dotClass: STAGE_STATUS_STYLES[s].dot,
+            }))}
+          />
 
           <Button
             type="button"

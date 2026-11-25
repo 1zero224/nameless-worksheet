@@ -12,7 +12,8 @@ import { Link } from 'react-router';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { STAGE_STATUS_STYLES, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
-import { Card, cn, Input, Select } from '@/components/ui/primitives.js';
+import { Card, cn, Input } from '@/components/ui/primitives.js';
+import { SelectField } from '@/components/ui/select.js';
 
 export function SearchPage() {
   const [rawQuery, setRawQuery] = useState('');
@@ -68,33 +69,35 @@ export function SearchPage() {
             />
           </div>
 
-          <Select
+          <SelectField
             aria-label="筛选工作表"
             value={worksheetId}
-            onChange={(e) => setWorksheetId(e.target.value)}
-            className="w-36"
-          >
-            <option value="">全部工作表</option>
-            {worksheets.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </Select>
+            onValueChange={setWorksheetId}
+            className="w-40"
+            options={[
+              { value: '', label: '全部工作表' },
+              ...worksheets.map((w) => ({
+                value: w.id,
+                label: w.name,
+                dotClass: (WORKSHEET_COLOR_STYLES[w.color] ?? WORKSHEET_COLOR_STYLES.sky).dot,
+              })),
+            ]}
+          />
 
-          <Select
+          <SelectField
             aria-label="筛选工序状态"
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="w-32"
-          >
-            <option value="">全部状态</option>
-            {STAGE_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {STAGE_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </Select>
+            onValueChange={setStatus}
+            className="w-36"
+            options={[
+              { value: '', label: '全部状态' },
+              ...STAGE_STATUSES.map((s) => ({
+                value: s,
+                label: STAGE_STATUS_LABELS[s],
+                dotClass: STAGE_STATUS_STYLES[s].dot,
+              })),
+            ]}
+          />
 
           <label className="inline-flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer">
             <input

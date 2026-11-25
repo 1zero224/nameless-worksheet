@@ -126,7 +126,8 @@ test.describe
 
       // 管理员甲创建一条管理员邀请给乙
       await pageA.getByRole('link', { name: '用户与邀请' }).click();
-      await pageA.locator('#invRole').selectOption('admin');
+      await pageA.locator('#invRole').click();
+      await pageA.getByRole('option', { name: '管理员', exact: true }).click();
       await pageA.getByRole('button', { name: '生成邀请链接' }).click();
       inviteUrlAdmin2 = await pageA.getByTestId('one-time-link-input').inputValue();
       await pageA.getByRole('button', { name: '我已保存' }).click();

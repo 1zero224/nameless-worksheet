@@ -17,9 +17,15 @@ import {
 import { Check, ExternalLink, MessageSquareText, Pencil, Plus, X } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/api/client.js';
-import { PRIORITY_STYLES, peerColorForUser, STAGE_STATUS_STYLES } from '@/components/ui/colors.js';
+import {
+  PRIORITY_DOT_STYLES,
+  PRIORITY_STYLES,
+  peerColorForUser,
+  STAGE_STATUS_STYLES,
+} from '@/components/ui/colors.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays.js';
 import { Button, cn, Input } from '@/components/ui/primitives.js';
+import { SelectField } from '@/components/ui/select.js';
 
 export interface ActiveCellConflict {
   actorDisplayName: string;
@@ -520,21 +526,19 @@ export function PriorityCellEditor({
       className="relative flex min-h-[38px] w-full items-center px-2 py-1"
     >
       <PeerOverlay peer={peer} />
-      <select
+      <SelectField
         aria-label="优先级"
+        variant="pill"
+        size="xs"
         value={priority}
-        onChange={(e) => void onSelect(e.target.value as Priority)}
-        className={cn(
-          'rounded-full px-2 py-0.5 text-xs font-medium outline-none cursor-pointer',
-          PRIORITY_STYLES[priority],
-        )}
-      >
-        {PRIORITIES.map((p) => (
-          <option key={p} value={p}>
-            {PRIORITY_LABELS[p]}
-          </option>
-        ))}
-      </select>
+        onValueChange={(val) => void onSelect(val as Priority)}
+        className={PRIORITY_STYLES[priority]}
+        options={PRIORITIES.map((p) => ({
+          value: p,
+          label: PRIORITY_LABELS[p],
+          dotClass: PRIORITY_DOT_STYLES[p],
+        }))}
+      />
     </div>
   );
 }
