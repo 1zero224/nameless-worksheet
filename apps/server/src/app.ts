@@ -13,10 +13,14 @@ import { createDb, createPool, type Db } from './db/index.js';
 import { AppError } from './errors.js';
 import { startJobs } from './jobs/index.js';
 import { registerAccountRoutes } from './modules/accounts.js';
+import { registerBoardColumnRoutes } from './modules/board-columns.js';
+import { registerChangeLogRoutes } from './modules/change-logs.js';
+import { registerColumnRoutes } from './modules/columns.js';
 import { registerDiagRoutes } from './modules/diag.js';
 import { registerHealthRoutes } from './modules/health.js';
 import { registerInviteRoutes } from './modules/invites.js';
 import { registerUserRoutes } from './modules/users.js';
+import { registerWorksheetRoutes } from './modules/worksheets.js';
 import { type EventBus, InProcessEventBus } from './realtime/bus.js';
 import { RealtimeHub } from './realtime/hub.js';
 import { registerRealtimeRoute } from './realtime/route.js';
@@ -150,6 +154,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   registerAccountRoutes(app, { db, config, bus, realtime, lockout, enableRateLimit });
   registerInviteRoutes(app, { db, config, bus, enableRateLimit });
   registerUserRoutes(app, { db, config, bus, realtime });
+  registerBoardColumnRoutes(app, { db, bus });
+  registerWorksheetRoutes(app, { db, bus });
+  registerColumnRoutes(app, { db, bus });
+  registerChangeLogRoutes(app, { db });
   registerDiagRoutes(app, { db, bus });
   registerRealtimeRoute(app, { db, config, realtime });
 
