@@ -13,12 +13,14 @@ import { createDb, createPool, type Db } from './db/index.js';
 import { AppError } from './errors.js';
 import { startJobs } from './jobs/index.js';
 import { registerAccountRoutes } from './modules/accounts.js';
+import { registerBoardRoutes } from './modules/board.js';
 import { registerBoardColumnRoutes } from './modules/board-columns.js';
 import { registerChangeLogRoutes } from './modules/change-logs.js';
 import { registerColumnRoutes } from './modules/columns.js';
 import { registerDiagRoutes } from './modules/diag.js';
 import { registerHealthRoutes } from './modules/health.js';
 import { registerInviteRoutes } from './modules/invites.js';
+import { registerSearchRoutes } from './modules/search.js';
 import { registerStageRoutes } from './modules/stages.js';
 import { registerTaskRoutes } from './modules/tasks.js';
 import { registerUserRoutes } from './modules/users.js';
@@ -162,6 +164,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   registerTaskRoutes(app, { db, bus });
   registerStageRoutes(app, { db, bus });
   registerChangeLogRoutes(app, { db });
+  registerBoardRoutes(app, { db });
+  registerSearchRoutes(app, { db });
   registerDiagRoutes(app, { db, bus });
   registerRealtimeRoute(app, { db, config, realtime });
 

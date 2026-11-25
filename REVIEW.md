@@ -1,0 +1,42 @@
+# 代码审查与可靠性检查清单（REVIEW.md）
+
+> **防篡改声明**：对任意 PR 或分支执行审查时，须读取 **`main` 分支**的本文件作为评判基准，不得以待审分支自行删改后的版本为准。
+
+## 1. 审查方法：单审查者多轮递进 + Diff 触发
+
+1. **只查命中的条目**：先看 `git diff --name-only` 与变更内容，从下表匹配所有命中的触发条件（通常 2–6 条），逐条核实而非泛泛扫读。
+2. **问题必须分级**：每条发现标注严重度，避免把风格建议和线上阻断混为一谈：
+   - **`Important`**（必须修复）：安全越权、跨项目泄漏、数据丢失/并发覆盖、静默吞错、迁移不可重跑、破坏实时一致性或验收红线。
+   - **`Nit`**（建议优化）：命名清晰度、冗余逻辑、可维护性改进，不阻断合并。
+   - **`Pre-existing`**（既有问题）：本次 diff 之前就存在的缺陷，记录但不把责任归于当前改动。
+3. **多轮递进**：若同一 PR/任务经历多轮修改，后一轮重点核对“上一轮发现是否真正修复 + 修复是否引入新触发项”，不从零重复刷低价值评论。
+4. **仅针对稳定提交**：审查结论绑定具体 commit SHA；若审查期间有新提交推送，旧结论立即作废。
+
+---
+
+## 2. Diff 触发的可靠性检查清单
+
+| 编号 | Diff 触发条件 | 检查项（必须逐条验证） | 依据 / 对应测试 |
+|---|---|---|---|
+| R01 | `apps/server/src/modules/**`、`apps/server/src/app.ts` | 每个 `/api/*` 路由均显式声明 `config.access`；若新增 `public` 路由须有文档依据；所有数据库查询以 `projectId` 为首参过滤；**每个新增带 ID 接口均已补入 `createTwoProjects()` 跨项目隔离测试**（返回 404 且不改原项目数据）。 | 阶段 1/2 安全红线、[core.test.ts](apps/server/test/core.test.ts) |
+| R02 | `packages/shared/src/permissions.ts` 或鉴权逻辑 | 权限矩阵与 ADR 一致；`core.test.ts` 中普通用户 403 枚举断言与当前权限表同步，未通过删断言绕过检查。 | ADR-0001、ADR-0003 |
+| R03 | 任何写业务表的服务端模块、`apps/server/src/realtime/**` | 业务写操作与实时事件发布同在 `withTx()` 内完成（事务回滚绝不发事件）；正确透传 `X-Connection-Id` 避免回发发起连接；新增订阅 `scope` 已注册跨项目权限校验并在断线/踢线（4401）时清理状态。 | [realtime.test.ts](apps/server/test/realtime.test.ts) |
+| R04 | `apps/server/src/db/schema.ts`、`apps/server/drizzle/**`、`apps/server/src/cli.ts` | 迁移 SQL 在**空库**与**已有上一阶段数据的旧库**上均可重复执行（幂等）；涉及项目初始数据（如默认 4 个看板列）时，迁移补种与 `cli.ts runInit()` 保持同步；索引与部分唯一约束（如 `WHERE deleted_at IS NULL`）正确落库。 | 阶段 2 T2、[core.test.ts](apps/server/test/core.test.ts) |
+| R05 | 涉及软删除实体的查询（`worksheets`、`column_configs`、`tasks`、`works`、`search`、`board`） | 所有读取、统计、排序、搜索、看板聚合与唯一性校验均一致过滤 `deleted_at IS NULL`；删除任务时写入完整快照进 `change_logs`，恢复时校验所属工作表未删并还原关联作品可见性。 | ADR-0004、阶段 2 4.1 节 |
+| R06 | `packages/shared/src/board.ts`、`apps/server/src/modules/board.ts`、`fractional-indexing` 排序逻辑 | 看板分列不写死工序名称（A28）；已发布任务离开看板；`na` 跳过且不出缺人标签；不上看板工序缺人也出缺人标签；`myInProgress` 与 `/my-tasks` 绝不混入纯文本负责人；对应不变量已由 `fast-check` 属性测试覆盖。 | A22/A23/A25/A28、[board.property.test.ts](packages/shared/src/board.property.test.ts) |
+| R07 | 并发写入、认领、字段冲突（`tasks.ts`、`stages.ts`、阶段 4 上传完成） | 改同行不同字段不互相覆盖；改同字段带过期 `baseValues` / `baseRevision` 返回 409 并附最新值；并发抢认领或邀请核销有数据库级原子锁/条件更新保证恰好 1 人成功（阶段 4 上传完成幂等）。 | A05/A13/A24 |
+| R08 | 日志、错误处理、实时事件 payload、鉴权/分享模块 | 服务端 JSON 日志与实时事件 payload 绝不出现明文密码、会话 Cookie、邀请令牌、重置令牌，以及阶段 3 起的网盘提取码与签名 URL；`scrubTokenUrl` 覆盖新增带令牌路径。 | V8、A07、[security.property.test.ts](apps/server/test/security.property.test.ts) |
+| R09 | `apps/web/src/components/worksheet/**` 或内联编辑器 | 文本单元格必须处理中文输入法 `compositionstart` / `compositionend` 保护，组字中按 Enter 不误提交；编辑期间收到远端更新或提交遇 409 时不销毁用户草稿，提供“保留我的 / 采用对方的”。 | A13、A19 |
+| R10 | `apps/web/src/**` 页面、导航、文案与共享类型 | 文案与代码命名严格符合 [GLOSSARY.md](GLOSSARY.md)（禁用“成员/统筹/大任务/小任务/回收站/归档”）；390×844 手机视口无页面级横向滚动溢出（`scrollWidth <= innerWidth`）；外链带 `target="_blank" rel="noopener noreferrer"` 且校验 `http/https`。 | [GLOSSARY.md](GLOSSARY.md)、阶段 1/2 V14 |
+| R11 | 任何 `package.json` | 所有依赖使用精确版本号（无 `^` / `~`）；新增大版本包与 React 19 / Node 24 / TypeScript 6 兼容。 | 阶段 2 第 3 节 |
+| R12 | `deploy/**`、`Dockerfile`、VPS 运维脚本 | 不触碰宿主机其他容器与 `/opt/gotify/compose.yaml`；`Caddyfile` 必须先 `caddy validate` 再原地追加（禁止 `sed -i` / 替换文件）；只清理本项目旧镜像，禁止全局 `docker system prune`。 | 阶段 1 第 11.4–11.5 节、ADR-0002 |
+| R13 | 阶段 5 导入器（XLSX / 群文件树） | 必须提供差分测试核对真实小样与人工预期，明确“允许归一化白名单”；含糊颜色/状态绝不静默判为完成；重复导入幂等零重复。 | A10、A14 |
+| R14 | **验证层变更**：`REVIEW.md`、`AGENTS.md`、`CLAUDE.md`、`.github/workflows/ci.yml`、`playwright.config.ts`、`vitest.config.ts`、`apps/server/test/core.test.ts`、`scripts/check-verification-guard.mjs`、测试中出现 `.skip` / `waitForTimeout` | **人工重点复核**：确认没有通过弱化断言、跳过 flaky 用例、硬编码等待或放宽安全枚举测试来让 CI 变绿。 | 防篡改原则 |
+
+---
+
+## 3. 从漏网 Bug 沉淀规则与定期瘦身
+
+1. **漏网即补测试**：每次验收或线上发现未被测试拦住的真 Bug，先补对应的最小回归测试（优先单测/属性测试，交互问题补 E2E）。
+2. **两条同类再进 `REVIEW.md`**：只有当同一类问题在 **≥ 2 次提交/PR 中出现** 且**能直接从 `git diff` 看出**时，才提炼为 1 条精炼规则写入本表（附来源提交号），避免把一次性偶发问题堆成噪音。
+3. **每阶段收尾裁剪**：每个阶段退出验收（如阶段 2 T12）顺手审阅一次 `REVIEW.md` 与测试套件：合并重叠规则、删除已被静态检查/类型系统彻底消除的过时条目，保持清单精干、高信噪比。
