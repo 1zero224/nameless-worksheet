@@ -7,10 +7,13 @@ import { RequireAuth, RequirePermission, useMe } from '@/app/AuthContext.js';
 import { ToastProvider } from '@/components/ui/overlays.js';
 import { AdminRealtimePage } from '@/pages/AdminRealtimePage.js';
 import { AdminUsersPage } from '@/pages/AdminUsersPage.js';
+import { HomePage } from '@/pages/HomePage.js';
 import { InviteRegisterPage } from '@/pages/InviteRegisterPage.js';
 import { LoginPage } from '@/pages/LoginPage.js';
+import { MyTasksPage } from '@/pages/MyTasksPage.js';
 import { PlaceholderPage } from '@/pages/PlaceholderPage.js';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage.js';
+import { SearchPage } from '@/pages/SearchPage.js';
 import { SettingsPage } from '@/pages/SettingsPage.js';
 import { WorksheetDetailPage } from '@/pages/WorksheetDetailPage.js';
 import { WorksheetsPage } from '@/pages/WorksheetsPage.js';
@@ -58,11 +61,11 @@ function AppRoutes() {
             </RequireAuth>
           }
         >
-          <Route index element={<PlaceholderPage title="首页" />} />
-          <Route path="/my-tasks" element={<PlaceholderPage title="我的任务" />} />
+          <Route index element={<HomePage />} />
+          <Route path="/my-tasks" element={<MyTasksPage />} />
           <Route path="/worksheets" element={<WorksheetsPage />} />
           <Route path="/worksheets/:id" element={<WorksheetDetailPage />} />
-          <Route path="/search" element={<PlaceholderPage title="资源检索" />} />
+          <Route path="/search" element={<SearchPage />} />
           <Route path="/references" element={<PlaceholderPage title="参考资料" />} />
           <Route path="/settings" element={<SettingsPage />} />
 
