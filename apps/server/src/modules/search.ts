@@ -10,6 +10,7 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { type Db, schema } from '../db/index.js';
+import { ascC } from './helpers.js';
 import { toStageCellDto } from './worksheets.js';
 
 const searchQuerySchema = z.object({
@@ -57,7 +58,7 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
         .select()
         .from(schema.worksheets)
         .where(and(...wsConditions))
-        .orderBy(asc(schema.worksheets.sortOrder), asc(schema.worksheets.id));
+        .orderBy(ascC(schema.worksheets.sortOrder), asc(schema.worksheets.id));
 
       if (wsRows.length === 0) {
         const empty: SearchResponse = { items: [], total: 0 };
@@ -88,12 +89,12 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
               isNull(schema.columnConfigs.deletedAt),
             ),
           )
-          .orderBy(asc(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
+          .orderBy(ascC(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
         db
           .select()
           .from(schema.tasks)
           .where(and(...taskConditions))
-          .orderBy(asc(schema.tasks.sortOrder), asc(schema.tasks.id)),
+          .orderBy(ascC(schema.tasks.sortOrder), asc(schema.tasks.id)),
         db
           .select()
           .from(schema.works)

@@ -13,7 +13,7 @@ import { withTx } from '../db/tx.js';
 import { AppError, notFound, uniqueViolation } from '../errors.js';
 import type { EventBus } from '../realtime/bus.js';
 import { recordChangeLog } from './change-logs.js';
-import { parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
+import { ascC, parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
 
 export function toBoardColumnDto(row: typeof schema.boardColumns.$inferSelect): BoardColumn {
   return {
@@ -38,7 +38,7 @@ export function registerBoardColumnRoutes(
       .select()
       .from(schema.boardColumns)
       .where(eq(schema.boardColumns.projectId, auth.projectId))
-      .orderBy(asc(schema.boardColumns.sortOrder), asc(schema.boardColumns.id));
+      .orderBy(ascC(schema.boardColumns.sortOrder), asc(schema.boardColumns.id));
     return rows.map(toBoardColumnDto);
   });
 
@@ -61,7 +61,7 @@ export function registerBoardColumnRoutes(
               .select({ sortOrder: schema.boardColumns.sortOrder })
               .from(schema.boardColumns)
               .where(eq(schema.boardColumns.projectId, auth.projectId))
-              .orderBy(asc(schema.boardColumns.sortOrder), asc(schema.boardColumns.id));
+              .orderBy(ascC(schema.boardColumns.sortOrder), asc(schema.boardColumns.id));
 
             const lastKey = existing[existing.length - 1]?.sortOrder ?? null;
             const sortOrder = generateKeyBetween(lastKey, null);
@@ -252,7 +252,7 @@ export function registerBoardColumnRoutes(
             .select()
             .from(schema.boardColumns)
             .where(eq(schema.boardColumns.projectId, auth.projectId))
-            .orderBy(asc(schema.boardColumns.sortOrder), asc(schema.boardColumns.id));
+            .orderBy(ascC(schema.boardColumns.sortOrder), asc(schema.boardColumns.id));
 
           const uniqueIds = new Set(body.orderedIds);
           if (uniqueIds.size !== body.orderedIds.length || uniqueIds.size !== existing.length) {

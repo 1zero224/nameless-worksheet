@@ -1,6 +1,12 @@
+import { type AnyColumn, sql } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AppError } from '../errors.js';
+
+/** 按 ASCII / 字节序升序排列（保证 fractional-indexing 排序键在非 C 区域设置的 PostgreSQL 上顺序一致） */
+export function ascC(col: AnyColumn) {
+  return sql`${col} COLLATE "C" ASC`;
+}
 
 export function parseBody<T extends z.ZodType>(schema: T, body: unknown): z.output<T> {
   const result = schema.safeParse(body ?? {});

@@ -10,6 +10,7 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { type Db, schema } from '../db/index.js';
 import { toBoardColumnDto } from './board-columns.js';
+import { ascC } from './helpers.js';
 import {
   listWorksheetSummaries,
   toColumnConfigDto,
@@ -29,7 +30,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
         .select()
         .from(schema.boardColumns)
         .where(eq(schema.boardColumns.projectId, auth.projectId))
-        .orderBy(asc(schema.boardColumns.sortOrder), asc(schema.boardColumns.id)),
+        .orderBy(ascC(schema.boardColumns.sortOrder), asc(schema.boardColumns.id)),
       listWorksheetSummaries(db, auth.projectId),
     ]);
 
@@ -60,7 +61,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
             isNull(schema.columnConfigs.deletedAt),
           ),
         )
-        .orderBy(asc(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
+        .orderBy(ascC(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
       db
         .select()
         .from(schema.tasks)
@@ -72,7 +73,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
             isNull(schema.tasks.deletedAt),
           ),
         )
-        .orderBy(asc(schema.tasks.sortOrder), asc(schema.tasks.id)),
+        .orderBy(ascC(schema.tasks.sortOrder), asc(schema.tasks.id)),
       db
         .select()
         .from(schema.works)
@@ -166,7 +167,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
             isNull(schema.columnConfigs.deletedAt),
           ),
         )
-        .orderBy(asc(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
+        .orderBy(ascC(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
       db
         .select()
         .from(schema.tasks)
@@ -177,7 +178,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
             isNull(schema.tasks.deletedAt),
           ),
         )
-        .orderBy(asc(schema.tasks.sortOrder), asc(schema.tasks.id)),
+        .orderBy(ascC(schema.tasks.sortOrder), asc(schema.tasks.id)),
       db
         .select()
         .from(schema.works)

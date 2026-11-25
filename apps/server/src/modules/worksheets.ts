@@ -25,7 +25,7 @@ import { AppError, notFound, uniqueViolation } from '../errors.js';
 import type { EventBus } from '../realtime/bus.js';
 import { toBoardColumnDto } from './board-columns.js';
 import { findActiveWorksheet, recordChangeLog } from './change-logs.js';
-import { parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
+import { ascC, parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
 
 export function toWorksheetDto(row: typeof schema.worksheets.$inferSelect): Worksheet {
   return {
@@ -125,7 +125,7 @@ export async function listWorksheetSummaries(
     .select()
     .from(schema.worksheets)
     .where(and(eq(schema.worksheets.projectId, projectId), isNull(schema.worksheets.deletedAt)))
-    .orderBy(asc(schema.worksheets.sortOrder), asc(schema.worksheets.id));
+    .orderBy(ascC(schema.worksheets.sortOrder), asc(schema.worksheets.id));
 
   if (wsRows.length === 0) return [];
 
@@ -186,7 +186,7 @@ export function registerWorksheetRoutes(
                   isNull(schema.worksheets.deletedAt),
                 ),
               )
-              .orderBy(asc(schema.worksheets.sortOrder), asc(schema.worksheets.id));
+              .orderBy(ascC(schema.worksheets.sortOrder), asc(schema.worksheets.id));
 
             const lastKey = existing[existing.length - 1]?.sortOrder ?? null;
             const sortOrder = generateKeyBetween(lastKey, null);
@@ -355,7 +355,7 @@ export function registerWorksheetRoutes(
               isNull(schema.columnConfigs.deletedAt),
             ),
           )
-          .orderBy(asc(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
+          .orderBy(ascC(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
         db
           .select()
           .from(schema.tasks)
@@ -366,7 +366,7 @@ export function registerWorksheetRoutes(
               isNull(schema.tasks.deletedAt),
             ),
           )
-          .orderBy(asc(schema.tasks.sortOrder), asc(schema.tasks.id)),
+          .orderBy(ascC(schema.tasks.sortOrder), asc(schema.tasks.id)),
         db
           .select()
           .from(schema.stageCells)
@@ -390,7 +390,7 @@ export function registerWorksheetRoutes(
           .select()
           .from(schema.boardColumns)
           .where(eq(schema.boardColumns.projectId, auth.projectId))
-          .orderBy(asc(schema.boardColumns.sortOrder), asc(schema.boardColumns.id)),
+          .orderBy(ascC(schema.boardColumns.sortOrder), asc(schema.boardColumns.id)),
       ]);
 
       const activeColIds = new Set(colRows.map((c) => c.id));

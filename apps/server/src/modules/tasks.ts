@@ -22,7 +22,7 @@ import { withTx } from '../db/tx.js';
 import { AppError, notFound, uniqueViolation } from '../errors.js';
 import type { EventBus } from '../realtime/bus.js';
 import { findActiveWorksheet, recordChangeLog } from './change-logs.js';
-import { parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
+import { ascC, parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
 import { toStageCellDto, toTaskDetailDto, toWorkDto } from './worksheets.js';
 
 function worksheetSortLockKey(worksheetId: string): bigint {
@@ -158,7 +158,7 @@ async function computePositionKey(
         isNull(schema.tasks.deletedAt),
       ),
     )
-    .orderBy(asc(schema.tasks.sortOrder), asc(schema.tasks.id));
+    .orderBy(ascC(schema.tasks.sortOrder), asc(schema.tasks.id));
 
   const others = opts.excludeTaskId ? rows.filter((r) => r.id !== opts.excludeTaskId) : rows;
 
@@ -213,7 +213,7 @@ async function computePositionKey(
         isNull(schema.tasks.deletedAt),
       ),
     )
-    .orderBy(asc(schema.tasks.sortOrder), asc(schema.tasks.id));
+    .orderBy(ascC(schema.tasks.sortOrder), asc(schema.tasks.id));
 
   const lockedOthers = opts.excludeTaskId
     ? lockedRows.filter((r) => r.id !== opts.excludeTaskId)
@@ -749,7 +749,7 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
                 isNull(schema.columnConfigs.deletedAt),
               ),
             )
-            .orderBy(asc(schema.columnConfigs.sortOrder));
+            .orderBy(ascC(schema.columnConfigs.sortOrder));
 
           const now = new Date();
           await tx

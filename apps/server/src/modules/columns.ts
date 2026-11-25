@@ -13,7 +13,7 @@ import { withTx } from '../db/tx.js';
 import { AppError, notFound, uniqueViolation } from '../errors.js';
 import type { EventBus } from '../realtime/bus.js';
 import { findActiveWorksheet, recordChangeLog } from './change-logs.js';
-import { parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
+import { ascC, parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
 import { toColumnConfigDto } from './worksheets.js';
 
 function mapColumnUniqueError(err: unknown): AppError | null {
@@ -61,7 +61,7 @@ export function registerColumnRoutes(app: FastifyInstance, deps: { db: Db; bus: 
                   isNull(schema.columnConfigs.deletedAt),
                 ),
               )
-              .orderBy(asc(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id));
+              .orderBy(ascC(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id));
 
             let boardColumnId: string | null = null;
             if (body.type === 'stage') {
