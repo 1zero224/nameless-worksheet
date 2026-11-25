@@ -31,6 +31,7 @@ const SYSTEM_TOGGLEABLE: Array<{
   key: Exclude<keyof SystemColumnsConfig, 'title'>;
   label: string;
 }> = [
+  { key: 'work', label: '作品' },
   { key: 'priority', label: '优先级' },
   { key: 'publish', label: '发布信息' },
   { key: 'files', label: '文件' },
@@ -41,6 +42,10 @@ export function isSystemColumnHidden(
   sys: SystemColumnsConfig | undefined,
   key: Exclude<keyof SystemColumnsConfig, 'title'>,
 ): boolean {
+  // 作品列默认隐藏（因工作表采用作品大标题横幅分组，仍可在字段显隐中找回）
+  if (key === 'work') {
+    return sys?.work?.hidden !== false;
+  }
   return Boolean(sys?.[key]?.hidden);
 }
 

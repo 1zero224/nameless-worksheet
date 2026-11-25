@@ -251,18 +251,18 @@ export function TaskDetailDrawer({
           {currentWork && (
             <div
               data-testid="work-shared-attachments-slot"
-              className="rounded-lg border border-dashed border-indigo-200/90 bg-indigo-50/45 px-3 py-2.5"
+              className="rounded-lg border border-dashed border-black/[0.14] bg-[#fafafa] px-3 py-2.5"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-indigo-900">
-                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-zinc-900">
+                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
                   <span className="truncate">所属作品「{currentWork.name}」共用附件</span>
                 </span>
-                <span className="shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-medium text-indigo-600 ring-1 ring-indigo-200/70">
+                <span className="shrink-0 rounded-full border border-black/[0.08] bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-500">
                   阶段 3 接入
                 </span>
               </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-indigo-800/75">
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
                 后续将在此自动透出整片原片、纯音源与通用字体包，打开任意分段即可直接获取。
               </p>
             </div>

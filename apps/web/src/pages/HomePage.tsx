@@ -1,13 +1,6 @@
-import {
-  type BoardCard,
-  type BoardResponse,
-  type MyTaskItem,
-  PRIORITY_LABELS,
-  STAGE_STATUS_LABELS,
-  type UserListItem,
-} from '@nw/shared';
+import type { BoardResponse, MyTaskItem, UserListItem } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Check, Columns3, Hand, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowRight, Check, Columns3, SlidersHorizontal, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
@@ -15,12 +8,9 @@ import { queryKeys } from '@/api/keys.js';
 import { SidebarExpandButton } from '@/app/AppShell.js';
 import { useMe } from '@/app/AuthContext.js';
 import { BoardColumnsModal } from '@/components/board/BoardColumnsModal.js';
+import { KanbanBoard } from '@/components/board/KanbanBoard.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
-import {
-  PRIORITY_STYLES,
-  STAGE_STATUS_STYLES,
-  WORKSHEET_COLOR_STYLES,
-} from '@/components/ui/colors.js';
+import { WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import { useToast } from '@/components/ui/overlays.js';
 import { Button, cn } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
@@ -160,18 +150,6 @@ export function HomePage() {
     });
   }, [board?.cards, worksheetFilter, workFilter, onlyMissing, onlyMine, me]);
 
-  const cardsByBoardCol = useMemo(() => {
-    const map = new Map<string, BoardCard[]>();
-    for (const bc of board?.boardColumns ?? []) {
-      map.set(bc.id, []);
-    }
-    for (const card of filteredCards) {
-      const list = map.get(card.boardColumnId);
-      if (list) list.push(card);
-    }
-    return map;
-  }, [board?.boardColumns, filteredCards]);
-
   const availableWorks = useMemo(() => {
     const all = board?.works ?? [];
     if (!worksheetFilter) return all;
@@ -187,59 +165,54 @@ export function HomePage() {
     );
   }, [workFilter, board?.works]);
 
-  const formatAssignees = (assignees: BoardCard['stageAssignees']) =>
-    assignees
-      .map((a) => (a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name))
-      .join('、');
-
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
       {/* 极简顶栏（44px） */}
-      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 px-3">
+      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-black/[0.08] px-3">
         <div className="flex min-w-0 items-center gap-2">
           <SidebarExpandButton />
-          <h1 className="truncate text-[15px] font-semibold text-slate-900">首页</h1>
-          <span className="hidden text-xs text-slate-400 sm:inline">· 跨工作表任务流转看板</span>
+          <h1 className="truncate text-[14px] font-semibold text-zinc-950">首页</h1>
+          <span className="hidden text-xs text-zinc-400 sm:inline">· 跨工作表任务流转看板</span>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
             onClick={() => setBoardColsModalOpen(true)}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.1] bg-white px-2.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
           >
-            <Columns3 className="h-3.5 w-3.5 text-slate-400" />
+            <Columns3 className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
             管理看板列
           </button>
           <Link
             to="/worksheets"
-            className="hidden h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 sm:inline-flex"
+            className="hidden h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-500 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 sm:inline-flex"
           >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.75} />
             工作表总览
           </Link>
         </div>
       </div>
 
-      {/* 顶部紧凑“我进行中的任务”横条 */}
+      {/* 顶部紧凑“我进行中的任务”快捷条 */}
       {board && (
         <section
           data-testid="my-in-progress-bar"
-          className="shrink-0 border-b border-slate-200/80 bg-sky-50/35 px-3 py-1.5"
+          className="shrink-0 border-b border-black/[0.08] bg-[#fafafa] px-3 py-1.5"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-800">我进行中的任务</span>
-              <span className="rounded-full bg-sky-100 px-1.5 py-0 text-[11px] font-medium text-sky-800">
+              <span className="text-xs font-semibold text-zinc-900">我进行中的任务</span>
+              <span className="rounded-full bg-white px-1.5 py-0 text-[11px] font-medium tabular-nums text-zinc-600 ring-1 ring-black/[0.08]">
                 {board.myInProgress.length}
               </span>
               {board.myInProgress.length === 0 && (
-                <span className="text-xs text-slate-400">当前没有进行中的工序</span>
+                <span className="text-xs text-zinc-400">当前没有进行中的工序</span>
               )}
             </div>
             <Link
               to="/my-tasks"
-              className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-zinc-600 hover:text-zinc-950"
             >
               {board.myPendingCount > 0
                 ? `另有 ${board.myPendingCount} 项已认领待开始 · 前往我的任务`
@@ -257,17 +230,17 @@ export function HomePage() {
                   <div
                     key={`${item.taskId}:${item.stageColumnId}`}
                     data-testid={`my-in-progress-item-${item.taskId}-${item.stageColumnId}`}
-                    className="flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200/90 bg-white px-2.5 py-1 text-xs shadow-2xs"
+                    className="flex shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 py-1 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
                   >
-                    <span className={cn('h-2 w-2 shrink-0 rounded-full', wsColor.dot)} />
-                    <span className="text-[11px] text-slate-500">{item.worksheetName}</span>
+                    <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', wsColor.dot)} />
+                    <span className="text-[11px] text-zinc-400">{item.worksheetName}</span>
                     {item.workName && (
-                      <span className="rounded bg-indigo-50 px-1.5 py-0.25 text-[11px] font-medium text-indigo-700">
+                      <span className="rounded bg-black/[0.04] px-1.5 py-0.25 text-[11px] font-medium text-zinc-700">
                         {item.workName}
                       </span>
                     )}
-                    <span className="font-medium text-slate-900">{item.taskTitle}</span>
-                    <span className="rounded bg-sky-100 px-1.5 py-0.25 text-[11px] font-medium text-sky-800">
+                    <span className="font-medium text-zinc-950">{item.taskTitle}</span>
+                    <span className="rounded bg-[#EFF6FF] px-1.5 py-0.25 text-[11px] font-medium text-blue-700">
                       {item.stageColumnName}
                     </span>
                     <Button
@@ -304,7 +277,7 @@ export function HomePage() {
       )}
 
       {/* 紧凑单行筛选栏 */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200/80 bg-slate-50/40 px-3 py-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-3 py-1.5">
         <SelectField
           aria-label="按工作表筛选"
           size="xs"
@@ -353,8 +326,8 @@ export function HomePage() {
           className={cn(
             'rounded-md border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
             onlyMissing
-              ? 'border-amber-500 bg-amber-50 text-amber-900'
-              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+              ? 'border-zinc-900 bg-zinc-900 text-white'
+              : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04]',
           )}
         >
           仅看缺人
@@ -367,8 +340,8 @@ export function HomePage() {
           className={cn(
             'rounded-md border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
             onlyMine
-              ? 'border-sky-500 bg-sky-50 text-sky-900'
-              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+              ? 'border-zinc-900 bg-zinc-900 text-white'
+              : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04]',
           )}
         >
           仅看与我有关
@@ -377,14 +350,14 @@ export function HomePage() {
         {activeWorkObj && (
           <span
             data-testid="active-work-filter-chip"
-            className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800"
+            className="inline-flex items-center gap-1 rounded-full border border-black/[0.1] bg-[#fafafa] px-2.5 py-0.5 text-xs font-medium text-zinc-800"
           >
             作品：{activeWorkObj.name}
             <button
               type="button"
               onClick={() => setWorkFilter(null)}
               aria-label="清除作品筛选"
-              className="rounded-full p-0.5 hover:bg-indigo-200 cursor-pointer"
+              className="rounded-full p-0.5 text-zinc-500 hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
             >
               <X className="h-3 w-3" />
             </button>
@@ -392,185 +365,28 @@ export function HomePage() {
         )}
       </div>
 
-      {/* 看板主体（撑满剩余高度，各列独立纵向滚动） */}
+      {/* 公共 Teable 风格作品聚合看板 */}
       {isLoading || !board ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+        <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
           正在加载看板…
         </div>
       ) : (
-        <div
-          data-testid="board-columns"
-          className="flex min-h-0 flex-1 gap-3 overflow-x-auto bg-slate-50/50 p-3"
-        >
-          {board.boardColumns.map((bc) => {
-            const colCards = cardsByBoardCol.get(bc.id) ?? [];
-            return (
-              <div
-                key={bc.id}
-                data-testid={`board-col-${bc.id}`}
-                data-board-column-name={bc.name}
-                className="flex h-full min-h-0 w-72 shrink-0 flex-col rounded-lg border border-slate-200/80 bg-slate-100/70 sm:w-[300px]"
-              >
-                <div className="flex shrink-0 items-center justify-between px-3 py-2">
-                  <h2 className="text-[13px] font-semibold text-slate-800">{bc.name}</h2>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200/70">
-                    {colCards.length}
-                  </span>
-                </div>
-
-                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-2.5">
-                  {colCards.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-slate-300/80 py-8 text-center text-xs text-slate-400">
-                      暂无任务
-                    </div>
-                  ) : (
-                    colCards.map((card) => {
-                      const wsColor =
-                        WORKSHEET_COLOR_STYLES[card.worksheetColor] ?? WORKSHEET_COLOR_STYLES.sky;
-                      const assigneesText = formatAssignees(card.stageAssignees);
-                      return (
-                        <div
-                          key={`${card.taskId}:${card.boardColumnId}`}
-                          data-testid={`board-card-${card.taskId}-${card.boardColumnId}`}
-                          className="rounded-lg border border-slate-200/90 bg-white p-2.5 shadow-2xs transition-colors hover:border-slate-300"
-                        >
-                          {/* 顶部标签行 */}
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span
-                              className={cn(
-                                'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.25 text-[11px] font-medium',
-                                wsColor.badge,
-                              )}
-                            >
-                              <span className={cn('h-1.5 w-1.5 rounded-full', wsColor.dot)} />
-                              {card.worksheetName}
-                            </span>
-
-                            {card.workId && card.workName && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setWorkFilter((prev) =>
-                                    prev?.workId === card.workId &&
-                                    prev.worksheetId === card.worksheetId
-                                      ? null
-                                      : {
-                                          worksheetId: card.worksheetId,
-                                          workId: card.workId!,
-                                        },
-                                  );
-                                }}
-                                className="rounded bg-indigo-50 px-1.5 py-0.25 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100 cursor-pointer"
-                              >
-                                {card.workName}
-                              </button>
-                            )}
-
-                            {card.priority !== 'normal' && (
-                              <span
-                                className={cn(
-                                  'rounded-full px-1.5 py-0.25 text-[11px] font-medium',
-                                  PRIORITY_STYLES[card.priority],
-                                )}
-                              >
-                                {PRIORITY_LABELS[card.priority]}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* 标题与分工说明（点击打开详情侧栏） */}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setDetailTarget({
-                                worksheetId: card.worksheetId,
-                                taskId: card.taskId,
-                              })
-                            }
-                            className="mt-1.5 block w-full text-left cursor-pointer"
-                          >
-                            <div className="text-[13px] font-medium text-slate-900 hover:text-sky-700">
-                              {card.taskTitle}
-                            </div>
-                            {card.divisionNote && (
-                              <div className="mt-0.5 truncate text-xs text-slate-500">
-                                {card.divisionNote}
-                              </div>
-                            )}
-                          </button>
-
-                          {/* 本列工序状态行 */}
-                          <div className="mt-2 flex items-center justify-between text-xs">
-                            <span
-                              className={cn(
-                                'rounded px-1.5 py-0.5 text-[11px] font-medium',
-                                STAGE_STATUS_STYLES[card.stageStatus].badge,
-                              )}
-                            >
-                              {assigneesText
-                                ? `${assigneesText} · ${STAGE_STATUS_LABELS[card.stageStatus]}`
-                                : `${STAGE_STATUS_LABELS[card.stageStatus]} · 缺人`}
-                            </span>
-                          </div>
-
-                          {/* 缺人标签区（点击原子抢占认领） */}
-                          {card.missingStages.length > 0 && (
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              {card.missingStages.map((ms) => {
-                                const claimKey = `${card.taskId}:${ms.columnId}`;
-                                const claiming = claimingKeys.has(claimKey);
-                                return (
-                                  <button
-                                    key={ms.columnId}
-                                    type="button"
-                                    disabled={claiming}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      void handleClaim(card.taskId, ms.columnId, ms.name);
-                                    }}
-                                    className="inline-flex items-center gap-0.5 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 cursor-pointer"
-                                  >
-                                    <Hand className="h-3 w-3" />
-                                    {claiming ? '认领中…' : `缺 ${ms.name}`}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          {/* 底部迷你进度点 + 阶段 3 快捷附件下载槽位 */}
-                          {card.stageProgress.length > 0 && (
-                            <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-1.5">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {card.stageProgress.map((sp) => (
-                                  <span
-                                    key={sp.columnId}
-                                    title={`${sp.name}：${STAGE_STATUS_LABELS[sp.status]}`}
-                                    className="inline-flex items-center gap-1 text-[10px] text-slate-500"
-                                  >
-                                    <span
-                                      className={cn(
-                                        'h-1.5 w-1.5 rounded-full',
-                                        STAGE_STATUS_STYLES[sp.status].dot,
-                                      )}
-                                    />
-                                    <span>{sp.name}</span>
-                                  </span>
-                                ))}
-                              </div>
-                              {/* 阶段 3 预留：本列工序最新附件一键下载角标槽位 */}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <KanbanBoard
+          boardColumns={board.boardColumns}
+          cards={filteredCards}
+          userMap={userMap}
+          claimingKeys={claimingKeys}
+          showWorksheetSource
+          onClaim={handleClaim}
+          onOpenDetail={setDetailTarget}
+          onSelectWorkFilter={(target) =>
+            setWorkFilter((prev) =>
+              prev?.workId === target.workId && prev.worksheetId === target.worksheetId
+                ? null
+                : target,
+            )
+          }
+        />
       )}
 
       {/* 右上角「管理看板列」弹窗 */}

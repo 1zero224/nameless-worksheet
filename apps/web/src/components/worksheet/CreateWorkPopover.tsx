@@ -68,14 +68,14 @@ export function CreateWorkPopover({
         <button
           type="button"
           data-testid="create-work-trigger"
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 transition-colors hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-800 cursor-pointer"
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
         >
-          <FolderPlus className="h-3.5 w-3.5 text-indigo-500" />
+          <FolderPlus className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.75} />
           <span>新建作品</span>
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-72 space-y-2.5 p-3">
+      <PopoverContent align="start" className="w-72 space-y-2.5 p-3">
         <div>
           <div className="text-xs font-semibold text-slate-800">新建作品大标题</div>
           <p className="mt-0.5 text-[11px] text-slate-400">

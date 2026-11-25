@@ -1,17 +1,7 @@
 import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import {
   type Assignee,
   type ColumnChangedPayload,
-  type ColumnConfig,
+  computeBoardData,
   getEffectiveStageCell,
   type PresencePeer,
   type Priority,
@@ -32,84 +22,49 @@ import {
   type WorkUpdatedPayload,
 } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
-  FolderOpen,
-  GripVertical,
+  ExternalLink,
   History,
-  MoreHorizontal,
-  PanelRightOpen,
-  Plus,
+  Kanban,
   RotateCcw,
   Search,
-  Trash2,
+  Table2,
 } from 'lucide-react';
-import {
-  createContext,
-  type FormEvent,
-  Fragment,
-  type MouseEvent as ReactMouseEvent,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { motion } from 'motion/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { SidebarExpandButton } from '@/app/AppShell.js';
 import { useMe } from '@/app/AuthContext.js';
+import { KanbanBoard } from '@/components/board/KanbanBoard.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import { peerColorForUser, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
-import {
-  ConfirmDialog,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  useToast,
-} from '@/components/ui/overlays.js';
+import { ConfirmDialog, useToast } from '@/components/ui/overlays.js';
 import { Button, cn, Input } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
 import { AddColumnPopover } from '@/components/worksheet/AddColumnPopover.js';
-import {
-  type ActiveCellConflict,
-  type CellEditSignal,
-  InlineTextCell,
-  PriorityCellEditor,
-  PublishCellEditor,
-  type StageCellConflict,
-  StageCellEditor,
-} from '@/components/worksheet/CellEditors.js';
+import type { ActiveCellConflict, StageCellConflict } from '@/components/worksheet/CellEditors.js';
 import { ChangeLogDrawer } from '@/components/worksheet/ChangeLogDrawer.js';
-import { ColumnHeaderMenu } from '@/components/worksheet/ColumnHeaderMenu.js';
 import { ColumnManagerModal } from '@/components/worksheet/ColumnManagerModal.js';
 import { CreateWorkPopover } from '@/components/worksheet/CreateWorkPopover.js';
+import { FieldVisibilityPopover } from '@/components/worksheet/FieldVisibilityPopover.js';
 import {
-  FieldVisibilityPopover,
-  isSystemColumnHidden,
-} from '@/components/worksheet/FieldVisibilityPopover.js';
-import { InlineAddSegmentRow, WorkBannerRow } from '@/components/worksheet/WorkBannerRow.js';
+  type GridDisplayBlock,
+  WorksheetCanvasGrid,
+} from '@/components/worksheet/WorksheetCanvasGrid.js';
 import { useRealtimeClient, useRealtimeScope } from '@/realtime/context.js';
 
-const TABLE_FEATURES = tableFeatures({});
-const columnHelper = createColumnHelper<typeof TABLE_FEATURES, TaskDetail>();
 const EMPTY_TASKS: TaskDetail[] = [];
 
+type ViewMode = 'grid' | 'board';
 type StatusChip = 'all' | 'mine' | 'not_started' | 'in_progress' | 'all_stages_done';
 type LocalSort = 'manual' | 'title' | 'priority' | 'work';
 
 const PRIORITY_RANK: Record<Priority, number> = { urgent: 0, high: 1, normal: 2 };
-
-type DisplayBlock =
-  | { kind: 'standalone'; key: string; tasks: TaskDetail[] }
-  | { kind: 'work'; key: string; work: Work; tasks: TaskDetail[]; isEmptyPending: boolean };
 
 function sortTasksByKey(list: TaskDetail[]): TaskDetail[] {
   return [...list].sort((a, b) => {
@@ -117,410 +72,6 @@ function sortTasksByKey(list: TaskDetail[]): TaskDetail[] {
     if (a.sortOrder > b.sortOrder) return 1;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
-}
-
-function isTaskAllStagesDone(task: TaskDetail, stageCols: ColumnConfig[]): boolean {
-  const applicable = stageCols
-    .map((c) => getEffectiveStageCell(task, c.id))
-    .filter((cell) => cell.status !== 'na');
-  return applicable.length > 0 && applicable.every((cell) => cell.status === 'done');
-}
-
-// ---- 稳定单元格上下文（避免 FlexRender 因列定义变更而卸载单元格、丢失输入态/IME） ----
-
-interface EditRequestState {
-  taskId: string;
-  columnKey: string;
-  signal: CellEditSignal;
-}
-
-interface WorksheetGridContextValue {
-  users: UserListItem[];
-  userMap: Map<string, string>;
-  selectedCell: { taskId: string; columnKey: string } | null;
-  editRequest: EditRequestState | null;
-  peerByCell: Map<string, PresencePeer>;
-  textConflicts: Map<string, ActiveCellConflict>;
-  stageConflicts: Map<string, StageCellConflict>;
-  selectCell: (taskId: string, columnKey: string) => void;
-  setEditingFocus: (taskId: string | null, columnKey: string | null, editing: boolean) => void;
-  moveFromCell: (taskId: string, columnKey: string, direction: 'down' | 'right' | 'left') => void;
-  clearTextConflict: (key: string) => void;
-  clearStageConflict: (key: string) => void;
-  acceptRemoteField: (taskId: string, field: string, remoteVal: string) => void;
-  patchTask: (
-    taskId: string,
-    changes: Record<string, unknown>,
-    baseValues?: Record<string, unknown>,
-    force?: boolean,
-  ) => Promise<void>;
-  patchStage: (
-    taskId: string,
-    columnId: string,
-    payload: {
-      assignees: Assignee[];
-      status: StageStatus;
-      note: string;
-      baseRevision: number;
-      force: boolean;
-    },
-  ) => Promise<void>;
-  openDetail: (taskId: string) => void;
-}
-
-const WorksheetGridContext = createContext<WorksheetGridContextValue | null>(null);
-
-function useWorksheetGrid(): WorksheetGridContextValue {
-  const ctx = useContext(WorksheetGridContext);
-  if (!ctx) throw new Error('WorksheetGridContext missing');
-  return ctx;
-}
-
-function getEditSignalFor(
-  req: EditRequestState | null,
-  taskId: string,
-  columnKey: string,
-): CellEditSignal | null {
-  if (!req || req.taskId !== taskId || req.columnKey !== columnKey) return null;
-  return req.signal;
-}
-
-function TitleGridCell({ row }: { row: { original: TaskDetail } }) {
-  const ctx = useWorksheetGrid();
-  const task = row.original;
-  const conflictKey = `${task.id}:title`;
-  return (
-    <InlineTextCell
-      taskId={task.id}
-      columnKey="title"
-      value={task.title}
-      required
-      selected={ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === 'title'}
-      editSignal={getEditSignalFor(ctx.editRequest, task.id, 'title')}
-      peer={ctx.peerByCell.get(conflictKey)}
-      remoteConflict={ctx.textConflicts.get(conflictKey) ?? null}
-      onSelect={() => ctx.selectCell(task.id, 'title')}
-      onEditingChange={(ed) => ctx.setEditingFocus(task.id, 'title', ed)}
-      onMoveAfterCommit={(dir) => ctx.moveFromCell(task.id, 'title', dir)}
-      onClearConflict={() => ctx.clearTextConflict(conflictKey)}
-      onAcceptRemote={(val) => ctx.acceptRemoteField(task.id, 'title', val)}
-      onCommit={(nextVal, baseVal, force) =>
-        ctx.patchTask(task.id, { title: nextVal }, { title: baseVal }, force)
-      }
-    />
-  );
-}
-
-function DivisionNoteGridCell({ row }: { row: { original: TaskDetail } }) {
-  const ctx = useWorksheetGrid();
-  const task = row.original;
-  const conflictKey = `${task.id}:divisionNote`;
-  return (
-    <InlineTextCell
-      taskId={task.id}
-      columnKey="divisionNote"
-      value={task.divisionNote}
-      placeholder="填写分工说明"
-      selected={
-        ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === 'divisionNote'
-      }
-      editSignal={getEditSignalFor(ctx.editRequest, task.id, 'divisionNote')}
-      peer={ctx.peerByCell.get(conflictKey)}
-      remoteConflict={ctx.textConflicts.get(conflictKey) ?? null}
-      onSelect={() => ctx.selectCell(task.id, 'divisionNote')}
-      onEditingChange={(ed) => ctx.setEditingFocus(task.id, 'divisionNote', ed)}
-      onMoveAfterCommit={(dir) => ctx.moveFromCell(task.id, 'divisionNote', dir)}
-      onClearConflict={() => ctx.clearTextConflict(conflictKey)}
-      onAcceptRemote={(val) => ctx.acceptRemoteField(task.id, 'divisionNote', val)}
-      onCommit={(nextVal, baseVal, force) =>
-        ctx.patchTask(task.id, { divisionNote: nextVal }, { divisionNote: baseVal }, force)
-      }
-    />
-  );
-}
-
-function StageGridCell({
-  row,
-  column,
-}: {
-  row: { original: TaskDetail };
-  column: { columnDef: { meta?: unknown } };
-}) {
-  const ctx = useWorksheetGrid();
-  const col = (column.columnDef.meta as { columnConfig: ColumnConfig }).columnConfig;
-  const task = row.original;
-  const cell = getEffectiveStageCell(task, col.id);
-  const conflictKey = `${task.id}:${col.id}`;
-  return (
-    <StageCellEditor
-      taskId={task.id}
-      columnId={col.id}
-      columnName={col.name}
-      cell={cell}
-      users={ctx.users}
-      userMap={ctx.userMap}
-      selected={ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === col.id}
-      editSignal={getEditSignalFor(ctx.editRequest, task.id, col.id)}
-      peer={ctx.peerByCell.get(conflictKey)}
-      remoteConflict={ctx.stageConflicts.get(conflictKey) ?? null}
-      onSelect={() => ctx.selectCell(task.id, col.id)}
-      onFocusChange={(ed) =>
-        ed === null
-          ? ctx.setEditingFocus(task.id, col.id, false)
-          : ctx.setEditingFocus(task.id, col.id, ed)
-      }
-      onClearConflict={() => ctx.clearStageConflict(conflictKey)}
-      onCommit={(payload) => ctx.patchStage(task.id, col.id, payload)}
-    />
-  );
-}
-
-function CustomGridCell({
-  row,
-  column,
-}: {
-  row: { original: TaskDetail };
-  column: { columnDef: { meta?: unknown } };
-}) {
-  const ctx = useWorksheetGrid();
-  const col = (column.columnDef.meta as { columnConfig: ColumnConfig }).columnConfig;
-  const customInputType: 'text' | 'date' | 'link' =
-    col.type === 'date' || col.type === 'link' ? col.type : 'text';
-  const task = row.original;
-  const val = task.customValues[col.id] ?? '';
-  const conflictKey = `${task.id}:${col.id}`;
-  return (
-    <InlineTextCell
-      taskId={task.id}
-      columnKey={col.id}
-      value={val}
-      inputType={customInputType}
-      placeholder={col.type === 'link' ? 'https://...' : ''}
-      selected={ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === col.id}
-      editSignal={getEditSignalFor(ctx.editRequest, task.id, col.id)}
-      peer={ctx.peerByCell.get(conflictKey)}
-      remoteConflict={ctx.textConflicts.get(conflictKey) ?? null}
-      onSelect={() => ctx.selectCell(task.id, col.id)}
-      onEditingChange={(ed) => ctx.setEditingFocus(task.id, col.id, ed)}
-      onMoveAfterCommit={(dir) => ctx.moveFromCell(task.id, col.id, dir)}
-      onClearConflict={() => ctx.clearTextConflict(conflictKey)}
-      onAcceptRemote={(remoteVal) => ctx.acceptRemoteField(task.id, col.id, remoteVal)}
-      onCommit={(nextVal, baseVal, force) =>
-        ctx.patchTask(
-          task.id,
-          { customValues: { [col.id]: nextVal || null } },
-          { customValues: { [col.id]: baseVal || null } },
-          force,
-        )
-      }
-    />
-  );
-}
-
-function PriorityGridCell({ row }: { row: { original: TaskDetail } }) {
-  const ctx = useWorksheetGrid();
-  const task = row.original;
-  return (
-    <PriorityCellEditor
-      taskId={task.id}
-      priority={task.priority}
-      selected={ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === 'priority'}
-      editSignal={getEditSignalFor(ctx.editRequest, task.id, 'priority')}
-      peer={ctx.peerByCell.get(`${task.id}:priority`)}
-      onSelectCell={() => ctx.selectCell(task.id, 'priority')}
-      onFocusChange={(ed) =>
-        ed === null
-          ? ctx.setEditingFocus(task.id, 'priority', false)
-          : ctx.setEditingFocus(task.id, 'priority', ed)
-      }
-      onSelect={(next) =>
-        ctx.patchTask(task.id, { priority: next }, { priority: task.priority }, true)
-      }
-    />
-  );
-}
-
-function PublishGridCell({ row }: { row: { original: TaskDetail } }) {
-  const ctx = useWorksheetGrid();
-  const task = row.original;
-  return (
-    <PublishCellEditor
-      taskId={task.id}
-      publishStatus={task.publishStatus}
-      publishedAt={task.publishedAt}
-      publishUrl={task.publishUrl}
-      selected={ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === 'publish'}
-      editSignal={getEditSignalFor(ctx.editRequest, task.id, 'publish')}
-      peer={ctx.peerByCell.get(`${task.id}:publish`)}
-      onSelect={() => ctx.selectCell(task.id, 'publish')}
-      onFocusChange={(ed) =>
-        ed === null
-          ? ctx.setEditingFocus(task.id, 'publish', false)
-          : ctx.setEditingFocus(task.id, 'publish', ed)
-      }
-      onSave={(patch) => ctx.patchTask(task.id, patch, undefined, true)}
-    />
-  );
-}
-
-function FilesGridCell({ row }: { row: { original: TaskDetail } }) {
-  const ctx = useWorksheetGrid();
-  const task = row.original;
-  const selected = ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === 'files';
-  return (
-    <button
-      type="button"
-      data-testid={`cell-${task.id}-files`}
-      onClick={() => {
-        ctx.selectCell(task.id, 'files');
-        ctx.openDetail(task.id);
-      }}
-      className={cn(
-        'flex min-h-[36px] w-full items-center gap-1 px-2 text-xs text-slate-400 hover:bg-slate-50 hover:text-slate-600 outline-none cursor-pointer',
-        selected && 'ring-2 ring-inset ring-sky-500',
-      )}
-      title="任务文件将在阶段 3 启用，点击打开详情"
-    >
-      <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate">阶段 3</span>
-    </button>
-  );
-}
-
-function SortableTableRow({
-  task,
-  rowNumber,
-  inWorkGroup = false,
-  dragEnabled,
-  rowSelected,
-  highlighted,
-  onContextMenu,
-  onInsertBelow,
-  onOpenDetail,
-  onDelete,
-  children,
-}: {
-  task: TaskDetail;
-  rowNumber: number;
-  inWorkGroup?: boolean;
-  dragEnabled: boolean;
-  rowSelected: boolean;
-  highlighted: boolean;
-  onContextMenu: (e: ReactMouseEvent<HTMLTableRowElement>) => void;
-  onInsertBelow: () => void;
-  onOpenDetail: () => void;
-  onDelete: () => void;
-  children: React.ReactNode;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
-    disabled: !dragEnabled,
-  });
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  return (
-    <tr
-      ref={setNodeRef}
-      data-task-row={task.id}
-      onContextMenu={onContextMenu}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(
-        'group h-9 border-b border-slate-200/80 bg-white hover:bg-slate-50/70',
-        isDragging && 'relative z-30 shadow-md ring-2 ring-sky-500/30',
-        highlighted && 'bg-amber-50 ring-2 ring-inset ring-amber-400 transition-colors',
-      )}
-    >
-      {/* 极窄 40px 行号列：默认显行号，悬停/选中切为拖拽手柄 + 展开详情；作品子行左侧带细色条标明归属 */}
-      <td className="sticky left-0 z-20 h-9 w-10 min-w-10 max-w-10 border-r border-slate-200/80 bg-white p-0 text-center group-hover:bg-slate-50">
-        {inWorkGroup && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-indigo-400/75"
-          />
-        )}
-        <div className="relative flex h-9 w-10 items-center justify-center">
-          <span
-            className={cn(
-              'text-[11px] tabular-nums text-slate-400 select-none',
-              rowSelected || menuOpen ? 'hidden' : 'group-hover:hidden group-focus-within:hidden',
-            )}
-          >
-            {rowNumber}
-          </span>
-          <div
-            className={cn(
-              'items-center justify-center gap-0.5',
-              rowSelected || menuOpen ? 'flex' : 'hidden group-hover:flex group-focus-within:flex',
-            )}
-          >
-            <button
-              type="button"
-              {...(dragEnabled ? attributes : {})}
-              {...(dragEnabled ? listeners : {})}
-              disabled={!dragEnabled}
-              aria-label={`拖动排序 ${task.title}`}
-              title={dragEnabled ? '拖动调整行序或跨作品移动' : '恢复默认顺序后可拖动调整行序'}
-              className={cn(
-                'flex h-5 w-4 items-center justify-center rounded text-slate-400',
-                dragEnabled
-                  ? 'cursor-grab hover:bg-slate-200/70 hover:text-slate-700 active:cursor-grabbing'
-                  : 'cursor-not-allowed opacity-30',
-              )}
-            >
-              <GripVertical className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              onClick={onOpenDetail}
-              title="展开任务详情"
-              aria-label={`打开 ${task.title} 详情`}
-              className="flex h-5 w-4 items-center justify-center rounded text-slate-400 hover:bg-sky-50 hover:text-sky-700 cursor-pointer"
-            >
-              <PanelRightOpen className="h-3 w-3" />
-            </button>
-          </div>
-        </div>
-      </td>
-
-      {children}
-
-      {/* 最右侧 40px 轻量行菜单列（与表头 `+` 列对齐） */}
-      <td className="h-9 w-10 min-w-10 p-0 text-center">
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={`行操作 ${task.title}`}
-              title="行操作"
-              className={cn(
-                'mx-auto flex h-6 w-6 items-center justify-center rounded text-slate-400 transition-opacity hover:bg-slate-200/70 hover:text-slate-800 cursor-pointer',
-                menuOpen || rowSelected
-                  ? 'opacity-100'
-                  : 'opacity-0 group-hover:opacity-100 focus:opacity-100',
-              )}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[148px]">
-            <DropdownMenuItem onSelect={onOpenDetail}>
-              <PanelRightOpen className="h-3.5 w-3.5 text-slate-400" />
-              展开任务详情
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onInsertBelow}>
-              <Plus className="h-3.5 w-3.5 text-slate-400" />
-              在下方插入一行
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={onDelete}>
-              <Trash2 className="h-3.5 w-3.5" />
-              删除任务
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </td>
-    </tr>
-  );
 }
 
 export function WorksheetDetailPage() {
@@ -532,37 +83,25 @@ export function WorksheetDetailPage() {
   const realtime = useRealtimeClient();
   const { pushToast } = useToast();
 
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [subscribedReady, setSubscribedReady] = useState(false);
   const [peers, setPeers] = useState<Map<string, PresencePeer>>(new Map());
   const [selectedCell, setSelectedCell] = useState<{ taskId: string; columnKey: string } | null>(
     null,
   );
-  const [editRequest, setEditRequest] = useState<EditRequestState | null>(null);
   const activeEditorRef = useRef<{ taskId: string; columnKey: string } | null>(null);
-  const quickAddInputRef = useRef<HTMLInputElement | null>(null);
-  const insertInputRef = useRef<HTMLInputElement | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement | null>(null);
-  const [scrollContainerEl, setScrollContainerEl] = useState<HTMLDivElement | null>(null);
-  const editNonceRef = useRef(1);
 
   const [textConflicts, setTextConflicts] = useState<Map<string, ActiveCellConflict>>(new Map());
   const [stageConflicts, setStageConflicts] = useState<Map<string, StageCellConflict>>(new Map());
+  const [claimingKeys, setClaimingKeys] = useState<Set<string>>(new Set());
 
   const [colModalOpen, setColModalOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [publishedExpanded, setPublishedExpanded] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
-  const [quickAddTitle, setQuickAddTitle] = useState('');
-  const [insertingAfterId, setInsertingAfterId] = useState<string | null>(null);
-  const [insertTitle, setInsertTitle] = useState('');
-  const [rowContextMenu, setRowContextMenu] = useState<{
-    task: TaskDetail;
-    x: number;
-    y: number;
-  } | null>(null);
 
-  // 作品大标题横幅相关状态
+  // 作品大标题横幅状态
   const [pendingWorks, setPendingWorks] = useState<Work[]>([]);
   const [collapsedWorkIds, setCollapsedWorkIds] = useState<Set<string>>(new Set());
   const [addingSegmentWorkId, setAddingSegmentWorkId] = useState<string | null>(null);
@@ -577,7 +116,6 @@ export function WorksheetDetailPage() {
   const [workFilter, setWorkFilter] = useState<string>('');
   const [keyword, setKeyword] = useState('');
   const [localSort, setLocalSort] = useState<LocalSort>('manual');
-  const [previewWidths, setPreviewWidths] = useState<Record<string, number>>({});
 
   const wsScope = useMemo(
     () => (worksheetId ? { type: 'worksheet', id: worksheetId } : null),
@@ -586,64 +124,19 @@ export function WorksheetDetailPage() {
 
   useEffect(() => {
     if (!worksheetId) return;
+    setViewMode('grid');
     setSubscribedReady(false);
     setPeers(new Map());
     setSelectedCell(null);
-    setEditRequest(null);
     activeEditorRef.current = null;
     setTextConflicts(new Map());
     setStageConflicts(new Map());
     setPublishedExpanded(false);
-    setPreviewWidths({});
-    setInsertingAfterId(null);
-    setRowContextMenu(null);
     setPendingWorks([]);
     setCollapsedWorkIds(new Set());
     setAddingSegmentWorkId(null);
     setUngroupingWork(null);
   }, [worksheetId]);
-
-  // 追踪表格滚动容器可视宽度，确保作品大标题横幅在宽表横向滚动时仍完整贴合视口
-  useEffect(() => {
-    const el = scrollContainerEl;
-    if (!el) return;
-    const syncWidth = () => {
-      el.style.setProperty('--ws-scroll-w', `${el.clientWidth}px`);
-    };
-    syncWidth();
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(syncWidth);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [scrollContainerEl]);
-
-  // 插入行展开时自动聚焦输入框
-  useEffect(() => {
-    if (insertingAfterId) {
-      requestAnimationFrame(() => insertInputRef.current?.focus());
-    }
-  }, [insertingAfterId]);
-
-  // 关闭行右键菜单（点击外部、Esc 或滚动）
-  useEffect(() => {
-    if (!rowContextMenu) return;
-    const onPointerClick = (e: MouseEvent) => {
-      if (contextMenuRef.current?.contains(e.target as Node)) return;
-      setRowContextMenu(null);
-    };
-    const close = () => setRowContextMenu(null);
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') setRowContextMenu(null);
-    };
-    window.addEventListener('click', onPointerClick);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', close, true);
-    return () => {
-      window.removeEventListener('click', onPointerClick);
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', close, true);
-    };
-  }, [rowContextMenu]);
 
   const refetchWorksheet = useCallback(() => {
     if (worksheetId) {
@@ -699,9 +192,10 @@ export function WorksheetDetailPage() {
 
       if (ev.type === 'column.changed') {
         const p = ev.payload as ColumnChangedPayload;
-        if (p.action === 'reordered' && p.columns) {
+        const nextCols = p.columns;
+        if (p.action === 'reordered' && nextCols) {
           queryClient.setQueryData<WorksheetFullResponse>(qKey, (old) =>
-            old ? { ...old, columns: p.columns! } : old,
+            old ? { ...old, columns: nextCols } : old,
           );
         } else {
           refetchWorksheet();
@@ -823,7 +317,7 @@ export function WorksheetDetailPage() {
               : existing.customValues,
           };
           const nextWorks =
-            payload.work && !old.works.some((w) => w.id === payload.work!.id)
+            payload.work && !old.works.some((w) => w.id === payload.work?.id)
               ? [...old.works, payload.work]
               : old.works;
           return {
@@ -905,14 +399,16 @@ export function WorksheetDetailPage() {
     if (!locateTaskId || !data) return;
     const target = data.tasks.find((t) => t.id === locateTaskId);
     if (!target) return;
+    setViewMode('grid');
     if (target.publishStatus === 'published') {
       setPublishedExpanded(true);
     }
     if (target.workId) {
+      const targetWorkId = target.workId;
       setCollapsedWorkIds((prev) => {
-        if (!prev.has(target.workId!)) return prev;
+        if (!prev.has(targetWorkId)) return prev;
         const next = new Set(prev);
-        next.delete(target.workId!);
+        next.delete(targetWorkId);
         return next;
       });
     }
@@ -922,10 +418,6 @@ export function WorksheetDetailPage() {
     nextParams.delete('taskId');
     setSearchParams(nextParams, { replace: true });
 
-    requestAnimationFrame(() => {
-      const el = document.querySelector(`[data-task-row="${target.id}"]`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
     const timer = setTimeout(() => setHighlightedTaskId(null), 2200);
     return () => clearTimeout(timer);
   }, [locateTaskId, data, searchParams, setSearchParams]);
@@ -958,16 +450,6 @@ export function WorksheetDetailPage() {
     },
     [setEditingFocus],
   );
-
-  const peerByCell = useMemo(() => {
-    const map = new Map<string, PresencePeer>();
-    for (const peer of peers.values()) {
-      if (peer.focus) {
-        map.set(`${peer.focus.taskId}:${peer.focus.columnKey}`, peer);
-      }
-    }
-    return map;
-  }, [peers]);
 
   const onlineUsers = useMemo(() => {
     const byUser = new Map<string, PresencePeer>();
@@ -1083,9 +565,9 @@ export function WorksheetDetailPage() {
     [data?.tasks],
   );
 
-  // 将未发布任务组织为「作品大标题横幅块」+「无作品独立平铺块」
-  const displayBlocks = useMemo<DisplayBlock[]>(() => {
-    const blocks: DisplayBlock[] = [];
+  // 将未发布任务组织为「无作品独立平铺块」+「作品大标题横幅块」
+  const displayBlocks = useMemo<GridDisplayBlock[]>(() => {
+    const blocks: GridDisplayBlock[] = [];
     const tasksByWorkId = new Map<string, TaskDetail[]>();
     for (const task of activeTasks) {
       if (task.workId) {
@@ -1127,7 +609,6 @@ export function WorksheetDetailPage() {
       }
     }
 
-    // 刚新建但尚未录入分段的空作品，立即渲染横幅引导输入首条分段
     const kw = keyword.trim().toLowerCase();
     for (const pw of pendingWorks) {
       if (emittedWorkIds.has(pw.id)) continue;
@@ -1145,7 +626,6 @@ export function WorksheetDetailPage() {
     return blocks;
   }, [activeTasks, workMap, worksheetId, pendingWorks, workFilter, keyword]);
 
-  // 展平当前主表所有可见任务行（按渲染顺序，跳过已折叠作品内的行）
   const visualActiveTasks = useMemo(() => {
     const list: TaskDetail[] = [];
     for (const block of displayBlocks) {
@@ -1157,6 +637,36 @@ export function WorksheetDetailPage() {
     }
     return list;
   }, [displayBlocks, collapsedWorkIds]);
+
+  // 单表「看板视图」实时推导数据（零额外后端接口，严格复用 @nw/shared computeBoardData）
+  const singleSheetBoard = useMemo(() => {
+    if (!data || !me) return { boardColumns: [], cards: [] };
+    const mappedBoardColIds = new Set(
+      data.columns
+        .filter((c) => c.type === 'stage' && c.boardColumnId)
+        .map((c) => c.boardColumnId as string),
+    );
+    const relevantBoardCols =
+      mappedBoardColIds.size > 0
+        ? data.boardColumns.filter((bc) => mappedBoardColIds.has(bc.id))
+        : data.boardColumns;
+    const computed = computeBoardData({
+      boardColumns: relevantBoardCols,
+      worksheets: [
+        {
+          id: data.worksheet.id,
+          name: data.worksheet.name,
+          color: data.worksheet.color,
+          sortOrder: data.worksheet.sortOrder,
+        },
+      ],
+      stageColumns: data.columns,
+      works: allWorks,
+      tasks: activeTasks,
+      currentUserId: me.user.id,
+    });
+    return { boardColumns: relevantBoardCols, cards: computed.cards };
+  }, [data, me, allWorks, activeTasks]);
 
   const createTaskMutation = useMutation({
     mutationFn: (payload: { title: string; afterTaskId?: string | null; workId?: string | null }) =>
@@ -1258,6 +768,31 @@ export function WorksheetDetailPage() {
     [worksheetId, queryClient],
   );
 
+  const handleBoardClaim = async (taskId: string, columnId: string, stageName: string) => {
+    const key = `${taskId}:${columnId}`;
+    if (claimingKeys.has(key)) return;
+    setClaimingKeys((prev) => new Set(prev).add(key));
+    try {
+      await apiFetch(`/api/tasks/${taskId}/stages/${columnId}/claim`, { method: 'POST' });
+      pushToast({ message: `已认领「${stageName}」（保持未开始）`, variant: 'success' });
+      refetchWorksheet();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.board });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myTasks });
+    } catch (err) {
+      pushToast({
+        message: err instanceof ApiError ? err.message : '认领失败',
+        variant: 'error',
+      });
+      refetchWorksheet();
+    } finally {
+      setClaimingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
   const deleteTask = useCallback(
     async (task: TaskDetail) => {
       try {
@@ -1288,6 +823,69 @@ export function WorksheetDetailPage() {
       }
     },
     [worksheetId, queryClient, pushToast, refetchWorksheet],
+  );
+
+  const handleReorderRows = useCallback(
+    async (movingTaskId: string, dropRowIndex: number) => {
+      if (isFilteredOrSorted || !worksheetId) return;
+      const movingTask = visualActiveTasks.find((t) => t.id === movingTaskId);
+      if (!movingTask) return;
+      const clampedIdx = Math.max(0, Math.min(visualActiveTasks.length - 1, dropRowIndex));
+      const overTask = visualActiveTasks[clampedIdx];
+      const targetWorkId = overTask ? overTask.workId : null;
+      const targetList = visualActiveTasks.filter((t) => t.id !== movingTaskId);
+      const afterTaskId = clampedIdx > 0 ? (targetList[clampedIdx - 1]?.id ?? null) : null;
+      const beforeTaskId =
+        clampedIdx < targetList.length ? (targetList[clampedIdx]?.id ?? null) : null;
+
+      try {
+        if (movingTask.workId !== targetWorkId) {
+          await patchTask(
+            movingTaskId,
+            { workId: targetWorkId },
+            { workId: movingTask.workId },
+            true,
+          );
+        }
+        const { updates } = await apiFetch<{
+          updates: Array<{ taskId: string; sortOrder: string }>;
+        }>(`/api/worksheets/${worksheetId}/tasks/reorder`, {
+          method: 'POST',
+          body: { taskId: movingTaskId, afterTaskId, beforeTaskId },
+        });
+        const map = new Map(updates.map((u) => [u.taskId, u.sortOrder]));
+        queryClient.setQueryData<WorksheetFullResponse>(queryKeys.worksheet(worksheetId), (old) => {
+          if (!old) return old;
+          const next = old.tasks.map((t) => {
+            const s = map.get(t.id);
+            return s !== undefined ? { ...t, sortOrder: s } : t;
+          });
+          return { ...old, tasks: sortTasksByKey(next) };
+        });
+      } catch {
+        refetchWorksheet();
+      }
+    },
+    [isFilteredOrSorted, worksheetId, visualActiveTasks, patchTask, queryClient, refetchWorksheet],
+  );
+
+  const handleResizeColumn = useCallback(
+    (colId: string, width: number, isSystem: boolean) => {
+      if (!worksheetId) return;
+      if (isSystem) {
+        const sysKey = colId as keyof SystemColumnsConfig;
+        void apiFetch(`/api/worksheets/${worksheetId}`, {
+          method: 'PATCH',
+          body: { systemColumns: { [sysKey]: { width } } },
+        }).then(() => refetchWorksheet());
+      } else {
+        void apiFetch(`/api/worksheets/${worksheetId}/columns/${colId}`, {
+          method: 'PATCH',
+          body: { width },
+        }).then(() => refetchWorksheet());
+      }
+    },
+    [worksheetId, refetchWorksheet],
   );
 
   const renameWork = useCallback(
@@ -1330,9 +928,7 @@ export function WorksheetDetailPage() {
         });
       }
       setUngroupingWork(null);
-      if (addingSegmentWorkId === work.id) {
-        setAddingSegmentWorkId(null);
-      }
+      if (addingSegmentWorkId === work.id) setAddingSegmentWorkId(null);
       setPendingWorks((prev) => prev.filter((w) => w.id !== work.id));
       refetchWorksheet();
       void queryClient.invalidateQueries({ queryKey: queryKeys.board });
@@ -1366,7 +962,6 @@ export function WorksheetDetailPage() {
       next.delete(workId);
       return next;
     });
-    setInsertingAfterId(null);
     setAddingSegmentWorkId(workId);
   }, []);
 
@@ -1407,543 +1002,9 @@ export function WorksheetDetailPage() {
     [worksheetId, queryClient],
   );
 
-  const startResize = useCallback(
-    (colId: string, startWidth: number, isSystem: boolean, e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const startX = e.clientX;
-      let latestWidth = startWidth;
-
-      const onMove = (moveEv: MouseEvent) => {
-        latestWidth = Math.max(
-          80,
-          Math.min(600, Math.round(startWidth + (moveEv.clientX - startX))),
-        );
-        setPreviewWidths((prev) => ({ ...prev, [colId]: latestWidth }));
-      };
-
-      const onUp = () => {
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        if (!worksheetId || latestWidth === startWidth) return;
-
-        if (isSystem) {
-          const sysKey = colId as keyof SystemColumnsConfig;
-          void apiFetch(`/api/worksheets/${worksheetId}`, {
-            method: 'PATCH',
-            body: { systemColumns: { [sysKey]: { width: latestWidth } } },
-          }).then(() => refetchWorksheet());
-        } else {
-          void apiFetch(`/api/worksheets/${worksheetId}/columns/${colId}`, {
-            method: 'PATCH',
-            body: { width: latestWidth },
-          }).then(() => refetchWorksheet());
-        }
-      };
-
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
-    },
-    [worksheetId, refetchWorksheet],
-  );
-
-  const wsSystemColumns = data?.worksheet.systemColumns;
-  const wsColumns = data?.columns;
-
-  // 列定义仅依赖列结构与列宽，cell 使用模块级稳定组件，绝不因焦点/冲突/任务变更卸载单元格！
-  const visibleColumns = useMemo(() => {
-    if (!wsColumns) return [];
-    const sys = wsSystemColumns ?? {};
-    const defs = [];
-
-    defs.push(
-      columnHelper.display({
-        id: 'title',
-        header: '标题 / 分段',
-        meta: {
-          width: previewWidths.title ?? sys.title?.width ?? 220,
-          isSystem: true,
-          systemKey: 'title' as const,
-          stickyTitle: true,
-          isTextCell: true,
-        },
-        cell: TitleGridCell,
-      }),
-    );
-
-    for (const col of wsColumns) {
-      if (col.hidden) continue;
-      defs.push(
-        columnHelper.display({
-          id: col.id,
-          header: col.name,
-          meta: {
-            width: previewWidths[col.id] ?? col.width,
-            isSystem: false,
-            columnConfig: col,
-            isTextCell: col.type === 'text' || col.type === 'link',
-          },
-          cell: col.type === 'stage' ? StageGridCell : CustomGridCell,
-        }),
-      );
-    }
-
-    if (!isSystemColumnHidden(sys, 'priority')) {
-      defs.push(
-        columnHelper.display({
-          id: 'priority',
-          header: '优先级',
-          meta: {
-            width: previewWidths.priority ?? sys.priority?.width ?? 92,
-            isSystem: true,
-            systemKey: 'priority' as const,
-          },
-          cell: PriorityGridCell,
-        }),
-      );
-    }
-
-    if (!isSystemColumnHidden(sys, 'publish')) {
-      defs.push(
-        columnHelper.display({
-          id: 'publish',
-          header: '发布信息',
-          meta: {
-            width: previewWidths.publish ?? sys.publish?.width ?? 148,
-            isSystem: true,
-            systemKey: 'publish' as const,
-          },
-          cell: PublishGridCell,
-        }),
-      );
-    }
-
-    if (!isSystemColumnHidden(sys, 'files')) {
-      defs.push(
-        columnHelper.display({
-          id: 'files',
-          header: '文件',
-          meta: {
-            width: previewWidths.files ?? sys.files?.width ?? 96,
-            isSystem: true,
-            systemKey: 'files' as const,
-          },
-          cell: FilesGridCell,
-        }),
-      );
-    }
-
-    if (!isSystemColumnHidden(sys, 'divisionNote')) {
-      defs.push(
-        columnHelper.display({
-          id: 'divisionNote',
-          header: '分工说明',
-          meta: {
-            width: previewWidths.divisionNote ?? sys.divisionNote?.width ?? 170,
-            isSystem: true,
-            systemKey: 'divisionNote' as const,
-            isTextCell: true,
-          },
-          cell: DivisionNoteGridCell,
-        }),
-      );
-    }
-
-    return defs;
-  }, [wsSystemColumns, wsColumns, previewWidths]);
-
-  const visibleColumnKeys = useMemo(
-    () => visibleColumns.map((c) => c.id as string),
-    [visibleColumns],
-  );
-
-  const textColumnKeySet = useMemo(() => {
-    const set = new Set<string>();
-    for (const col of visibleColumns) {
-      const meta = col.meta as { isTextCell?: boolean } | undefined;
-      if (meta?.isTextCell && col.id) set.add(col.id);
-    }
-    return set;
-  }, [visibleColumns]);
-
-  const focusCellElement = useCallback((taskId: string, columnKey: string) => {
-    const focusNow = () => {
-      const el = document.querySelector<HTMLElement>(`[data-testid="cell-${taskId}-${columnKey}"]`);
-      if (!el) return false;
-      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-      const focusable = el.matches('button') ? el : el.querySelector<HTMLElement>('button');
-      focusable?.focus({ preventScroll: true });
-      return true;
-    };
-    if (!focusNow()) {
-      requestAnimationFrame(() => {
-        focusNow();
-      });
-    }
-  }, []);
-
-  const moveFromCell = useCallback(
-    (taskId: string, columnKey: string, direction: 'down' | 'right' | 'left') => {
-      const list = visualActiveTasks.some((t) => t.id === taskId)
-        ? visualActiveTasks
-        : publishedExpanded && publishedTasks.some((t) => t.id === taskId)
-          ? publishedTasks
-          : null;
-      if (!list || visibleColumnKeys.length === 0) return;
-
-      const rIdx = list.findIndex((t) => t.id === taskId);
-      const cIdx = visibleColumnKeys.indexOf(columnKey);
-      if (rIdx === -1 || cIdx === -1) return;
-
-      let nextR = rIdx;
-      let nextC = cIdx;
-      if (direction === 'down') {
-        nextR = Math.min(list.length - 1, rIdx + 1);
-      } else if (direction === 'right') {
-        if (cIdx + 1 < visibleColumnKeys.length) {
-          nextC = cIdx + 1;
-        } else if (rIdx + 1 < list.length) {
-          nextR = rIdx + 1;
-          nextC = 0;
-        }
-      } else if (direction === 'left') {
-        if (cIdx - 1 >= 0) {
-          nextC = cIdx - 1;
-        } else if (rIdx - 1 >= 0) {
-          nextR = rIdx - 1;
-          nextC = visibleColumnKeys.length - 1;
-        }
-      }
-
-      const targetTask = list[nextR];
-      const targetCol = visibleColumnKeys[nextC];
-      if (!targetTask || !targetCol) return;
-      selectCell(targetTask.id, targetCol);
-      focusCellElement(targetTask.id, targetCol);
-    },
-    [
-      visualActiveTasks,
-      publishedTasks,
-      publishedExpanded,
-      visibleColumnKeys,
-      selectCell,
-      focusCellElement,
-    ],
-  );
-
-  // 单元格键盘导航（顺畅跨越作品大标题横幅并在可见任务行之间移动）
-  useEffect(() => {
-    const onKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (!selectedCell) return;
-      if (activeEditorRef.current) return;
-      if (
-        colModalOpen ||
-        logsOpen ||
-        detailTaskId ||
-        rowContextMenu ||
-        insertingAfterId ||
-        ungroupingWork
-      ) {
-        return;
-      }
-
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable ||
-          target.closest('[role="dialog"]') ||
-          target.closest('[data-radix-popper-content-wrapper]'))
-      ) {
-        return;
-      }
-
-      const list = visualActiveTasks.some((t) => t.id === selectedCell.taskId)
-        ? visualActiveTasks
-        : publishedExpanded && publishedTasks.some((t) => t.id === selectedCell.taskId)
-          ? publishedTasks
-          : null;
-      if (!list || visibleColumnKeys.length === 0) return;
-
-      const rIdx = list.findIndex((t) => t.id === selectedCell.taskId);
-      const cIdx = visibleColumnKeys.indexOf(selectedCell.columnKey);
-      if (rIdx === -1 || cIdx === -1) return;
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setSelectedCell(null);
-        setEditingFocus(null, null, false);
-        return;
-      }
-
-      let nextR = rIdx;
-      let nextC = cIdx;
-      let moved = false;
-
-      if (e.key === 'ArrowUp') {
-        nextR = Math.max(0, rIdx - 1);
-        moved = true;
-      } else if (e.key === 'ArrowDown') {
-        nextR = Math.min(list.length - 1, rIdx + 1);
-        moved = true;
-      } else if (e.key === 'ArrowLeft') {
-        nextC = Math.max(0, cIdx - 1);
-        moved = true;
-      } else if (e.key === 'ArrowRight') {
-        nextC = Math.min(visibleColumnKeys.length - 1, cIdx + 1);
-        moved = true;
-      } else if (e.key === 'Tab') {
-        if (e.shiftKey) {
-          if (cIdx > 0) {
-            nextC = cIdx - 1;
-          } else if (rIdx > 0) {
-            nextR = rIdx - 1;
-            nextC = visibleColumnKeys.length - 1;
-          }
-        } else {
-          if (cIdx + 1 < visibleColumnKeys.length) {
-            nextC = cIdx + 1;
-          } else if (rIdx + 1 < list.length) {
-            nextR = rIdx + 1;
-            nextC = 0;
-          }
-        }
-        moved = true;
-      }
-
-      if (moved) {
-        e.preventDefault();
-        const nextTask = list[nextR];
-        const nextCol = visibleColumnKeys[nextC];
-        if (nextTask && nextCol) {
-          selectCell(nextTask.id, nextCol);
-          focusCellElement(nextTask.id, nextCol);
-        }
-        return;
-      }
-
-      if (e.key === 'Enter' || e.key === 'F2') {
-        e.preventDefault();
-        if (selectedCell.columnKey === 'files') {
-          setDetailTaskId(selectedCell.taskId);
-        } else {
-          const nonce = ++editNonceRef.current;
-          setEditRequest({
-            taskId: selectedCell.taskId,
-            columnKey: selectedCell.columnKey,
-            signal: { nonce },
-          });
-        }
-        return;
-      }
-
-      // 选中文本格时直接键入字符快速进入编辑（不拦截中文 IME Process/组合态）
-      if (
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        !e.isComposing &&
-        e.key.length === 1 &&
-        e.key !== ' ' &&
-        textColumnKeySet.has(selectedCell.columnKey)
-      ) {
-        e.preventDefault();
-        const nonce = ++editNonceRef.current;
-        setEditRequest({
-          taskId: selectedCell.taskId,
-          columnKey: selectedCell.columnKey,
-          signal: { nonce, initialChar: e.key },
-        });
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [
-    selectedCell,
-    colModalOpen,
-    logsOpen,
-    detailTaskId,
-    rowContextMenu,
-    insertingAfterId,
-    ungroupingWork,
-    visualActiveTasks,
-    publishedTasks,
-    publishedExpanded,
-    visibleColumnKeys,
-    textColumnKeySet,
-    selectCell,
-    setEditingFocus,
-    focusCellElement,
-  ]);
-
-  const gridContextValue = useMemo<WorksheetGridContextValue>(
-    () => ({
-      users,
-      userMap,
-      selectedCell,
-      editRequest,
-      peerByCell,
-      textConflicts,
-      stageConflicts,
-      selectCell,
-      setEditingFocus,
-      moveFromCell,
-      clearTextConflict,
-      clearStageConflict,
-      acceptRemoteField,
-      patchTask,
-      patchStage,
-      openDetail: setDetailTaskId,
-    }),
-    [
-      users,
-      userMap,
-      selectedCell,
-      editRequest,
-      peerByCell,
-      textConflicts,
-      stageConflicts,
-      selectCell,
-      setEditingFocus,
-      moveFromCell,
-      clearTextConflict,
-      clearStageConflict,
-      acceptRemoteField,
-      patchTask,
-      patchStage,
-    ],
-  );
-
-  const mainTable = useTable({
-    features: TABLE_FEATURES,
-    columns: visibleColumns,
-    data: visualActiveTasks,
-    getRowId: (row) => row.id,
-  });
-
-  const publishedTable = useTable({
-    features: TABLE_FEATURES,
-    columns: visibleColumns,
-    data: publishedTasks,
-    getRowId: (row) => row.id,
-  });
-
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  const handleRowDragEnd = async (ev: DragEndEvent) => {
-    if (isFilteredOrSorted || !worksheetId) return;
-    const { active, over } = ev;
-    if (!over || active.id === over.id) return;
-
-    const movingId = String(active.id);
-    const overId = String(over.id);
-    const movingTask = visualActiveTasks.find((t) => t.id === movingId);
-    if (!movingTask) return;
-
-    // 情况 1：拖放到作品大标题横幅上 -> 移入该作品末尾
-    if (overId.startsWith('work-drop:')) {
-      const targetWorkId = overId.slice('work-drop:'.length);
-      const targetWorkTasks = activeTasks.filter(
-        (t) => t.workId === targetWorkId && t.id !== movingId,
-      );
-      const lastTarget = targetWorkTasks[targetWorkTasks.length - 1] ?? null;
-
-      try {
-        if (movingTask.workId !== targetWorkId) {
-          await patchTask(movingId, { workId: targetWorkId }, { workId: movingTask.workId }, true);
-        }
-        if (lastTarget) {
-          const { updates } = await apiFetch<{
-            updates: Array<{ taskId: string; sortOrder: string }>;
-          }>(`/api/worksheets/${worksheetId}/tasks/reorder`, {
-            method: 'POST',
-            body: { taskId: movingId, afterTaskId: lastTarget.id, beforeTaskId: null },
-          });
-          const map = new Map(updates.map((u) => [u.taskId, u.sortOrder]));
-          queryClient.setQueryData<WorksheetFullResponse>(
-            queryKeys.worksheet(worksheetId),
-            (old) => {
-              if (!old) return old;
-              const next = old.tasks.map((t) => {
-                const s = map.get(t.id);
-                return s !== undefined ? { ...t, sortOrder: s } : t;
-              });
-              return { ...old, tasks: sortTasksByKey(next) };
-            },
-          );
-        }
-      } catch {
-        refetchWorksheet();
-      }
-      return;
-    }
-
-    // 情况 2：拖放到另一任务行（同作品内排序，或跨作品/独立区互拖同步更新 workId + sortOrder）
-    const oldIdx = visualActiveTasks.findIndex((t) => t.id === movingId);
-    const newIdx = visualActiveTasks.findIndex((t) => t.id === overId);
-    if (oldIdx === -1 || newIdx === -1) return;
-
-    const overTask = visualActiveTasks[newIdx];
-    const targetWorkId = overTask ? overTask.workId : null;
-    const targetList = visualActiveTasks.filter((t) => t.id !== movingId);
-    const afterTaskId = newIdx > 0 ? (targetList[newIdx - 1]?.id ?? null) : null;
-    const beforeTaskId = newIdx < targetList.length ? (targetList[newIdx]?.id ?? null) : null;
-
-    try {
-      if (movingTask.workId !== targetWorkId) {
-        await patchTask(movingId, { workId: targetWorkId }, { workId: movingTask.workId }, true);
-      }
-      const { updates } = await apiFetch<{ updates: Array<{ taskId: string; sortOrder: string }> }>(
-        `/api/worksheets/${worksheetId}/tasks/reorder`,
-        {
-          method: 'POST',
-          body: { taskId: movingId, afterTaskId, beforeTaskId },
-        },
-      );
-      const map = new Map(updates.map((u) => [u.taskId, u.sortOrder]));
-      queryClient.setQueryData<WorksheetFullResponse>(queryKeys.worksheet(worksheetId), (old) => {
-        if (!old) return old;
-        const next = old.tasks.map((t) => {
-          const s = map.get(t.id);
-          return s !== undefined ? { ...t, sortOrder: s } : t;
-        });
-        return { ...old, tasks: sortTasksByKey(next) };
-      });
-    } catch {
-      refetchWorksheet();
-    }
-  };
-
-  const handleQuickAdd = (e: FormEvent) => {
-    e.preventDefault();
-    const title = quickAddTitle.trim();
-    if (!title) return;
-    createTaskMutation.mutate({ title });
-    setQuickAddTitle('');
-    requestAnimationFrame(() => {
-      quickAddInputRef.current?.focus();
-    });
-  };
-
-  const handleInsertSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    const title = insertTitle.trim();
-    if (!title || !insertingAfterId) return;
-    const anchor = data?.tasks.find((t) => t.id === insertingAfterId);
-    createTaskMutation.mutate({
-      title,
-      afterTaskId: insertingAfterId,
-      workId: anchor?.workId ?? null,
-    });
-    setInsertingAfterId(null);
-    setInsertTitle('');
-  };
-
   if (isLoading || !subscribedReady) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+      <div className="flex flex-1 items-center justify-center text-sm text-zinc-400">
         正在加载工作表…
       </div>
     );
@@ -1952,7 +1013,7 @@ export function WorksheetDetailPage() {
   if (error || !data) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-        <p className="text-sm text-slate-600">工作表不存在或已被删除</p>
+        <p className="text-sm text-zinc-600">工作表不存在或已被删除</p>
         <Button
           type="button"
           variant="secondary"
@@ -1967,339 +1028,207 @@ export function WorksheetDetailPage() {
 
   const wsColor = WORKSHEET_COLOR_STYLES[data.worksheet.color] ?? WORKSHEET_COLOR_STYLES.sky;
   const dragEnabled = !isFilteredOrSorted;
-  const totalColSpan = visibleColumns.length + 2;
 
-  const renderTableHeaders = (tableInstance: typeof mainTable, stickyTop: boolean) => (
-    <thead
-      className={cn(
-        'bg-slate-50/95 text-left text-xs font-medium text-slate-600',
-        stickyTop && 'sticky top-0 z-30',
-      )}
-    >
-      {tableInstance.getHeaderGroups().map((hg) => (
-        <tr key={hg.id} className="h-[34px] border-b border-slate-200/80">
-          {/* 40px 极窄行号列头 */}
-          <th className="sticky left-0 z-30 h-[34px] w-10 min-w-10 max-w-10 border-r border-slate-200/80 bg-slate-50/95 p-0 text-center text-[11px] font-medium text-slate-400">
-            #
-          </th>
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      {/* 上层 44px Teable 风格视图标签栏 */}
+      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-black/[0.08] px-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <SidebarExpandButton />
+            <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', wsColor.dot)} />
+            <h1 className="truncate text-[14px] font-semibold text-zinc-950">
+              {data.worksheet.name}
+            </h1>
+          </div>
 
-          {hg.headers.map((header) => {
-            const meta = header.column.columnDef.meta as
-              | {
-                  width?: number;
-                  isSystem?: boolean;
-                  systemKey?: keyof SystemColumnsConfig;
-                  stickyTitle?: boolean;
-                  columnConfig?: ColumnConfig;
-                }
-              | undefined;
-            const width = meta?.width ?? 140;
-            const label =
-              typeof header.column.columnDef.header === 'string'
-                ? header.column.columnDef.header
-                : header.id;
-            return (
-              <th
-                key={header.id}
-                style={{ width, minWidth: width }}
-                className={cn(
-                  'relative h-[34px] select-none border-r border-slate-200/80 bg-slate-50/95 p-0 font-medium',
-                  meta?.stickyTitle &&
-                    'sticky left-[40px] z-30 shadow-[2px_0_4px_-2px_rgba(15,23,42,0.06)]',
-                )}
-              >
-                <ColumnHeaderMenu
-                  worksheetId={data.worksheet.id}
-                  label={label}
-                  systemKey={meta?.systemKey}
-                  columnConfig={meta?.columnConfig}
-                  allColumns={data.columns}
-                  boardColumns={data.boardColumns}
-                />
-                {/* 右缘 6px 隐形列宽拖拽热区 */}
+          <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />
+
+          {/* 表格视图 / 看板视图标签切换（motion layoutId 平滑滑移指示线） */}
+          <div className="flex h-11 items-center gap-1" role="tablist" aria-label="工作表视图">
+            {(
+              [
+                { id: 'grid', label: '表格视图', icon: Table2, testId: 'view-tab-grid' },
+                { id: 'board', label: '看板视图', icon: Kanban, testId: 'view-tab-board' },
+              ] as const
+            ).map((tab) => {
+              const active = viewMode === tab.id;
+              const Icon = tab.icon;
+              return (
                 <button
+                  key={tab.id}
                   type="button"
-                  aria-label={`调整列宽 ${header.id}`}
-                  onMouseDown={(e) => startResize(header.id, width, Boolean(meta?.isSystem), e)}
-                  className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize transition-colors hover:bg-sky-500"
-                />
-              </th>
-            );
-          })}
+                  role="tab"
+                  aria-selected={active}
+                  data-testid={tab.testId}
+                  onClick={() => setViewMode(tab.id)}
+                  className={cn(
+                    'relative inline-flex h-11 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors cursor-pointer',
+                    active ? 'text-zinc-950' : 'text-zinc-500 hover:text-zinc-900',
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  <span>{tab.label}</span>
+                  {active && (
+                    <motion.span
+                      layoutId="worksheet-view-tab-indicator"
+                      transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+                      className="absolute right-1.5 bottom-0 left-1.5 h-[2px] rounded-full bg-zinc-950"
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-          {/* 最右侧 `+` 列头原地加列 */}
-          <th className="h-[34px] w-10 min-w-10 bg-slate-50/95 p-0 text-center">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {onlineUsers.length > 0 && (
+            <div
+              data-testid="presence-bar"
+              className="flex items-center gap-1 rounded-full border border-black/[0.08] bg-[#fafafa] px-2 py-0.5"
+            >
+              <span className="hidden text-[11px] text-zinc-400 sm:inline">在线</span>
+              {onlineUsers.map((peer) => {
+                const color = peerColorForUser(peer.userId);
+                return (
+                  <span
+                    key={peer.userId}
+                    title={
+                      peer.focus
+                        ? `${peer.displayName}${peer.focus.editing ? '（正在编辑）' : '（正在查看）'}`
+                        : `${peer.displayName}（在线）`
+                    }
+                    className={cn(
+                      'inline-flex items-center rounded-full px-1.5 py-0.25 text-[11px] font-medium',
+                      color.bg,
+                      color.text,
+                    )}
+                  >
+                    {peer.displayName}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setLogsOpen(true)}
+            className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+          >
+            <History className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
+            <span className="hidden sm:inline">修改记录</span>
+            <span className="sr-only sm:hidden">修改记录</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 下层 36px 极简图标工具栏 */}
+      <div className="flex min-h-[36px] shrink-0 flex-wrap items-center gap-1.5 border-b border-black/[0.08] bg-[#fafafa]/60 px-3 py-1">
+        <CreateWorkPopover
+          worksheetId={data.worksheet.id}
+          onCreated={(createdWork) => {
+            setViewMode('grid');
+            setPendingWorks((prev) =>
+              prev.some((w) => w.id === createdWork.id) ||
+              data.works.some((w) => w.id === createdWork.id)
+                ? prev
+                : [...prev, createdWork],
+            );
+            openAddSegmentForWork(createdWork.id);
+          }}
+        />
+
+        {viewMode === 'grid' && (
+          <>
+            <FieldVisibilityPopover
+              worksheet={data.worksheet}
+              columns={data.columns}
+              onOpenFullModal={() => setColModalOpen(true)}
+            />
             <AddColumnPopover
               worksheetId={data.worksheet.id}
               columns={data.columns}
               boardColumns={data.boardColumns}
             />
-          </th>
-        </tr>
-      ))}
-    </thead>
-  );
-
-  const renderSingleRow = (
-    tableInstance: typeof mainTable,
-    row: ReturnType<typeof mainTable.getRowModel>['rows'][number],
-    rowNumber: number,
-    allowDrag: boolean,
-    inWorkGroup = false,
-  ) => {
-    const task = row.original;
-    const rowSelected = selectedCell?.taskId === task.id;
-    return (
-      <Fragment key={row.id}>
-        <SortableTableRow
-          task={task}
-          rowNumber={rowNumber}
-          inWorkGroup={inWorkGroup}
-          dragEnabled={allowDrag}
-          rowSelected={rowSelected}
-          highlighted={highlightedTaskId === task.id}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setRowContextMenu({
-              task,
-              x: Math.min(e.clientX, window.innerWidth - 170),
-              y: Math.min(e.clientY, window.innerHeight - 130),
-            });
-          }}
-          onInsertBelow={() => {
-            setAddingSegmentWorkId(null);
-            setInsertingAfterId(task.id);
-            setInsertTitle('');
-          }}
-          onOpenDetail={() => setDetailTaskId(task.id)}
-          onDelete={() => void deleteTask(task)}
-        >
-          {row.getAllCells().map((cell) => {
-            const meta = cell.column.columnDef.meta as
-              | { width?: number; stickyTitle?: boolean }
-              | undefined;
-            const width = meta?.width ?? 140;
-            return (
-              <td
-                key={cell.id}
-                style={{ width, minWidth: width }}
-                className={cn(
-                  'border-r border-slate-200/80 p-0 align-middle',
-                  meta?.stickyTitle &&
-                    'sticky left-[40px] z-20 bg-white group-hover:bg-slate-50 shadow-[2px_0_4px_-2px_rgba(15,23,42,0.06)]',
-                )}
-              >
-                <tableInstance.FlexRender cell={cell} />
-              </td>
-            );
-          })}
-        </SortableTableRow>
-
-        {/* 在该行下方贴合网格原地插入新行 */}
-        {insertingAfterId === task.id && (
-          <tr data-testid="inline-insert-row" className="h-9 border-b border-sky-200 bg-sky-50/60">
-            <td className="sticky left-0 z-20 h-9 w-10 min-w-10 border-r border-slate-200/80 bg-sky-50 text-center text-sky-600">
-              <Plus className="mx-auto h-3.5 w-3.5" />
-            </td>
-            <td colSpan={visibleColumns.length + 1} className="h-9 p-0 align-middle">
-              <form
-                onSubmit={handleInsertSubmit}
-                className="sticky left-[40px] flex h-9 w-full max-w-lg items-center gap-1.5 px-2"
-              >
-                <input
-                  ref={insertInputRef}
-                  value={insertTitle}
-                  onChange={(e) => setInsertTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      e.preventDefault();
-                      setInsertingAfterId(null);
-                    }
-                  }}
-                  placeholder="输入新任务标题回车确认"
-                  className="h-7 min-w-0 flex-1 rounded border border-sky-400 bg-white px-2 text-[13px] text-slate-900 outline-none focus:ring-2 focus:ring-sky-500/20"
-                  maxLength={200}
-                />
-                <Button
-                  type="submit"
-                  size="sm"
-                  className="h-7 px-2.5 text-xs"
-                  disabled={createTaskMutation.isPending}
-                >
-                  插入
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => setInsertingAfterId(null)}
-                >
-                  取消
-                </Button>
-              </form>
-            </td>
-          </tr>
+          </>
         )}
-      </Fragment>
-    );
-  };
 
-  // 建立主表可见行索引映射（支持作品大标题横幅块与独立平铺块混合渲染）
-  const mainRowLookup = new Map(
-    mainTable.getRowModel().rows.map((r, idx) => [r.original.id, { row: r, rowNumber: idx + 1 }]),
-  );
+        <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />
 
-  return (
-    <WorksheetGridContext.Provider value={gridContextValue}>
-      <div className="flex h-full min-h-0 flex-col bg-white">
-        {/* 上层极简顶栏（44px）：表名、统计、+ 新建作品、在线状态、修改记录 */}
-        <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 px-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <SidebarExpandButton />
-            <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', wsColor.dot)} />
-            <h1 className="truncate text-[15px] font-semibold text-slate-900">
-              {data.worksheet.name}
-            </h1>
-            <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">
-              未发布 {data.tasks.length - totalPublishedCount} · 已发布 {totalPublishedCount}
-            </span>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <CreateWorkPopover
-              worksheetId={data.worksheet.id}
-              onCreated={(createdWork) => {
-                setPendingWorks((prev) =>
-                  prev.some((w) => w.id === createdWork.id) ||
-                  data.works.some((w) => w.id === createdWork.id)
-                    ? prev
-                    : [...prev, createdWork],
-                );
-                openAddSegmentForWork(createdWork.id);
-                requestAnimationFrame(() => {
-                  const banner = document.querySelector(
-                    `[data-testid="work-banner-${createdWork.id}"]`,
-                  );
-                  banner?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                });
-              }}
-            />
-
-            {onlineUsers.length > 0 && (
-              <div
-                data-testid="presence-bar"
-                className="flex items-center gap-1 rounded-full border border-slate-200/90 bg-slate-50/80 px-2 py-0.5"
-              >
-                <span className="hidden text-[11px] text-slate-400 sm:inline">在线</span>
-                {onlineUsers.map((peer) => {
-                  const color = peerColorForUser(peer.userId);
-                  return (
-                    <span
-                      key={peer.userId}
-                      title={
-                        peer.focus
-                          ? `${peer.displayName}${peer.focus.editing ? '（正在编辑）' : '（正在查看）'}`
-                          : `${peer.displayName}（在线）`
-                      }
-                      className={cn(
-                        'inline-flex items-center rounded-full px-1.5 py-0.25 text-[11px] font-medium',
-                        color.bg,
-                        color.text,
-                      )}
-                    >
-                      {peer.displayName}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-
+        <div className="flex flex-wrap items-center gap-0.5">
+          {(
+            [
+              ['all', '全部'],
+              ['mine', '我的'],
+              ['not_started', '未开始'],
+              ['in_progress', '进行中'],
+              ['all_stages_done', '全工序已完成'],
+            ] as const
+          ).map(([val, label]) => (
             <button
+              key={val}
               type="button"
-              onClick={() => setLogsOpen(true)}
-              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
+              onClick={() => setStatusChip(val)}
+              className={cn(
+                'rounded-md px-2 py-1 text-xs font-medium transition-colors cursor-pointer',
+                statusChip === val
+                  ? 'bg-black/[0.07] text-zinc-950'
+                  : 'text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900',
+              )}
             >
-              <History className="h-3.5 w-3.5 text-slate-400" />
-              <span className="hidden sm:inline">修改记录</span>
-              <span className="sr-only sm:hidden">修改记录</span>
+              {label}
             </button>
-          </div>
+          ))}
         </div>
 
-        {/* 下层单行紧凑工具栏（38px） */}
-        <div className="flex min-h-[38px] shrink-0 flex-wrap items-center gap-1.5 border-b border-slate-200/80 bg-slate-50/40 px-3 py-1">
-          <div className="flex flex-wrap items-center gap-1">
-            {(
-              [
-                ['all', '全部'],
-                ['mine', '我的'],
-                ['not_started', '未开始'],
-                ['in_progress', '进行中'],
-                ['all_stages_done', '全工序已完成'],
-              ] as const
-            ).map(([val, label]) => (
-              <button
-                key={val}
-                type="button"
-                onClick={() => setStatusChip(val)}
-                className={cn(
-                  'rounded-md px-2 py-1 text-xs font-medium transition-colors cursor-pointer',
-                  statusChip === val
-                    ? 'bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200'
-                    : 'text-slate-600 hover:bg-slate-200/60 hover:text-slate-900',
-                )}
-              >
-                {label}
-              </button>
-            ))}
+        <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+            <Input
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="筛选关键词…"
+              aria-label="表内筛选关键词"
+              className="h-7 w-32 pl-7 text-xs sm:w-36"
+            />
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
-            <div className="relative">
-              <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-              <Input
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder="筛选关键词…"
-                aria-label="表内筛选关键词"
-                className="h-7 w-32 pl-7 text-xs sm:w-36"
-              />
-            </div>
+          <SelectField
+            aria-label="按作品筛选"
+            size="xs"
+            value={workFilter}
+            onValueChange={setWorkFilter}
+            className="w-28 sm:w-32"
+            options={[
+              { value: '', label: '全部作品' },
+              ...allWorks.map((w) => ({ value: w.id, label: w.name })),
+            ]}
+          />
 
-            <SelectField
-              aria-label="按作品筛选"
-              size="xs"
-              value={workFilter}
-              onValueChange={setWorkFilter}
-              className="w-28 sm:w-32"
-              options={[
-                { value: '', label: '全部作品' },
-                ...allWorks.map((w) => ({ value: w.id, label: w.name })),
-              ]}
-            />
+          <SelectField
+            aria-label="按负责人筛选"
+            size="xs"
+            value={assigneeFilter}
+            onValueChange={setAssigneeFilter}
+            className="w-28 sm:w-32"
+            options={[
+              { value: '', label: '全部负责人' },
+              ...users.map((u) => ({
+                value: `u:${u.id}`,
+                label: u.displayName,
+                group: '项目用户',
+              })),
+              ...textAssigneeOptions.map((name) => ({
+                value: `t:${name}`,
+                label: name,
+                group: '纯文本负责人',
+              })),
+            ]}
+          />
 
-            <SelectField
-              aria-label="按负责人筛选"
-              size="xs"
-              value={assigneeFilter}
-              onValueChange={setAssigneeFilter}
-              className="w-28 sm:w-32"
-              options={[
-                { value: '', label: '全部负责人' },
-                ...users.map((u) => ({
-                  value: `u:${u.id}`,
-                  label: u.displayName,
-                  group: '项目用户',
-                })),
-                ...textAssigneeOptions.map((name) => ({
-                  value: `t:${name}`,
-                  label: name,
-                  group: '纯文本负责人',
-                })),
-              ]}
-            />
-
+          {viewMode === 'grid' && (
             <SelectField
               aria-label="本地排序"
               size="xs"
@@ -2315,349 +1244,218 @@ export function WorksheetDetailPage() {
                 { value: 'work', label: '按作品排序' },
               ]}
             />
+          )}
 
-            <FieldVisibilityPopover
-              worksheet={data.worksheet}
-              columns={data.columns}
-              onOpenFullModal={() => setColModalOpen(true)}
-            />
-
-            {isFilteredOrSorted && (
-              <button
-                type="button"
-                title="恢复默认顺序后可拖动调整行序"
-                onClick={() => {
-                  setStatusChip('all');
-                  setAssigneeFilter('');
-                  setWorkFilter('');
-                  setKeyword('');
-                  setLocalSort('manual');
-                }}
-                className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-sky-700 hover:bg-sky-50 cursor-pointer"
-              >
-                <RotateCcw className="h-3 w-3" />
-                重置
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* 紧凑已发布折叠条（30px，仅存在已发布任务时显示） */}
-        {totalPublishedCount > 0 && (
-          <div
-            data-testid="published-section"
-            className="shrink-0 border-b border-emerald-200/80 bg-emerald-50/45"
-          >
+          {isFilteredOrSorted && (
             <button
               type="button"
-              onClick={() => setPublishedExpanded((v) => !v)}
-              className="flex h-[30px] w-full items-center justify-between px-3 text-left text-xs font-medium text-emerald-900 transition-colors hover:bg-emerald-50 cursor-pointer"
+              title="恢复默认顺序后可拖动调整行序"
+              onClick={() => {
+                setStatusChip('all');
+                setAssigneeFilter('');
+                setWorkFilter('');
+                setKeyword('');
+                setLocalSort('manual');
+              }}
+              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-700 hover:bg-black/[0.05] cursor-pointer"
             >
-              <span className="inline-flex items-center gap-1.5">
-                {publishedExpanded ? (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5" />
-                )}
-                已发布（{publishedTasks.length} 条）
-              </span>
-              <span className="text-[11px] font-normal text-emerald-700/80">
-                {publishedExpanded ? '收起' : '展开查看'}
-              </span>
+              <RotateCcw className="h-3 w-3" />
+              重置
             </button>
+          )}
+        </div>
+      </div>
 
-            {publishedExpanded && (
-              <div className="max-h-[34vh] overflow-auto border-t border-emerald-200/60 bg-white">
-                <table className="w-max min-w-full border-collapse">
-                  {renderTableHeaders(publishedTable, true)}
-                  <tbody>
-                    {publishedTable
-                      .getRowModel()
-                      .rows.map((row, idx) => renderSingleRow(publishedTable, row, idx + 1, false))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 主表格画布（占满剩余视口高度，内部自由横纵滚动） */}
+      {/* 顶部紧凑 30px「已发布（N 条）」折叠条 */}
+      {totalPublishedCount > 0 && (
         <div
-          ref={setScrollContainerEl}
-          className="min-h-0 flex-1 overflow-auto bg-white"
-          data-testid="worksheet-table-scroll"
+          data-testid="published-section"
+          className="shrink-0 border-b border-black/[0.08] bg-[#ECFDF5]/60"
         >
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={(ev) => void handleRowDragEnd(ev)}
+          <button
+            type="button"
+            onClick={() => setPublishedExpanded((v) => !v)}
+            className="flex h-[30px] w-full items-center justify-between px-3 text-left text-xs font-medium text-emerald-900 transition-colors hover:bg-[#ECFDF5] cursor-pointer"
           >
-            <SortableContext
-              items={visualActiveTasks.map((t) => t.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <table
-                className="w-max min-w-full border-collapse"
-                data-testid="worksheet-main-table"
-              >
-                {renderTableHeaders(mainTable, true)}
-                <tbody>
-                  {displayBlocks.length === 0 && (
-                    <tr className="border-b border-slate-200/80">
-                      <td
-                        colSpan={totalColSpan}
-                        className="py-10 text-center text-xs text-slate-400"
+            <span className="inline-flex items-center gap-1.5">
+              {publishedExpanded ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
+              已发布（{publishedTasks.length} 条）
+            </span>
+            <span className="text-[11px] font-normal text-emerald-700/80">
+              {publishedExpanded ? '收起' : '展开查看'}
+            </span>
+          </button>
+
+          {publishedExpanded && (
+            <div className="max-h-[30vh] divide-y divide-black/[0.05] overflow-y-auto border-t border-black/[0.06] bg-white">
+              {publishedTasks.map((task) => {
+                const w = task.workId ? workMap.get(task.workId) : null;
+                return (
+                  <div
+                    key={task.id}
+                    className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs hover:bg-black/[0.02]"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      {w && (
+                        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">
+                          {w.name}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setDetailTaskId(task.id)}
+                        className="truncate font-medium text-zinc-900 hover:text-blue-600 cursor-pointer"
                       >
-                        {isFilteredOrSorted
-                          ? '没有符合筛选条件的任务'
-                          : '暂无未发布任务，点击顶栏「新建作品」或下方「+ 新建独立任务」开始录入'}
-                      </td>
-                    </tr>
-                  )}
-
-                  {displayBlocks.map((block, blockIdx) => {
-                    if (block.kind === 'standalone') {
-                      return (
-                        <Fragment key={block.key}>
-                          {block.tasks.map((task) => {
-                            const entry = mainRowLookup.get(task.id);
-                            if (!entry) return null;
-                            return renderSingleRow(
-                              mainTable,
-                              entry.row,
-                              entry.rowNumber,
-                              dragEnabled,
-                              false,
-                            );
-                          })}
-                        </Fragment>
-                      );
-                    }
-
-                    const collapsed = collapsedWorkIds.has(block.work.id);
-                    const doneCount = block.tasks.filter((t) =>
-                      isTaskAllStagesDone(t, stageCols),
-                    ).length;
-                    const lastTaskInWork = block.tasks[block.tasks.length - 1] ?? null;
-                    const prevIsWork = blockIdx > 0 && displayBlocks[blockIdx - 1]?.kind === 'work';
-                    const nextIsWork = displayBlocks[blockIdx + 1]?.kind === 'work';
-
-                    return (
-                      <Fragment key={block.key}>
-                        {/* 作品区域上方视觉间隔（避免与上一个作品底部间隔重复叠加） */}
-                        {!prevIsWork && (
-                          <tr data-work-spacer="top" className="h-3 bg-slate-100/80">
-                            <td
-                              colSpan={totalColSpan}
-                              className="border-b border-slate-300/80 p-0"
-                            />
-                          </tr>
-                        )}
-
-                        <WorkBannerRow
-                          work={block.work}
-                          colSpan={totalColSpan}
-                          taskCount={block.tasks.length}
-                          doneCount={doneCount}
-                          hasStages={stageCols.length > 0}
-                          collapsed={collapsed}
-                          dragEnabled={dragEnabled}
-                          isEmptyPending={block.isEmptyPending}
-                          onToggleCollapse={() => toggleWorkCollapsed(block.work.id)}
-                          onRename={(nextName) => renameWork(block.work.id, nextName)}
-                          onAddSegment={() => openAddSegmentForWork(block.work.id)}
-                          onUngroup={() => {
-                            if (block.isEmptyPending || block.tasks.length === 0) {
-                              setPendingWorks((prev) => prev.filter((w) => w.id !== block.work.id));
-                              if (addingSegmentWorkId === block.work.id) {
-                                setAddingSegmentWorkId(null);
-                              }
-                              pushToast({ message: '已关闭空作品横幅', variant: 'info' });
-                            } else {
-                              setUngroupingWork({ work: block.work, tasks: block.tasks });
-                            }
-                          }}
-                        />
-
-                        {!collapsed &&
-                          block.tasks.map((task) => {
-                            const entry = mainRowLookup.get(task.id);
-                            if (!entry) return null;
-                            return renderSingleRow(
-                              mainTable,
-                              entry.row,
-                              entry.rowNumber,
-                              dragEnabled,
-                              true,
-                            );
-                          })}
-
-                        {!collapsed && addingSegmentWorkId === block.work.id && (
-                          <InlineAddSegmentRow
-                            workName={block.work.name}
-                            colSpan={totalColSpan}
-                            pending={createTaskMutation.isPending}
-                            onSubmit={(segTitle) => {
-                              createTaskMutation.mutate({
-                                title: segTitle,
-                                workId: block.work.id,
-                                afterTaskId: lastTaskInWork?.id ?? null,
-                              });
-                            }}
-                            onCancel={() => setAddingSegmentWorkId(null)}
-                          />
-                        )}
-
-                        {/* 作品最下方子任务下方视觉间隔，与后续独立任务/下一作品/底行清晰区分 */}
-                        <tr data-work-spacer="bottom" className="h-3 bg-slate-100/80">
-                          <td
-                            colSpan={totalColSpan}
-                            className={cn(
-                              'border-t border-slate-300/80 p-0',
-                              nextIsWork
-                                ? 'border-b border-slate-300/80'
-                                : 'border-b border-slate-200/80',
-                            )}
-                          />
-                        </tr>
-                      </Fragment>
-                    );
-                  })}
-
-                  {/* 贴合网格的底部 `+ 新建独立任务` 原地行（回车连续加行） */}
-                  <tr className="h-9 border-b border-slate-200/80 bg-white transition-colors hover:bg-slate-50/70">
-                    <td className="sticky left-0 z-20 h-9 w-10 min-w-10 border-r border-slate-200/80 bg-white text-center text-slate-400">
-                      <Plus className="mx-auto h-3.5 w-3.5" />
-                    </td>
-                    <td colSpan={visibleColumns.length + 1} className="h-9 p-0 align-middle">
-                      <form
-                        onSubmit={handleQuickAdd}
-                        className="sticky left-[40px] flex h-9 w-full max-w-md items-center gap-2 px-2"
+                        {task.title}
+                      </button>
+                      {task.publishedAt && (
+                        <span className="shrink-0 text-[11px] text-zinc-400 tabular-nums">
+                          {task.publishedAt}
+                        </span>
+                      )}
+                      {task.publishUrl && /^https?:\/\//i.test(task.publishUrl) && (
+                        <a
+                          href={task.publishUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="打开发布链接"
+                          className="shrink-0 text-blue-600 hover:underline"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={() =>
+                          void patchTask(task.id, { publishStatus: 'unpublished' }, undefined, true)
+                        }
                       >
-                        <input
-                          ref={quickAddInputRef}
-                          id="worksheet-quick-add-input"
-                          value={quickAddTitle}
-                          onChange={(e) => setQuickAddTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && e.nativeEvent.isComposing) {
-                              e.preventDefault();
-                            }
-                          }}
-                          placeholder="新建独立任务（输入标题，回车连续添加）"
-                          aria-label="新建任务标题"
-                          maxLength={200}
-                          className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none"
-                        />
-                        {quickAddTitle.trim() && (
-                          <Button
-                            type="submit"
-                            size="sm"
-                            variant="secondary"
-                            className="h-6 px-2 text-xs"
-                            disabled={createTaskMutation.isPending}
-                          >
-                            添加
-                          </Button>
-                        )}
-                      </form>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </SortableContext>
-          </DndContext>
+                        改为未发布
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={() => setDetailTaskId(task.id)}
+                      >
+                        详情
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
+      )}
 
-        {/* 右键整行上下文菜单 */}
-        {rowContextMenu && (
-          <div
-            ref={contextMenuRef}
-            role="menu"
-            style={{ top: rowContextMenu.y, left: rowContextMenu.x }}
-            className="fixed z-[80] min-w-[152px] rounded-xl border border-slate-200/90 bg-white/98 p-1 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.18)] ring-1 ring-slate-950/5 backdrop-blur-md"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                const t = rowContextMenu.task;
-                setRowContextMenu(null);
-                setDetailTaskId(t.id);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 cursor-pointer"
-            >
-              <PanelRightOpen className="h-3.5 w-3.5 text-slate-400" />
-              展开任务详情
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                const t = rowContextMenu.task;
-                setRowContextMenu(null);
-                setAddingSegmentWorkId(null);
-                setInsertingAfterId(t.id);
-                setInsertTitle('');
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-100 cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5 text-slate-400" />
-              在下方插入一行
-            </button>
-            <div className="my-1 h-px bg-slate-100" />
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                const t = rowContextMenu.task;
-                setRowContextMenu(null);
-                void deleteTask(t);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 cursor-pointer"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              删除任务
-            </button>
-          </div>
-        )}
-
-        {/* 解散作品分组二次确认 */}
-        <ConfirmDialog
-          open={Boolean(ungroupingWork)}
-          onOpenChange={(open) => {
-            if (!open) setUngroupingWork(null);
-          }}
-          title="确认解散作品分组"
-          message={`确定要解散作品「${ungroupingWork?.work.name ?? ''}」的分组吗？旗下 ${ungroupingWork?.tasks.length ?? 0} 条任务将转为无作品独立任务，不会删除任何任务或分工数据。`}
-          confirmLabel="确认解散"
-          danger={false}
-          pending={ungroupPending}
-          onConfirm={() => void handleConfirmUngroupWork()}
-        />
-
-        <ColumnManagerModal
-          open={colModalOpen}
-          onOpenChange={setColModalOpen}
+      {/* 主视图区：Teable Canvas Grid 或 单表作品聚合看板 */}
+      {viewMode === 'grid' ? (
+        <WorksheetCanvasGrid
           worksheet={data.worksheet}
           columns={data.columns}
           boardColumns={data.boardColumns}
+          works={allWorks}
+          workMap={workMap}
+          displayBlocks={displayBlocks}
+          visualActiveTasks={visualActiveTasks}
+          stageCols={stageCols}
+          users={users}
+          userMap={userMap}
+          peers={peers}
+          selectedCell={selectedCell}
+          textConflicts={textConflicts}
+          stageConflicts={stageConflicts}
+          highlightedTaskId={highlightedTaskId}
+          collapsedWorkIds={collapsedWorkIds}
+          addingSegmentWorkId={addingSegmentWorkId}
+          dragEnabled={dragEnabled}
+          isFilteredOrSorted={isFilteredOrSorted}
+          createTaskPending={createTaskMutation.isPending}
+          onSelectCell={selectCell}
+          onSetEditingFocus={setEditingFocus}
+          onPatchTask={patchTask}
+          onPatchStage={patchStage}
+          onCreateTask={(payload) => createTaskMutation.mutate(payload)}
+          onDeleteTask={(t) => void deleteTask(t)}
+          onReorderRows={(movingTaskId, dropRowIndex) =>
+            void handleReorderRows(movingTaskId, dropRowIndex)
+          }
+          onResizeColumn={handleResizeColumn}
+          onToggleWorkCollapsed={toggleWorkCollapsed}
+          onRenameWork={renameWork}
+          onOpenAddSegment={openAddSegmentForWork}
+          onCloseAddSegment={() => setAddingSegmentWorkId(null)}
+          onUngroupWork={(block) => {
+            if (block.isEmptyPending || block.tasks.length === 0) {
+              setPendingWorks((prev) => prev.filter((w) => w.id !== block.work.id));
+              if (addingSegmentWorkId === block.work.id) setAddingSegmentWorkId(null);
+              pushToast({ message: '已关闭空作品横幅', variant: 'info' });
+            } else {
+              setUngroupingWork({ work: block.work, tasks: block.tasks });
+            }
+          }}
+          onOpenDetail={setDetailTaskId}
+          onClearTextConflict={clearTextConflict}
+          onClearStageConflict={clearStageConflict}
+          onAcceptRemoteField={acceptRemoteField}
         />
+      ) : (
+        <KanbanBoard
+          boardColumns={singleSheetBoard.boardColumns}
+          cards={singleSheetBoard.cards}
+          userMap={userMap}
+          claimingKeys={claimingKeys}
+          showWorksheetSource={false}
+          onClaim={handleBoardClaim}
+          onOpenDetail={({ taskId }) => setDetailTaskId(taskId)}
+          onSelectWorkFilter={({ workId }) =>
+            setWorkFilter((prev) => (prev === workId ? '' : workId))
+          }
+        />
+      )}
 
-        <ChangeLogDrawer
-          worksheetId={data.worksheet.id}
-          open={logsOpen}
-          onOpenChange={setLogsOpen}
-        />
+      {/* 解散作品分组二次确认 */}
+      <ConfirmDialog
+        open={Boolean(ungroupingWork)}
+        onOpenChange={(open) => {
+          if (!open) setUngroupingWork(null);
+        }}
+        title="确认解散作品分组"
+        message={`确定要解散作品「${ungroupingWork?.work.name ?? ''}」的分组吗？旗下 ${ungroupingWork?.tasks.length ?? 0} 条任务将转为无作品独立任务，不会删除任何任务或分工数据。`}
+        confirmLabel="确认解散"
+        danger={false}
+        pending={ungroupPending}
+        onConfirm={() => void handleConfirmUngroupWork()}
+      />
 
-        <TaskDetailDrawer
-          worksheetId={data.worksheet.id}
-          taskId={detailTaskId}
-          open={Boolean(detailTaskId)}
-          onClose={() => setDetailTaskId(null)}
-          showLocateButton={false}
-        />
-      </div>
-    </WorksheetGridContext.Provider>
+      <ColumnManagerModal
+        open={colModalOpen}
+        onOpenChange={setColModalOpen}
+        worksheet={data.worksheet}
+        columns={data.columns}
+        boardColumns={data.boardColumns}
+      />
+
+      <ChangeLogDrawer worksheetId={data.worksheet.id} open={logsOpen} onOpenChange={setLogsOpen} />
+
+      <TaskDetailDrawer
+        worksheetId={data.worksheet.id}
+        taskId={detailTaskId}
+        open={Boolean(detailTaskId)}
+        onClose={() => setDetailTaskId(null)}
+        showLocateButton={false}
+      />
+    </div>
   );
 }

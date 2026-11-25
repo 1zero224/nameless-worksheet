@@ -4,21 +4,15 @@ import {
   DropdownMenu as RadixDropdown,
   Popover as RadixPopover,
 } from 'radix-ui';
-import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { createContext, type ReactNode, useCallback, useContext } from 'react';
+import { Toaster, toast } from 'sonner';
 import { Button, cn } from './primitives.js';
 
 // ---- Popover ----
 
 export const Popover = RadixPopover.Root;
 export const PopoverTrigger = RadixPopover.Trigger;
+export const PopoverAnchor = RadixPopover.Anchor;
 
 export function PopoverContent({
   className,
@@ -35,7 +29,8 @@ export function PopoverContent({
         collisionPadding={8}
         {...props}
         className={cn(
-          'nw-floating-surface z-[70] rounded-xl border border-slate-200/90 bg-white/98 p-3 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.16),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-slate-950/5 backdrop-blur-md outline-none',
+          'z-[70] rounded-xl border border-black/[0.08] bg-white p-3 text-zinc-900 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.06)] outline-none',
+          'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1 duration-150',
           className,
         )}
       >
@@ -66,7 +61,8 @@ export function DropdownMenuContent({
         collisionPadding={8}
         {...props}
         className={cn(
-          'nw-floating-surface z-[70] min-w-[160px] overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 p-1 text-slate-800 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.16),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-slate-950/5 backdrop-blur-md outline-none',
+          'z-[70] min-w-[160px] overflow-hidden rounded-xl border border-black/[0.08] bg-white p-1 text-zinc-800 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.06)] outline-none',
+          'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1 duration-150',
           className,
         )}
       >
@@ -85,10 +81,10 @@ export function DropdownMenuItem({
     <RadixDropdown.Item
       {...props}
       className={cn(
-        'relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none transition-colors duration-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
+        'relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] outline-none transition-colors duration-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
         variant === 'destructive'
           ? 'text-red-600 data-[highlighted]:bg-red-50 data-[highlighted]:text-red-700'
-          : 'text-slate-700 data-[highlighted]:bg-slate-100/90 data-[highlighted]:text-slate-950',
+          : 'text-zinc-700 data-[highlighted]:bg-black/[0.04] data-[highlighted]:text-zinc-950',
         className,
       )}
     />
@@ -104,12 +100,12 @@ export function DropdownMenuCheckboxItem({
     <RadixDropdown.CheckboxItem
       {...props}
       className={cn(
-        'relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-8 pl-2.5 text-sm text-slate-700 outline-none transition-colors duration-100 data-[highlighted]:bg-slate-100/90 data-[highlighted]:text-slate-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
+        'relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-8 pl-2.5 text-[13px] text-zinc-700 outline-none transition-colors duration-100 data-[highlighted]:bg-black/[0.04] data-[highlighted]:text-zinc-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
         className,
       )}
     >
       <span className="truncate">{children}</span>
-      <span className="pointer-events-none absolute right-2 flex h-4 w-4 items-center justify-center text-slate-900">
+      <span className="pointer-events-none absolute right-2 flex h-4 w-4 items-center justify-center text-zinc-900">
         <RadixDropdown.ItemIndicator>
           <Check className="h-3.5 w-3.5 stroke-[2.25]" />
         </RadixDropdown.ItemIndicator>
@@ -123,7 +119,7 @@ export function DropdownMenuLabel({ className, ...props }: RadixDropdown.Dropdow
     <RadixDropdown.Label
       {...props}
       className={cn(
-        'px-2.5 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-slate-400 select-none',
+        'px-2.5 pt-2 pb-1 text-[11px] font-medium tracking-wide text-zinc-400 select-none',
         className,
       )}
     />
@@ -135,7 +131,10 @@ export function DropdownMenuSeparator({
   ...props
 }: RadixDropdown.DropdownMenuSeparatorProps) {
   return (
-    <RadixDropdown.Separator {...props} className={cn('-mx-1 my-1 h-px bg-slate-100', className)} />
+    <RadixDropdown.Separator
+      {...props}
+      className={cn('-mx-1 my-1 h-px bg-black/[0.06]', className)}
+    />
   );
 }
 
@@ -159,27 +158,28 @@ export function ModalDialog({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+        <RadixDialog.Overlay className="fixed inset-0 z-50 bg-black/35 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-150" />
         <RadixDialog.Content
           className={cn(
-            'fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-5 shadow-xl outline-none max-h-[85vh] overflow-y-auto',
+            'fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/[0.08] bg-white p-5 shadow-xl outline-none max-h-[85vh] overflow-y-auto',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-150',
             maxWidthClass,
           )}
         >
           <div className="mb-3 flex items-start justify-between gap-2">
             <div>
-              <RadixDialog.Title className="text-base font-semibold text-slate-900">
+              <RadixDialog.Title className="text-base font-semibold text-zinc-950">
                 {title}
               </RadixDialog.Title>
               {description && (
-                <RadixDialog.Description className="mt-1 text-xs text-slate-500">
+                <RadixDialog.Description className="mt-1 text-xs text-zinc-500">
                   {description}
                 </RadixDialog.Description>
               )}
             </div>
             <RadixDialog.Close
               aria-label="关闭"
-              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+              className="rounded-md p-1 text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 cursor-pointer"
             >
               <X className="h-4 w-4" />
             </RadixDialog.Close>
@@ -216,7 +216,7 @@ export function ConfirmDialog({
 }) {
   return (
     <ModalDialog open={open} onOpenChange={onOpenChange} title={title} maxWidthClass="max-w-sm">
-      <p className="text-sm text-slate-600">{message}</p>
+      <p className="text-sm text-zinc-600">{message}</p>
       <div className="mt-5 flex justify-end gap-2">
         <Button
           type="button"
@@ -261,23 +261,24 @@ export function Sheet({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black/30" />
+        <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black/25 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-150" />
         <RadixDialog.Content
           aria-describedby={undefined}
           className={cn(
-            'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-slate-200 bg-white shadow-2xl outline-none',
+            'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-black/[0.08] bg-white shadow-2xl outline-none',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right duration-200',
             widthClass,
           )}
         >
-          <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
-            <RadixDialog.Title className="truncate text-base font-semibold text-slate-900">
+          <div className="flex items-center justify-between gap-2 border-b border-black/[0.08] px-4 py-3">
+            <RadixDialog.Title className="truncate text-[15px] font-semibold text-zinc-950">
               {title}
             </RadixDialog.Title>
             <div className="flex shrink-0 items-center gap-1.5">
               {headerActions}
               <RadixDialog.Close
                 aria-label="关闭侧栏"
-                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+                className="rounded-md p-1 text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </RadixDialog.Close>
@@ -290,7 +291,7 @@ export function Sheet({
   );
 }
 
-// ---- Toast 轻量提示系统 ----
+// ---- Toast 提示系统（基于 sonner，保留原 useToast 契约与软删除一键撤销） ----
 
 export interface ToastOptions {
   message: string;
@@ -300,96 +301,47 @@ export interface ToastOptions {
   durationMs?: number;
 }
 
-interface ToastItem extends ToastOptions {
-  id: number;
-}
-
 const ToastContext = createContext<{ pushToast: (opts: ToastOptions) => void } | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<ToastItem[]>([]);
-  const nextIdRef = useRef(1);
-  const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
-
-  const dismiss = useCallback((id: number) => {
-    const t = timersRef.current.get(id);
-    if (t) {
-      clearTimeout(t);
-      timersRef.current.delete(id);
-    }
-    setItems((prev) => prev.filter((item) => item.id !== id));
-  }, []);
-
-  const pushToast = useCallback(
-    (opts: ToastOptions) => {
-      const id = nextIdRef.current++;
-      setItems((prev) => [...prev.slice(-3), { ...opts, id }]);
-      const timer = setTimeout(() => {
-        dismiss(id);
-      }, opts.durationMs ?? 5000);
-      timersRef.current.set(id, timer);
-    },
-    [dismiss],
-  );
-
-  useEffect(() => {
-    return () => {
-      for (const t of timersRef.current.values()) clearTimeout(t);
-      timersRef.current.clear();
+  const pushToast = useCallback((opts: ToastOptions) => {
+    const common = {
+      duration: opts.durationMs ?? 5000,
+      action:
+        opts.actionLabel && opts.onAction
+          ? {
+              label: opts.actionLabel,
+              onClick: () => {
+                void opts.onAction?.();
+              },
+            }
+          : undefined,
     };
+
+    if (opts.variant === 'error') {
+      toast.error(opts.message, common);
+    } else if (opts.variant === 'success') {
+      toast.success(opts.message, common);
+    } else {
+      toast(opts.message, common);
+    }
   }, []);
 
   return (
     <ToastContext.Provider value={{ pushToast }}>
       {children}
-      <div
-        aria-live="polite"
-        className="pointer-events-none fixed right-4 bottom-4 z-[60] flex max-w-sm flex-col gap-2"
-      >
-        {items.map((item) => {
-          const style =
-            item.variant === 'error'
-              ? 'border-red-200 bg-red-50 text-red-900'
-              : item.variant === 'success'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                : 'border-slate-200 bg-slate-900 text-white';
-          return (
-            <div
-              key={item.id}
-              role="status"
-              className={cn(
-                'pointer-events-auto flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-sm shadow-lg',
-                style,
-              )}
-            >
-              <span>{item.message}</span>
-              <div className="flex shrink-0 items-center gap-2">
-                {item.actionLabel && item.onAction && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const fn = item.onAction;
-                      dismiss(item.id);
-                      void fn?.();
-                    }}
-                    className="rounded bg-white/15 px-2 py-0.5 text-xs font-semibold underline hover:bg-white/25 cursor-pointer"
-                  >
-                    {item.actionLabel}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => dismiss(item.id)}
-                  aria-label="关闭提示"
-                  className="opacity-70 hover:opacity-100 cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <Toaster
+        position="bottom-right"
+        closeButton
+        toastOptions={{
+          classNames: {
+            toast:
+              'rounded-xl border border-black/[0.08] bg-white text-zinc-900 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.12)] text-[13px]',
+            actionButton:
+              '!bg-zinc-900 !text-white !rounded-md !px-2.5 !py-1 !text-xs !font-medium hover:!bg-zinc-800',
+          },
+        }}
+      />
     </ToastContext.Provider>
   );
 }

@@ -19,6 +19,8 @@ import {
   Activity,
   BookOpen,
   CheckSquare,
+  ChevronDown,
+  ChevronRight,
   GripVertical,
   HardDrive,
   Kanban,
@@ -81,11 +83,11 @@ export function SidebarExpandButton({ className }: { className?: string }) {
       title="展开左侧栏"
       aria-label="展开侧栏"
       className={cn(
-        'hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 md:inline-flex cursor-pointer',
+        'hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 md:inline-flex cursor-pointer',
         className,
       )}
     >
-      <PanelLeftOpen className="h-4 w-4" />
+      <PanelLeftOpen className="h-[15px] w-[15px]" strokeWidth={1.75} />
     </button>
   );
 }
@@ -99,29 +101,46 @@ interface NavItem {
 }
 
 const TOP_NAV: NavItem[] = [
-  { to: '/', label: '任务看板', icon: <Kanban className="h-3.5 w-3.5 shrink-0" />, end: true },
-  { to: '/my-tasks', label: '我的任务', icon: <CheckSquare className="h-3.5 w-3.5 shrink-0" /> },
-  { to: '/search', label: '资源检索', icon: <Search className="h-3.5 w-3.5 shrink-0" /> },
-  { to: '/references', label: '参考资料', icon: <BookOpen className="h-3.5 w-3.5 shrink-0" /> },
+  {
+    to: '/',
+    label: '任务看板',
+    icon: <Kanban className="h-[15px] w-[15px] shrink-0" strokeWidth={1.75} />,
+    end: true,
+  },
+  {
+    to: '/my-tasks',
+    label: '我的任务',
+    icon: <CheckSquare className="h-[15px] w-[15px] shrink-0" strokeWidth={1.75} />,
+  },
+  {
+    to: '/search',
+    label: '资源检索',
+    icon: <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={1.75} />,
+  },
+  {
+    to: '/references',
+    label: '参考资料',
+    icon: <BookOpen className="h-[15px] w-[15px] shrink-0" strokeWidth={1.75} />,
+  },
 ];
 
 const ADMIN_NAV: NavItem[] = [
   {
     to: '/admin/users',
     label: '用户与邀请',
-    icon: <Users className="h-3.5 w-3.5 shrink-0" />,
+    icon: <Users className="h-[15px] w-[15px] shrink-0" strokeWidth={1.75} />,
     permission: 'users.manage',
   },
   {
     to: '/admin/storage',
     label: '存储',
-    icon: <HardDrive className="h-3.5 w-3.5 shrink-0" />,
+    icon: <HardDrive className="h-[15px] w-[15px] shrink-0" strokeWidth={1.75} />,
     permission: 'storage.manage',
   },
   {
     to: '/admin/realtime',
     label: '实时通道诊断',
-    icon: <Activity className="h-3.5 w-3.5 shrink-0" />,
+    icon: <Activity className="h-[15px] w-[15px] shrink-0" strokeWidth={1.75} />,
     permission: 'diag.realtime',
   },
 ];
@@ -149,7 +168,7 @@ function SortableSidebarWorksheetItem({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
         'group relative flex items-center rounded-md transition-colors',
-        isDragging && 'z-20 bg-white shadow-md ring-1 ring-sky-400/50',
+        isDragging && 'z-20 bg-white shadow-md ring-1 ring-black/10',
       )}
     >
       <NavLink
@@ -159,12 +178,12 @@ function SortableSidebarWorksheetItem({
           cn(
             'flex min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 pr-12 pl-2.5 text-[13px] transition-colors select-none',
             isActive
-              ? 'bg-sky-50 font-medium text-sky-900'
-              : 'text-slate-700 hover:bg-slate-200/55 hover:text-slate-900',
+              ? 'bg-black/[0.06] font-medium text-zinc-950'
+              : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
           )
         }
       >
-        <span className={cn('h-2 w-2 shrink-0 rounded-full', colorStyle.dot)} />
+        <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', colorStyle.dot)} />
         <span className="truncate">{ws.name}</span>
       </NavLink>
 
@@ -180,7 +199,7 @@ function SortableSidebarWorksheetItem({
           {...listeners}
           aria-label={`拖动排序 ${ws.name}`}
           title="拖动调整顺序"
-          className="flex h-5 w-5 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-200/80 hover:text-slate-700 active:cursor-grabbing"
+          className="flex h-5 w-5 cursor-grab items-center justify-center rounded text-zinc-400 hover:bg-black/[0.06] hover:text-zinc-700 active:cursor-grabbing"
         >
           <GripVertical className="h-3 w-3" />
         </button>
@@ -191,18 +210,18 @@ function SortableSidebarWorksheetItem({
               type="button"
               aria-label={`工作表操作 ${ws.name}`}
               onClick={(e) => e.stopPropagation()}
-              className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-200/80 hover:text-slate-800 cursor-pointer"
+              className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 hover:bg-black/[0.06] hover:text-zinc-800 cursor-pointer"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[140px]">
+          <DropdownMenuContent align="end" className="min-w-[144px]">
             <DropdownMenuItem
               onSelect={() => {
                 onEdit(ws);
               }}
             >
-              <Pencil className="h-3.5 w-3.5 text-slate-400" />
+              <Pencil className="h-3.5 w-3.5 text-zinc-400" />
               重命名 / 改色
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -225,6 +244,7 @@ export function AppShell() {
   const { data: me } = useMe();
   const { status } = useRealtimeStatus();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [adminExpanded, setAdminExpanded] = useState(true);
   const [collapsed, setCollapsedState] = useState<boolean>(() => {
     try {
       return localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
@@ -273,7 +293,6 @@ export function AppShell() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  // 订阅项目级实时通道，同步左侧工作表列表、看板列与用户显示名变化
   useRealtimeScope(me ? { type: 'project', id: me.project.id } : null, {
     onEvent: (ev) => {
       if (ev.type === 'worksheet.changed') {
@@ -300,15 +319,14 @@ export function AppShell() {
     (item) => !item.permission || me.permissions.includes(item.permission),
   );
 
-  // 首页看板与单张工作表页切为全屏贴边白底画布，其余页面保留舒适留白
   const isCanvasPage = location.pathname === '/' || /^\/worksheets\/[^/]+/.test(location.pathname);
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
       'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
       isActive
-        ? 'bg-sky-50 font-medium text-sky-900'
-        : 'text-slate-700 hover:bg-slate-200/55 hover:text-slate-900',
+        ? 'bg-black/[0.06] font-medium text-zinc-950'
+        : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
     );
 
   const handleSidebarDragEnd = (event: DragEndEvent) => {
@@ -332,7 +350,7 @@ export function AppShell() {
           onClick={onNavigate}
           className={navLinkClass}
         >
-          <span className="text-slate-400">{item.icon}</span>
+          <span className="text-zinc-400">{item.icon}</span>
           <span className="truncate">{item.label}</span>
         </NavLink>
       ))}
@@ -345,8 +363,8 @@ export function AppShell() {
           onClick={onNavigate}
           className={({ isActive }) =>
             cn(
-              'text-[11px] font-semibold tracking-wider transition-colors',
-              isActive ? 'text-sky-800' : 'text-slate-400 hover:text-slate-700',
+              'text-[11px] font-medium tracking-wide transition-colors',
+              isActive ? 'text-zinc-950' : 'text-zinc-400 hover:text-zinc-700',
             )
           }
         >
@@ -361,9 +379,9 @@ export function AppShell() {
           title="新建工作表"
           aria-label="快速建表"
           data-testid="sidebar-create-worksheet"
-          className="flex h-5 w-5 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-200/70 hover:text-slate-800 cursor-pointer"
+          className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
         </button>
       </div>
 
@@ -375,7 +393,7 @@ export function AppShell() {
               onNavigate?.();
               setCreateOpen(true);
             }}
-            className="mx-1 rounded-md border border-dashed border-slate-200 px-2.5 py-2 text-left text-xs text-slate-400 hover:border-slate-300 hover:text-slate-600 cursor-pointer"
+            className="mx-1 rounded-md border border-dashed border-black/[0.12] px-2.5 py-2 text-left text-xs text-zinc-400 hover:border-black/[0.22] hover:text-zinc-700 cursor-pointer"
           >
             + 新建第一张工作表
           </button>
@@ -409,30 +427,40 @@ export function AppShell() {
         )}
       </div>
 
-      {/* 底部个人设置与管理 */}
+      {/* 左下角紧凑折叠区：管理入口与个人设置 */}
       <div className="mt-auto pt-3">
-        <div className="border-t border-slate-200/80 pt-2">
+        <div className="border-t border-black/[0.08] pt-2">
           {visibleAdminNav.length > 0 && (
             <div className="mb-1.5 space-y-0.5">
-              <div className="px-2.5 pt-1 pb-0.5 text-[11px] font-semibold tracking-wider text-slate-400">
-                管理
-              </div>
-              {visibleAdminNav.map((item) => (
-                <NavLink key={item.to} to={item.to} onClick={onNavigate} className={navLinkClass}>
-                  <span className="text-slate-400">{item.icon}</span>
-                  <span className="truncate">{item.label}</span>
-                </NavLink>
-              ))}
+              <button
+                type="button"
+                onClick={() => setAdminExpanded((v) => !v)}
+                className="flex w-full items-center justify-between px-2.5 py-1 text-[11px] font-medium tracking-wide text-zinc-400 hover:text-zinc-700 cursor-pointer"
+              >
+                <span>管理</span>
+                {adminExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+              </button>
+              {adminExpanded &&
+                visibleAdminNav.map((item) => (
+                  <NavLink key={item.to} to={item.to} onClick={onNavigate} className={navLinkClass}>
+                    <span className="text-zinc-400">{item.icon}</span>
+                    <span className="truncate">{item.label}</span>
+                  </NavLink>
+                ))}
             </div>
           )}
 
           <NavLink to="/settings" onClick={onNavigate} className={navLinkClass}>
-            <span className="text-slate-400">
-              <Settings className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-zinc-400">
+              <Settings className="h-[15px] w-[15px] shrink-0" strokeWidth={1.75} />
             </span>
             <span className="min-w-0 flex-1 truncate">个人设置</span>
           </NavLink>
-          <div className="mt-1 truncate px-2.5 text-[11px] text-slate-400">
+          <div className="mt-1 truncate px-2.5 text-[11px] text-zinc-400">
             {me.user.displayName} · {ROLE_LABELS[me.role]}
           </div>
         </div>
@@ -447,14 +475,14 @@ export function AppShell() {
       <div
         className={cn(
           'flex w-full overflow-x-hidden',
-          isCanvasPage ? 'h-dvh overflow-hidden bg-white' : 'min-h-screen bg-slate-50',
+          isCanvasPage ? 'h-dvh overflow-hidden bg-white' : 'min-h-screen bg-[#fafafa]',
         )}
       >
-        {/* 桌面端左侧栏（收窄至 208px，支持一键折叠） */}
+        {/* 桌面端极简左侧栏（216px，底色 #FAFAFA，支持一键折叠） */}
         {!collapsed && (
-          <aside className="hidden w-52 shrink-0 flex-col border-r border-slate-200/80 bg-slate-50/70 md:flex">
-            <div className="flex h-11 shrink-0 items-center justify-between gap-1.5 border-b border-slate-200/80 px-3">
-              <span className="truncate text-sm font-semibold text-slate-900">
+          <aside className="hidden w-[216px] shrink-0 flex-col border-r border-black/[0.08] bg-[#fafafa] md:flex">
+            <div className="flex h-11 shrink-0 items-center justify-between gap-1.5 border-b border-black/[0.08] px-3">
+              <span className="truncate text-[13px] font-semibold tracking-tight text-zinc-950">
                 {me.project.name}
               </span>
               <button
@@ -462,9 +490,9 @@ export function AppShell() {
                 onClick={toggleCollapsed}
                 title="折叠左侧栏"
                 aria-label="折叠侧栏"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-200/70 hover:text-slate-700 cursor-pointer"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
               >
-                <PanelLeftClose className="h-3.5 w-3.5" />
+                <PanelLeftClose className="h-[15px] w-[15px]" strokeWidth={1.75} />
               </button>
             </div>
             {renderNav()}
@@ -477,20 +505,20 @@ export function AppShell() {
             <button
               type="button"
               aria-label="关闭菜单"
-              className="fixed inset-0 bg-black/40"
+              className="fixed inset-0 bg-black/35"
               onClick={() => setDrawerOpen(false)}
             />
-            <aside className="relative z-50 flex w-60 max-w-[80vw] flex-col bg-slate-50 shadow-xl">
-              <div className="flex h-12 items-center justify-between border-b border-slate-200 bg-white px-3.5">
+            <aside className="relative z-50 flex w-60 max-w-[80vw] flex-col border-r border-black/[0.08] bg-[#fafafa] shadow-xl">
+              <div className="flex h-12 items-center justify-between border-b border-black/[0.08] bg-white px-3.5">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-900">
+                  <div className="truncate text-sm font-semibold text-zinc-950">
                     {me.project.name}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setDrawerOpen(false)}
-                  className="rounded p-1 text-slate-500 hover:bg-slate-100"
+                  className="rounded-md p-1 text-zinc-500 hover:bg-black/[0.05]"
                   aria-label="关闭导航"
                 >
                   ✕
@@ -509,20 +537,20 @@ export function AppShell() {
           )}
         >
           {/* 窄屏顶栏（48px） */}
-          <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white px-3 md:hidden">
+          <header className="flex h-12 shrink-0 items-center justify-between border-b border-black/[0.08] bg-white px-3 md:hidden">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="inline-flex items-center gap-1 rounded-md border border-black/[0.1] px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-black/[0.04]"
               aria-label="打开导航"
             >
               <Menu className="h-3.5 w-3.5" />
               菜单
             </button>
-            <span className="truncate px-2 text-sm font-semibold text-slate-900">
+            <span className="truncate px-2 text-sm font-semibold text-zinc-950">
               {me.project.name}
             </span>
-            <span className="truncate text-xs text-slate-500">{me.user.displayName}</span>
+            <span className="truncate text-xs text-zinc-500">{me.user.displayName}</span>
           </header>
 
           {/* 断线重连提示条 */}
@@ -546,10 +574,10 @@ export function AppShell() {
                   <button
                     type="button"
                     onClick={toggleCollapsed}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-2xs hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-black/[0.1] bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 shadow-2xs hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
                     aria-label="展开侧栏"
                   >
-                    <PanelLeftOpen className="h-3.5 w-3.5" />
+                    <PanelLeftOpen className="h-3.5 w-3.5" strokeWidth={1.75} />
                     展开导航栏
                   </button>
                 </div>

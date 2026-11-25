@@ -1,60 +1,55 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  --background: #ffffff;
+  --foreground: #09090b;
+  --muted: #fafafa;
+  --muted-foreground: #71717a;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --surface-hover: rgba(0, 0, 0, 0.04);
+  --surface-active: rgba(0, 0, 0, 0.06);
+  --ring: #2563eb;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+}
 
 @layer base {
   html,
   body {
+    background-color: var(--background);
+    color: var(--foreground);
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  * {
+    border-color: var(--border);
   }
 }
 
-@keyframes nw-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(-3px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+/* Radix 浮层关闭退场动画期间立即释放外层定位容器命中，避免拦截下方 Canvas 交互 */
+[data-radix-popper-content-wrapper]:has(> [data-state="closed"]) {
+  pointer-events: none !important;
 }
 
-@keyframes nw-pop-in-top {
-  from {
-    opacity: 0;
-    transform: translateY(3px) scale(0.97);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes nw-pop-out {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.97);
-  }
-}
-
-.nw-floating-surface[data-state="open"] {
-  animation: nw-pop-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
-  transform-origin: var(
-    --radix-select-content-transform-origin,
-    var(
-      --radix-dropdown-menu-content-transform-origin,
-      var(--radix-popover-content-transform-origin, top center)
-    )
-  );
-}
-
-.nw-floating-surface[data-state="open"][data-side="top"] {
-  animation: nw-pop-in-top 140ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.nw-floating-surface[data-state="closed"] {
-  animation: nw-pop-out 100ms ease-in forwards;
 }

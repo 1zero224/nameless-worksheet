@@ -59,7 +59,8 @@ export function SelectContent({
         collisionPadding={8}
         {...props}
         className={cn(
-          'nw-floating-surface relative z-[70] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 text-slate-800 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.16),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-slate-950/5 backdrop-blur-md',
+          'relative z-[70] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-black/[0.08] bg-white text-zinc-800 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.06)]',
+          'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-150',
           className,
         )}
       >
@@ -204,8 +205,11 @@ export function SelectField({
         className={cn(
           'group inline-flex cursor-pointer items-center justify-between gap-2 border text-left transition-all duration-150 outline-none',
           variant === 'pill'
-            ? 'w-auto border-transparent shadow-2xs hover:brightness-95 focus-visible:ring-2 focus-visible:ring-slate-900/15 data-[state=open]:ring-2 data-[state=open]:ring-slate-900/15 disabled:cursor-not-allowed disabled:opacity-60'
-            : 'w-full border-slate-200/90 bg-white text-slate-800 shadow-2xs hover:border-slate-300 hover:bg-slate-50/70 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-900/10 data-[state=open]:border-slate-400 data-[state=open]:bg-white data-[state=open]:ring-2 data-[state=open]:ring-slate-900/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-60',
+            ? 'w-auto border-transparent shadow-2xs hover:brightness-95 focus-visible:ring-2 focus-visible:ring-zinc-900/15 data-[state=open]:ring-2 data-[state=open]:ring-zinc-900/15 disabled:cursor-not-allowed disabled:opacity-60'
+            : cn(
+                !(className && /\bw-/.test(className)) && 'w-full',
+                'border-black/[0.1] bg-white text-zinc-800 hover:border-black/[0.18] hover:bg-black/[0.02] focus-visible:border-zinc-400 focus-visible:ring-2 focus-visible:ring-zinc-900/10 data-[state=open]:border-zinc-400 data-[state=open]:bg-white data-[state=open]:ring-2 data-[state=open]:ring-zinc-900/10 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 disabled:opacity-60',
+              ),
           sizeClass,
           className,
         )}

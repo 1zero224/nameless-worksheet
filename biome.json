@@ -7,7 +7,14 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/drizzle/meta", "!docs", "!.claude/skills", "!pnpm-lock.yaml"]
+    "includes": [
+      "**",
+      "!**/drizzle/meta",
+      "!docs",
+      "!.claude/skills",
+      "!pnpm-lock.yaml",
+      "!apps/web/src/vendor/teable-grid"
+    ]
   },
   "formatter": {
     "enabled": true,

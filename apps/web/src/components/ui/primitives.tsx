@@ -20,11 +20,12 @@ export function Button({
   size?: 'sm' | 'md';
 }) {
   const variants = {
-    primary: 'bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-400',
+    primary: 'bg-zinc-900 text-white hover:bg-zinc-800 disabled:bg-zinc-300',
     secondary:
-      'bg-white text-slate-900 border border-slate-300 hover:bg-slate-50 disabled:opacity-50',
+      'bg-white text-zinc-900 border border-black/[0.12] hover:bg-black/[0.04] disabled:opacity-50',
     danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
-    ghost: 'bg-transparent text-slate-700 hover:bg-slate-100 disabled:opacity-50',
+    ghost:
+      'bg-transparent text-zinc-700 hover:bg-black/[0.04] hover:text-zinc-950 disabled:opacity-50',
   };
   const sizes = {
     sm: 'px-2.5 py-1.5 text-xs',
@@ -50,7 +51,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
         ref={ref}
         {...props}
         className={cn(
-          'block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs placeholder:text-slate-400 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 disabled:bg-slate-100',
+          'block w-full rounded-md border border-black/[0.12] bg-white px-3 py-2 text-sm text-zinc-950 shadow-[0_1px_2px_rgba(0,0,0,0.03)] placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900/20 disabled:bg-zinc-50',
           className,
         )}
       />
@@ -61,13 +62,18 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     // biome-ignore lint/a11y/noLabelWithoutControl: 通用 Label 组件由调用方传入 htmlFor
-    <label {...props} className={cn('block text-sm font-medium text-slate-700 mb-1', className)} />
+    <label {...props} className={cn('block text-sm font-medium text-zinc-700 mb-1', className)} />
   );
 }
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn('rounded-lg border border-slate-200 bg-white p-5 shadow-xs', className)}>
+    <div
+      className={cn(
+        'rounded-lg border border-black/[0.08] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]',
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -81,11 +87,11 @@ export function Badge({
   children: ReactNode;
 }) {
   const styles = {
-    default: 'bg-slate-100 text-slate-800',
-    success: 'bg-emerald-100 text-emerald-800',
-    warning: 'bg-amber-100 text-amber-800',
-    danger: 'bg-red-100 text-red-800',
-    muted: 'bg-slate-100 text-slate-500',
+    default: 'bg-zinc-100 text-zinc-800',
+    success: 'bg-emerald-50 text-emerald-700',
+    warning: 'bg-amber-50 text-amber-800',
+    danger: 'bg-red-50 text-red-700',
+    muted: 'bg-zinc-100 text-zinc-500',
   };
   return (
     <span
@@ -107,10 +113,10 @@ export function Alert({
   children: ReactNode;
 }) {
   const styles = {
-    error: 'border-red-200 bg-red-50 text-red-800',
-    success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-    info: 'border-sky-200 bg-sky-50 text-sky-800',
-    warning: 'border-amber-200 bg-amber-50 text-amber-900',
+    error: 'border-red-200/90 bg-red-50/80 text-red-800',
+    success: 'border-emerald-200/90 bg-emerald-50/80 text-emerald-800',
+    info: 'border-blue-200/90 bg-blue-50/80 text-blue-800',
+    warning: 'border-amber-200/90 bg-amber-50/80 text-amber-900',
   };
   return (
     <div className={cn('rounded-md border px-3.5 py-2.5 text-sm', styles[variant])}>{children}</div>
@@ -131,18 +137,18 @@ export function Dialog({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-xl border border-black/[0.08] bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between gap-2">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-base font-semibold text-zinc-950">{title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer"
+            className="rounded p-1 text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 cursor-pointer"
             aria-label="关闭"
           >
             ✕

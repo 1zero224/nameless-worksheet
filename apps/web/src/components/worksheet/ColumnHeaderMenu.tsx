@@ -12,6 +12,7 @@ import { queryKeys } from '@/api/keys.js';
 import {
   ConfirmDialog,
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
   useToast,
@@ -28,6 +29,9 @@ export function ColumnHeaderMenu({
   columnConfig,
   allColumns,
   boardColumns,
+  controlledOpen,
+  onControlledOpenChange,
+  anchorRect,
 }: {
   worksheetId: string;
   label: string;
@@ -35,11 +39,21 @@ export function ColumnHeaderMenu({
   columnConfig?: ColumnConfig;
   allColumns: ColumnConfig[];
   boardColumns: BoardColumn[];
+  controlledOpen?: boolean;
+  onControlledOpenChange?: (open: boolean) => void;
+  anchorRect?: { x: number; y: number; width: number; height: number } | null;
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
 
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (isControlled) onControlledOpenChange?.(next);
+    else setInternalOpen(next);
+  };
+
   const [nameDraft, setNameDraft] = useState(columnConfig?.name ?? label);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -128,10 +142,11 @@ export function ColumnHeaderMenu({
     },
   });
 
-  // 标题列不可隐藏或删除，仅展示只读冻结标题
+  // 标题列不可隐藏或删除
   if (systemKey === 'title') {
+    if (isControlled) return null;
     return (
-      <div className="flex h-full items-center gap-1 truncate px-2.5 text-xs font-medium text-slate-600">
+      <div className="flex h-full items-center gap-1 truncate px-2.5 text-xs font-medium text-zinc-600">
         <span className="truncate">{label}</span>
       </div>
     );
@@ -154,8 +169,10 @@ export function ColumnHeaderMenu({
     const targetIdx = allColumns.findIndex((c) => c.id === swapTarget.id);
     if (targetIdx === -1) return;
     const next = [...allColumns];
-    const current = next[colIndex]!;
-    next[colIndex] = next[targetIdx]!;
+    const current = next[colIndex];
+    const swap = next[targetIdx];
+    if (!current || !swap) return;
+    next[colIndex] = swap;
     next[targetIdx] = current;
     reorderColMutation.mutate(next.map((c) => c.id));
   };
@@ -177,33 +194,48 @@ export function ColumnHeaderMenu({
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            data-testid={`col-header-${columnConfig?.id ?? systemKey ?? label}`}
-            className={cn(
-              'group/hdr flex h-full w-full items-center justify-between gap-1 px-2.5 text-left text-xs font-medium text-slate-600 transition-colors hover:bg-slate-200/50 hover:text-slate-900 cursor-pointer',
-              open && 'bg-sky-50/80 text-sky-900',
-            )}
-          >
-            <span className="truncate">{label}</span>
-            <ChevronDown
+        {isControlled ? (
+          anchorRect && (
+            <PopoverAnchor asChild>
+              <div
+                className="pointer-events-none absolute"
+                style={{
+                  left: anchorRect.x,
+                  top: anchorRect.y,
+                  width: anchorRect.width,
+                  height: anchorRect.height,
+                }}
+              />
+            </PopoverAnchor>
+          )
+        ) : (
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              data-testid={`col-header-${columnConfig?.id ?? systemKey ?? label}`}
               className={cn(
-                'h-3 w-3 shrink-0 text-slate-400 transition-opacity',
-                open ? 'opacity-100 text-sky-600' : 'opacity-0 group-hover/hdr:opacity-100',
+                'group/hdr flex h-full w-full items-center justify-between gap-1 px-2.5 text-left text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer',
+                open && 'bg-black/[0.06] text-zinc-950',
               )}
-            />
-          </button>
-        </PopoverTrigger>
+            >
+              <span className="truncate">{label}</span>
+              <ChevronDown
+                className={cn(
+                  'h-3 w-3 shrink-0 text-zinc-400 transition-opacity',
+                  open ? 'opacity-100 text-zinc-700' : 'opacity-0 group-hover/hdr:opacity-100',
+                )}
+              />
+            </button>
+          </PopoverTrigger>
+        )}
 
         <PopoverContent align="start" className="w-60 p-2">
           {columnConfig ? (
             <div className="space-y-2">
-              {/* 原地改名输入框 */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between px-0.5">
-                  <span className="text-[11px] font-medium text-slate-400">列名称</span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
+                  <span className="text-[11px] font-medium text-zinc-400">列名称</span>
+                  <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">
                     {COLUMN_TYPE_LABELS[columnConfig.type]}
                   </span>
                 </div>
@@ -224,10 +256,9 @@ export function ColumnHeaderMenu({
                 />
               </div>
 
-              {/* 工序列：看板映射下拉 */}
               {columnConfig.type === 'stage' && (
                 <div className="space-y-1">
-                  <div className="px-0.5 text-[11px] font-medium text-slate-400">对应看板列</div>
+                  <div className="px-0.5 text-[11px] font-medium text-zinc-400">对应看板列</div>
                   <SelectField
                     aria-label={`${columnConfig.name} 看板列映射`}
                     size="xs"
@@ -251,23 +282,23 @@ export function ColumnHeaderMenu({
                 </div>
               )}
 
-              <div className="border-t border-slate-100 pt-1">
+              <div className="border-t border-black/[0.06] pt-1">
                 <button
                   type="button"
                   disabled={!canMoveLeft || reorderColMutation.isPending}
                   onClick={() => moveColumn(-1)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
                 >
-                  <ArrowLeft className="h-3.5 w-3.5 text-slate-400" />
+                  <ArrowLeft className="h-3.5 w-3.5 text-zinc-400" />
                   向左移动
                 </button>
                 <button
                   type="button"
                   disabled={!canMoveRight || reorderColMutation.isPending}
                   onClick={() => moveColumn(1)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
                 >
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+                  <ArrowRight className="h-3.5 w-3.5 text-zinc-400" />
                   向右移动
                 </button>
                 <button
@@ -276,14 +307,14 @@ export function ColumnHeaderMenu({
                     updateColMutation.mutate({ hidden: true });
                     setOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
                 >
-                  <EyeOff className="h-3.5 w-3.5 text-slate-400" />
+                  <EyeOff className="h-3.5 w-3.5 text-zinc-400" />
                   隐藏此列
                 </button>
               </div>
 
-              <div className="border-t border-slate-100 pt-1">
+              <div className="border-t border-black/[0.06] pt-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -300,20 +331,20 @@ export function ColumnHeaderMenu({
           ) : systemKey ? (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between px-2 py-1">
-                <span className="text-xs font-medium text-slate-800">{label}</span>
-                <span className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
+                <span className="text-xs font-medium text-zinc-900">{label}</span>
+                <span className="inline-flex items-center gap-0.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">
                   <Lock className="h-2.5 w-2.5" />
                   系统列
                 </span>
               </div>
-              <div className="border-t border-slate-100 pt-1">
+              <div className="border-t border-black/[0.06] pt-1">
                 <button
                   type="button"
                   disabled={hideSystemMutation.isPending}
                   onClick={() => hideSystemMutation.mutate(systemKey as SystemToggleKey)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
                 >
-                  <EyeOff className="h-3.5 w-3.5 text-slate-400" />
+                  <EyeOff className="h-3.5 w-3.5 text-zinc-400" />
                   隐藏此列
                 </button>
               </div>

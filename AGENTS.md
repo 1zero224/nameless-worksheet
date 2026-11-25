@@ -7,7 +7,7 @@
 - **“代码写完了”不是完成，通过真实运行与自动化验证产出可复核证据才是完成。**
 - 领域术语严格以 [GLOSSARY.md](GLOSSARY.md) 为准（人叫“用户”，表格叫“工作表”，分组叫“作品”，行叫“任务”，环节叫“工序/工序列/工序格”，变更历史叫“修改记录”，在线聚焦叫“在线状态”；严禁出现“成员/统筹/大任务/小任务/回收站/归档”）。
 - `package.json` 依赖一律使用**精确版本号**（禁止 `^` / `~`）；使用新大版本依赖（如 `@tanstack/react-table` v9、`@dnd-kit/sortable` v10、`radix-ui`）前先读已安装版本的类型定义。
-- `research/` 仅作只读参考，不入库、不复制代码。
+- `research/` 原则上仅作只读参考，不入库、不复制代码；**经人类负责人明确批准的唯一例外**：允许按 MIT 协议规范将 `research/teable/packages/sdk/src/components/grid/` 精简去耦引入至 `apps/web/src/vendor/teable-grid/` 作为表格引擎（须保留原始 MIT `LICENSE` 与版权声明，严禁引入 Teable 名称/Logo 等受保护品牌资产，严禁拷贝 `apps/` 下 AGPL 代码，详见 [ADR-0005](docs/adr/0005-teable-grid-and-unified-attachment-slots.md)）。
 
 ## 2. 分层验证（廉价检查优先）
 

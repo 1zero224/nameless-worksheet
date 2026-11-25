@@ -10,7 +10,13 @@ import { Plus } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
-import { Popover, PopoverContent, PopoverTrigger, useToast } from '@/components/ui/overlays.js';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+  useToast,
+} from '@/components/ui/overlays.js';
 import { Alert, Button, cn, Input } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
 
@@ -18,15 +24,38 @@ export function AddColumnPopover({
   worksheetId,
   columns,
   boardColumns,
+  controlledOpen,
+  onControlledOpenChange,
+  anchorRect,
 }: {
   worksheetId: string;
   columns: ColumnConfig[];
   boardColumns: BoardColumn[];
+  controlledOpen?: boolean;
+  onControlledOpenChange?: (open: boolean) => void;
+  anchorRect?: { x: number; y: number; width: number; height: number } | null;
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
 
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+
+  const setOpen = (next: boolean) => {
+    if (next) {
+      setName('');
+      setType('stage');
+      setBoardColumnId('auto');
+      setErr(null);
+    }
+    if (isControlled) {
+      onControlledOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  };
+
   const [name, setName] = useState('');
   const [type, setType] = useState<ColumnType>('stage');
   const [boardColumnId, setBoardColumnId] = useState<string>('auto');
@@ -73,35 +102,42 @@ export function AddColumnPopover({
   };
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) {
-          setName('');
-          setType('stage');
-          setBoardColumnId('auto');
-          setErr(null);
-        }
-      }}
-    >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label="新增列"
-          title="新增列"
-          data-testid="add-column-trigger"
-          className="flex h-full w-full items-center justify-center text-slate-400 transition-colors hover:bg-slate-200/60 hover:text-slate-800 cursor-pointer"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-      </PopoverTrigger>
+    <Popover open={open} onOpenChange={setOpen}>
+      {isControlled ? (
+        anchorRect && (
+          <PopoverAnchor asChild>
+            <div
+              className="pointer-events-none absolute"
+              style={{
+                left: anchorRect.x,
+                top: anchorRect.y,
+                width: anchorRect.width,
+                height: anchorRect.height,
+              }}
+            />
+          </PopoverAnchor>
+        )
+      ) : (
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label="新增列"
+            title="新增列"
+            data-testid="add-column-trigger"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <span className="hidden sm:inline">新增列</span>
+          </button>
+        </PopoverTrigger>
+      )}
+
       <PopoverContent align="end" className="w-72 space-y-3">
-        <div className="text-xs font-semibold text-slate-800">新增列</div>
+        <div className="text-xs font-semibold text-zinc-900">新增列</div>
         {err && <Alert variant="error">{err}</Alert>}
         <form onSubmit={handleSubmit} className="space-y-2.5">
           <div>
-            <label htmlFor="inline-add-col-name" className="mb-1 block text-xs text-slate-500">
+            <label htmlFor="inline-add-col-name" className="mb-1 block text-xs text-zinc-500">
               列名
             </label>
             <Input
@@ -116,7 +152,7 @@ export function AddColumnPopover({
           </div>
 
           <div>
-            <div className="mb-1 text-xs text-slate-500">列类型</div>
+            <div className="mb-1 text-xs text-zinc-500">列类型</div>
             <div className="grid grid-cols-4 gap-1" role="radiogroup" aria-label="列类型">
               {COLUMN_TYPES.map((t) => (
                 <button
@@ -127,8 +163,8 @@ export function AddColumnPopover({
                   className={cn(
                     'rounded-md border py-1 text-xs font-medium transition-colors cursor-pointer',
                     type === t
-                      ? 'border-sky-500 bg-sky-50 text-sky-900'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                      ? 'border-zinc-900 bg-zinc-900 text-white'
+                      : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04]',
                   )}
                 >
                   {COLUMN_TYPE_LABELS[t]}
@@ -139,7 +175,7 @@ export function AddColumnPopover({
 
           {type === 'stage' && (
             <div>
-              <label htmlFor="inline-add-col-board" className="mb-1 block text-xs text-slate-500">
+              <label htmlFor="inline-add-col-board" className="mb-1 block text-xs text-zinc-500">
                 对应看板列
               </label>
               <SelectField
