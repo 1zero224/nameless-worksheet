@@ -94,6 +94,7 @@ export function InlineTextCell({
   const [localConflict, setLocalConflict] = useState<ActiveCellConflict | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const isComposingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -129,6 +130,7 @@ export function InlineTextCell({
   };
 
   const commitValue = async (force: boolean) => {
+    if (savingRef.current) return;
     const trimmed = draft.trim();
     if (required && !trimmed) {
       cancelEdit();
@@ -139,6 +141,7 @@ export function InlineTextCell({
       onEditingChange(false);
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     setSaveError(null);
     try {
@@ -161,6 +164,7 @@ export function InlineTextCell({
         setSaveError(err instanceof ApiError ? err.message : '保存失败');
       }
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -207,8 +211,8 @@ export function InlineTextCell({
           }}
           onKeyDown={handleKeyDown}
           onBlur={() => {
-            // 有冲突提示条或正在组字时，失焦不自动销毁草稿，交由用户点击“保留我的 / 采用对方的”
-            if (isComposingRef.current || conflict || saveError) return;
+            // 提交中、有冲突提示条或正在组字时，失焦不重复提交也不销毁草稿
+            if (savingRef.current || isComposingRef.current || conflict || saveError) return;
             void commitValue(false);
           }}
           aria-label={`编辑 ${columnKey}`}

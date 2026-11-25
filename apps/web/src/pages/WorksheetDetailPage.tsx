@@ -15,7 +15,6 @@ import {
   getEffectiveStageCell,
   type PresencePeer,
   type Priority,
-  type PublishStatus,
   type StageCell,
   type StageStatus,
   type StageUpdatedPayload,
@@ -46,7 +45,16 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  type FormEvent,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
@@ -85,6 +93,246 @@ function sortTasksByKey(list: TaskDetail[]): TaskDetail[] {
   });
 }
 
+// ---- 稳定单元格上下文（避免 FlexRender 因列定义变更而卸载单元格、丢失输入态/IME） ----
+
+interface WorksheetGridContextValue {
+  works: Work[];
+  users: UserListItem[];
+  userMap: Map<string, string>;
+  selectedCell: { taskId: string; columnKey: string } | null;
+  peerByCell: Map<string, PresencePeer>;
+  textConflicts: Map<string, ActiveCellConflict>;
+  stageConflicts: Map<string, StageCellConflict>;
+  setSelectedCell: (cell: { taskId: string; columnKey: string } | null) => void;
+  reportFocus: (taskId: string | null, columnKey: string | null, editing: boolean) => void;
+  clearTextConflict: (key: string) => void;
+  clearStageConflict: (key: string) => void;
+  acceptRemoteField: (taskId: string, field: string, remoteVal: string) => void;
+  patchTask: (
+    taskId: string,
+    changes: Record<string, unknown>,
+    baseValues?: Record<string, unknown>,
+    force?: boolean,
+  ) => Promise<void>;
+  patchStage: (
+    taskId: string,
+    columnId: string,
+    payload: {
+      assignees: Assignee[];
+      status: StageStatus;
+      note: string;
+      baseRevision: number;
+      force: boolean;
+    },
+  ) => Promise<void>;
+  renameWork: (targetWorkId: string, newName: string) => Promise<void>;
+  openDetail: (taskId: string) => void;
+}
+
+const WorksheetGridContext = createContext<WorksheetGridContextValue | null>(null);
+
+function useWorksheetGrid(): WorksheetGridContextValue {
+  const ctx = useContext(WorksheetGridContext);
+  if (!ctx) throw new Error('WorksheetGridContext missing');
+  return ctx;
+}
+
+function TitleGridCell({ row }: { row: { original: TaskDetail } }) {
+  const ctx = useWorksheetGrid();
+  const task = row.original;
+  const conflictKey = `${task.id}:title`;
+  return (
+    <InlineTextCell
+      taskId={task.id}
+      columnKey="title"
+      value={task.title}
+      required
+      selected={ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === 'title'}
+      peer={ctx.peerByCell.get(conflictKey)}
+      remoteConflict={ctx.textConflicts.get(conflictKey) ?? null}
+      onSelect={() => {
+        ctx.setSelectedCell({ taskId: task.id, columnKey: 'title' });
+        ctx.reportFocus(task.id, 'title', false);
+      }}
+      onEditingChange={(ed) => ctx.reportFocus(task.id, 'title', ed)}
+      onClearConflict={() => ctx.clearTextConflict(conflictKey)}
+      onAcceptRemote={(val) => ctx.acceptRemoteField(task.id, 'title', val)}
+      onCommit={(nextVal, baseVal, force) =>
+        ctx.patchTask(task.id, { title: nextVal }, { title: baseVal }, force)
+      }
+    />
+  );
+}
+
+function WorkGridCell({ row }: { row: { original: TaskDetail } }) {
+  const ctx = useWorksheetGrid();
+  const task = row.original;
+  return (
+    <WorkCellEditor
+      taskId={task.id}
+      workId={task.workId}
+      works={ctx.works}
+      peer={ctx.peerByCell.get(`${task.id}:work`)}
+      onFocusChange={(ed) =>
+        ed === null ? ctx.reportFocus(null, null, false) : ctx.reportFocus(task.id, 'work', ed)
+      }
+      onSelectWork={(next) => ctx.patchTask(task.id, next, { workId: task.workId }, true)}
+      onRenameWork={ctx.renameWork}
+    />
+  );
+}
+
+function DivisionNoteGridCell({ row }: { row: { original: TaskDetail } }) {
+  const ctx = useWorksheetGrid();
+  const task = row.original;
+  const conflictKey = `${task.id}:divisionNote`;
+  return (
+    <InlineTextCell
+      taskId={task.id}
+      columnKey="divisionNote"
+      value={task.divisionNote}
+      placeholder="填写分工说明"
+      selected={
+        ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === 'divisionNote'
+      }
+      peer={ctx.peerByCell.get(conflictKey)}
+      remoteConflict={ctx.textConflicts.get(conflictKey) ?? null}
+      onSelect={() => {
+        ctx.setSelectedCell({ taskId: task.id, columnKey: 'divisionNote' });
+        ctx.reportFocus(task.id, 'divisionNote', false);
+      }}
+      onEditingChange={(ed) => ctx.reportFocus(task.id, 'divisionNote', ed)}
+      onClearConflict={() => ctx.clearTextConflict(conflictKey)}
+      onAcceptRemote={(val) => ctx.acceptRemoteField(task.id, 'divisionNote', val)}
+      onCommit={(nextVal, baseVal, force) =>
+        ctx.patchTask(task.id, { divisionNote: nextVal }, { divisionNote: baseVal }, force)
+      }
+    />
+  );
+}
+
+function StageGridCell({
+  row,
+  column,
+}: {
+  row: { original: TaskDetail };
+  column: { columnDef: { meta?: unknown } };
+}) {
+  const ctx = useWorksheetGrid();
+  const col = (column.columnDef.meta as { columnConfig: ColumnConfig }).columnConfig;
+  const task = row.original;
+  const cell = getEffectiveStageCell(task, col.id);
+  const conflictKey = `${task.id}:${col.id}`;
+  return (
+    <StageCellEditor
+      taskId={task.id}
+      columnId={col.id}
+      columnName={col.name}
+      cell={cell}
+      users={ctx.users}
+      userMap={ctx.userMap}
+      peer={ctx.peerByCell.get(conflictKey)}
+      remoteConflict={ctx.stageConflicts.get(conflictKey) ?? null}
+      onFocusChange={(ed) =>
+        ed === null ? ctx.reportFocus(null, null, false) : ctx.reportFocus(task.id, col.id, ed)
+      }
+      onClearConflict={() => ctx.clearStageConflict(conflictKey)}
+      onCommit={(payload) => ctx.patchStage(task.id, col.id, payload)}
+    />
+  );
+}
+
+function CustomGridCell({
+  row,
+  column,
+}: {
+  row: { original: TaskDetail };
+  column: { columnDef: { meta?: unknown } };
+}) {
+  const ctx = useWorksheetGrid();
+  const col = (column.columnDef.meta as { columnConfig: ColumnConfig }).columnConfig;
+  const customInputType: 'text' | 'date' | 'link' =
+    col.type === 'date' || col.type === 'link' ? col.type : 'text';
+  const task = row.original;
+  const val = task.customValues[col.id] ?? '';
+  const conflictKey = `${task.id}:${col.id}`;
+  return (
+    <InlineTextCell
+      taskId={task.id}
+      columnKey={col.id}
+      value={val}
+      inputType={customInputType}
+      placeholder={col.type === 'link' ? 'https://...' : ''}
+      selected={ctx.selectedCell?.taskId === task.id && ctx.selectedCell.columnKey === col.id}
+      peer={ctx.peerByCell.get(conflictKey)}
+      remoteConflict={ctx.textConflicts.get(conflictKey) ?? null}
+      onSelect={() => {
+        ctx.setSelectedCell({ taskId: task.id, columnKey: col.id });
+        ctx.reportFocus(task.id, col.id, false);
+      }}
+      onEditingChange={(ed) => ctx.reportFocus(task.id, col.id, ed)}
+      onClearConflict={() => ctx.clearTextConflict(conflictKey)}
+      onAcceptRemote={(remoteVal) => ctx.acceptRemoteField(task.id, col.id, remoteVal)}
+      onCommit={(nextVal, baseVal, force) =>
+        ctx.patchTask(
+          task.id,
+          { customValues: { [col.id]: nextVal || null } },
+          { customValues: { [col.id]: baseVal || null } },
+          force,
+        )
+      }
+    />
+  );
+}
+
+function PriorityGridCell({ row }: { row: { original: TaskDetail } }) {
+  const ctx = useWorksheetGrid();
+  const task = row.original;
+  return (
+    <PriorityCellEditor
+      taskId={task.id}
+      priority={task.priority}
+      peer={ctx.peerByCell.get(`${task.id}:priority`)}
+      onSelect={(next) =>
+        ctx.patchTask(task.id, { priority: next }, { priority: task.priority }, true)
+      }
+    />
+  );
+}
+
+function PublishGridCell({ row }: { row: { original: TaskDetail } }) {
+  const ctx = useWorksheetGrid();
+  const task = row.original;
+  return (
+    <PublishCellEditor
+      taskId={task.id}
+      publishStatus={task.publishStatus}
+      publishedAt={task.publishedAt}
+      publishUrl={task.publishUrl}
+      peer={ctx.peerByCell.get(`${task.id}:publish`)}
+      onFocusChange={(ed) =>
+        ed === null ? ctx.reportFocus(null, null, false) : ctx.reportFocus(task.id, 'publish', ed)
+      }
+      onSave={(patch) => ctx.patchTask(task.id, patch, undefined, true)}
+    />
+  );
+}
+
+function FilesGridCell({ row }: { row: { original: TaskDetail } }) {
+  const ctx = useWorksheetGrid();
+  return (
+    <button
+      type="button"
+      onClick={() => ctx.openDetail(row.original.id)}
+      className="flex min-h-[38px] w-full items-center gap-1 px-2 text-xs text-slate-400 hover:bg-slate-50 hover:text-slate-600 cursor-pointer"
+      title="任务文件将在阶段 3 启用，点击打开详情"
+    >
+      <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">阶段 3</span>
+    </button>
+  );
+}
+
 function SortableTableRow({
   task,
   dragEnabled,
@@ -118,7 +366,6 @@ function SortableTableRow({
         highlighted && 'bg-amber-50 ring-2 ring-inset ring-amber-400 transition-colors',
       )}
     >
-      {/* 左侧冻结操作 + 拖动手柄列 */}
       <td className="sticky left-0 z-20 w-[72px] min-w-[72px] border-r border-slate-200 bg-white px-1 group-hover:bg-slate-50">
         <div className="flex items-center gap-0.5">
           <button
@@ -158,7 +405,6 @@ function SortableTableRow({
         </div>
       </td>
       {children}
-      {/* 末列删除按钮 */}
       <td className="w-10 min-w-10 border-l border-slate-100 px-1 text-center">
         <button
           type="button"
@@ -183,7 +429,6 @@ export function WorksheetDetailPage() {
   const realtime = useRealtimeClient();
   const { pushToast } = useToast();
 
-  // 订阅后再拉取数据（第 8.2 节）
   const [subscribedReady, setSubscribedReady] = useState(false);
   const [peers, setPeers] = useState<Map<string, PresencePeer>>(new Map());
   const [selectedCell, setSelectedCell] = useState<{ taskId: string; columnKey: string } | null>(
@@ -193,7 +438,6 @@ export function WorksheetDetailPage() {
   const [textConflicts, setTextConflicts] = useState<Map<string, ActiveCellConflict>>(new Map());
   const [stageConflicts, setStageConflicts] = useState<Map<string, StageCellConflict>>(new Map());
 
-  // 弹窗与抽屉状态
   const [colModalOpen, setColModalOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
@@ -203,14 +447,11 @@ export function WorksheetDetailPage() {
   const [insertingAfterId, setInsertingAfterId] = useState<string | null>(null);
   const [insertTitle, setInsertTitle] = useState('');
 
-  // 本地筛选与排序（不落库）
   const [statusChip, setStatusChip] = useState<StatusChip>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
   const [workFilter, setWorkFilter] = useState<string>('');
   const [keyword, setKeyword] = useState('');
   const [localSort, setLocalSort] = useState<LocalSort>('manual');
-
-  // 列宽拖动实时预览
   const [previewWidths, setPreviewWidths] = useState<Record<string, number>>({});
 
   const wsScope = useMemo(
@@ -218,7 +459,6 @@ export function WorksheetDetailPage() {
     [worksheetId],
   );
 
-  // 切换工作表时重置本地状态
   useEffect(() => {
     if (!worksheetId) return;
     setSubscribedReady(false);
@@ -237,7 +477,6 @@ export function WorksheetDetailPage() {
     }
   }, [queryClient, worksheetId]);
 
-  // 实时订阅当前工作表
   useRealtimeScope(wsScope, {
     onSubscribed: () => {
       setSubscribedReady(true);
@@ -357,7 +596,6 @@ export function WorksheetDetailPage() {
         const payload = ev.payload as TaskUpdatedPayload;
         const active = activeEditorRef.current;
 
-        // 若正在编辑同一任务的同一字段，触发冲突浮条而不覆盖输入框草稿（A19）
         if (active && active.taskId === payload.taskId) {
           const colKey = active.columnKey;
           let hit = false;
@@ -392,7 +630,6 @@ export function WorksheetDetailPage() {
             needRefetch = true;
             return old;
           }
-          // 若 revision 出现断层（> +1），触发整表重拉保证一致性
           if (payload.revision > existing.revision + 1) {
             needRefetch = true;
             return old;
@@ -453,7 +690,6 @@ export function WorksheetDetailPage() {
     },
   });
 
-  // 如果实时客户端已连接且有游标，或短超时兜底（防止断线状态下无法首次打开页面）
   useEffect(() => {
     if (!wsScope || subscribedReady) return;
     if (realtime.getStatus() === 'connected' && realtime.getCursor(wsScope) !== null) {
@@ -478,7 +714,6 @@ export function WorksheetDetailPage() {
   const userMap = useMemo(() => new Map(users.map((u) => [u.id, u.displayName])), [users]);
   const workMap = useMemo(() => new Map((data?.works ?? []).map((w) => [w.id, w])), [data?.works]);
 
-  // 从 URL ?taskId=<id> 定位高亮并打开详情侧栏
   const locateTaskId = searchParams.get('taskId');
   useEffect(() => {
     if (!locateTaskId || !data) return;
@@ -489,7 +724,6 @@ export function WorksheetDetailPage() {
     }
     setDetailTaskId(target.id);
     setHighlightedTaskId(target.id);
-    // 清除 URL 中的 taskId 防止重复触发
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('taskId');
     setSearchParams(nextParams, { replace: true });
@@ -502,7 +736,6 @@ export function WorksheetDetailPage() {
     return () => clearTimeout(timer);
   }, [locateTaskId, data, searchParams, setSearchParams]);
 
-  // 上报在线焦点
   const reportFocus = useCallback(
     (taskId: string | null, columnKey: string | null, editing: boolean) => {
       if (!wsScope) return;
@@ -524,7 +757,6 @@ export function WorksheetDetailPage() {
     [wsScope, realtime],
   );
 
-  // 构建 peer 焦点映射 (taskId:columnKey -> peer) 和在线用户去重列表
   const peerByCell = useMemo(() => {
     const map = new Map<string, PresencePeer>();
     for (const peer of peers.values()) {
@@ -546,7 +778,6 @@ export function WorksheetDetailPage() {
     return [...byUser.values()];
   }, [peers]);
 
-  // 表中所有纯文本负责人名字（供筛选下拉使用）
   const textAssigneeOptions = useMemo(() => {
     const set = new Set<string>();
     for (const task of data?.tasks ?? []) {
@@ -559,7 +790,6 @@ export function WorksheetDetailPage() {
     return [...set].sort();
   }, [data?.tasks]);
 
-  // 本地筛选与排序
   const stageCols = useMemo(
     () => (data?.columns ?? []).filter((c) => c.type === 'stage'),
     [data?.columns],
@@ -650,8 +880,6 @@ export function WorksheetDetailPage() {
     () => (data?.tasks ?? EMPTY_TASKS).filter((t) => t.publishStatus === 'published').length,
     [data?.tasks],
   );
-
-  // ---- 写入 Mutations ----
 
   const createTaskMutation = useMutation({
     mutationFn: (payload: { title: string; afterTaskId?: string | null }) =>
@@ -787,7 +1015,43 @@ export function WorksheetDetailPage() {
     [worksheetId, queryClient, pushToast],
   );
 
-  // 列宽拖动持久化
+  const clearTextConflict = useCallback((key: string) => {
+    setTextConflicts((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const clearStageConflict = useCallback((key: string) => {
+    setStageConflicts((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const acceptRemoteField = useCallback(
+    (taskId: string, field: string, remoteVal: string) => {
+      if (!worksheetId) return;
+      queryClient.setQueryData<WorksheetFullResponse>(queryKeys.worksheet(worksheetId), (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          tasks: old.tasks.map((t) => {
+            if (t.id !== taskId) return t;
+            if (field === 'title') return { ...t, title: remoteVal };
+            if (field === 'divisionNote') return { ...t, divisionNote: remoteVal };
+            return { ...t, customValues: { ...t.customValues, [field]: remoteVal || null } };
+          }),
+        };
+      });
+    },
+    [worksheetId, queryClient],
+  );
+
   const startResize = useCallback(
     (colId: string, startWidth: number, isSystem: boolean, e: React.MouseEvent) => {
       e.preventDefault();
@@ -828,365 +1092,137 @@ export function WorksheetDetailPage() {
     [worksheetId, refetchWorksheet],
   );
 
-  // ---- TanStack Table v9 列定义 ----
+  const wsSystemColumns = data?.worksheet.systemColumns;
+  const wsColumns = data?.columns;
 
+  // 列定义仅依赖列结构与列宽，cell 使用模块级稳定组件，绝不因焦点/冲突/任务变更卸载单元格！
   const visibleColumns = useMemo(() => {
-    if (!data) return [];
-    const sys = data.worksheet.systemColumns ?? {};
+    if (!wsColumns) return [];
+    const sys = wsSystemColumns ?? {};
     const defs = [];
 
-    // 1. 标题（永远冻结常显）
-    const titleWidth = previewWidths.title ?? sys.title?.width ?? 220;
     defs.push(
       columnHelper.display({
         id: 'title',
-        header: () => '标题',
-        meta: { width: titleWidth, isSystem: true, stickyTitle: true },
-        cell: ({ row }) => {
-          const task = row.original;
-          const conflictKey = `${task.id}:title`;
-          return (
-            <InlineTextCell
-              taskId={task.id}
-              columnKey="title"
-              value={task.title}
-              required
-              selected={selectedCell?.taskId === task.id && selectedCell.columnKey === 'title'}
-              peer={peerByCell.get(conflictKey)}
-              remoteConflict={textConflicts.get(conflictKey) ?? null}
-              onSelect={() => {
-                setSelectedCell({ taskId: task.id, columnKey: 'title' });
-                reportFocus(task.id, 'title', false);
-              }}
-              onEditingChange={(ed) => reportFocus(task.id, 'title', ed)}
-              onClearConflict={() =>
-                setTextConflicts((prev) => {
-                  if (!prev.has(conflictKey)) return prev;
-                  const next = new Map(prev);
-                  next.delete(conflictKey);
-                  return next;
-                })
-              }
-              onAcceptRemote={(remoteVal) => {
-                if (!worksheetId) return;
-                queryClient.setQueryData<WorksheetFullResponse>(
-                  queryKeys.worksheet(worksheetId),
-                  (old) =>
-                    old
-                      ? {
-                          ...old,
-                          tasks: old.tasks.map((t) =>
-                            t.id === task.id ? { ...t, title: remoteVal } : t,
-                          ),
-                        }
-                      : old,
-                );
-              }}
-              onCommit={(nextVal, baseVal, force) =>
-                patchTask(task.id, { title: nextVal }, { title: baseVal }, force)
-              }
-            />
-          );
+        header: '标题',
+        meta: {
+          width: previewWidths.title ?? sys.title?.width ?? 220,
+          isSystem: true,
+          stickyTitle: true,
         },
+        cell: TitleGridCell,
       }),
     );
 
-    // 2. 作品
     if (!sys.work?.hidden) {
-      const width = previewWidths.work ?? sys.work?.width ?? 140;
       defs.push(
         columnHelper.display({
           id: 'work',
-          header: () => '作品',
-          meta: { width, isSystem: true },
-          cell: ({ row }) => {
-            const task = row.original;
-            return (
-              <WorkCellEditor
-                taskId={task.id}
-                workId={task.workId}
-                works={data.works}
-                peer={peerByCell.get(`${task.id}:work`)}
-                onFocusChange={(ed) =>
-                  ed === null ? reportFocus(null, null, false) : reportFocus(task.id, 'work', ed)
-                }
-                onSelectWork={(next) => patchTask(task.id, next, { workId: task.workId }, true)}
-                onRenameWork={renameWork}
-              />
-            );
-          },
+          header: '作品',
+          meta: { width: previewWidths.work ?? sys.work?.width ?? 140, isSystem: true },
+          cell: WorkGridCell,
         }),
       );
     }
 
-    // 3. 分工说明
     if (!sys.divisionNote?.hidden) {
-      const width = previewWidths.divisionNote ?? sys.divisionNote?.width ?? 180;
       defs.push(
         columnHelper.display({
           id: 'divisionNote',
-          header: () => '分工说明',
-          meta: { width, isSystem: true },
-          cell: ({ row }) => {
-            const task = row.original;
-            const conflictKey = `${task.id}:divisionNote`;
-            return (
-              <InlineTextCell
-                taskId={task.id}
-                columnKey="divisionNote"
-                value={task.divisionNote}
-                placeholder="填写分工说明"
-                selected={
-                  selectedCell?.taskId === task.id && selectedCell.columnKey === 'divisionNote'
-                }
-                peer={peerByCell.get(conflictKey)}
-                remoteConflict={textConflicts.get(conflictKey) ?? null}
-                onSelect={() => {
-                  setSelectedCell({ taskId: task.id, columnKey: 'divisionNote' });
-                  reportFocus(task.id, 'divisionNote', false);
-                }}
-                onEditingChange={(ed) => reportFocus(task.id, 'divisionNote', ed)}
-                onClearConflict={() =>
-                  setTextConflicts((prev) => {
-                    if (!prev.has(conflictKey)) return prev;
-                    const next = new Map(prev);
-                    next.delete(conflictKey);
-                    return next;
-                  })
-                }
-                onAcceptRemote={(remoteVal) => {
-                  if (!worksheetId) return;
-                  queryClient.setQueryData<WorksheetFullResponse>(
-                    queryKeys.worksheet(worksheetId),
-                    (old) =>
-                      old
-                        ? {
-                            ...old,
-                            tasks: old.tasks.map((t) =>
-                              t.id === task.id ? { ...t, divisionNote: remoteVal } : t,
-                            ),
-                          }
-                        : old,
-                  );
-                }}
-                onCommit={(nextVal, baseVal, force) =>
-                  patchTask(task.id, { divisionNote: nextVal }, { divisionNote: baseVal }, force)
-                }
-              />
-            );
+          header: '分工说明',
+          meta: {
+            width: previewWidths.divisionNote ?? sys.divisionNote?.width ?? 180,
+            isSystem: true,
           },
+          cell: DivisionNoteGridCell,
         }),
       );
     }
 
-    // 4. 可配置列（工序列 + 自定义列）
-    for (const col of data.columns) {
+    for (const col of wsColumns) {
       if (col.hidden) continue;
-      const width = previewWidths[col.id] ?? col.width;
-      if (col.type === 'stage') {
-        defs.push(
-          columnHelper.display({
-            id: col.id,
-            header: () => col.name,
-            meta: { width, isSystem: false, columnConfig: col },
-            cell: ({ row }) => {
-              const task = row.original;
-              const cell = getEffectiveStageCell(task, col.id);
-              const conflictKey = `${task.id}:${col.id}`;
-              return (
-                <StageCellEditor
-                  taskId={task.id}
-                  columnId={col.id}
-                  columnName={col.name}
-                  cell={cell}
-                  users={users}
-                  userMap={userMap}
-                  peer={peerByCell.get(conflictKey)}
-                  remoteConflict={stageConflicts.get(conflictKey) ?? null}
-                  onFocusChange={(ed) =>
-                    ed === null ? reportFocus(null, null, false) : reportFocus(task.id, col.id, ed)
-                  }
-                  onClearConflict={() =>
-                    setStageConflicts((prev) => {
-                      if (!prev.has(conflictKey)) return prev;
-                      const next = new Map(prev);
-                      next.delete(conflictKey);
-                      return next;
-                    })
-                  }
-                  onCommit={(payload) => patchStage(task.id, col.id, payload)}
-                />
-              );
-            },
-          }),
-        );
-      } else {
-        const customInputType: 'text' | 'date' | 'link' =
-          col.type === 'date' || col.type === 'link' ? col.type : 'text';
-        defs.push(
-          columnHelper.display({
-            id: col.id,
-            header: () => col.name,
-            meta: { width, isSystem: false, columnConfig: col },
-            cell: ({ row }) => {
-              const task = row.original;
-              const val = task.customValues[col.id] ?? '';
-              const conflictKey = `${task.id}:${col.id}`;
-              return (
-                <InlineTextCell
-                  taskId={task.id}
-                  columnKey={col.id}
-                  value={val}
-                  inputType={customInputType}
-                  placeholder={col.type === 'link' ? 'https://...' : ''}
-                  selected={selectedCell?.taskId === task.id && selectedCell.columnKey === col.id}
-                  peer={peerByCell.get(conflictKey)}
-                  remoteConflict={textConflicts.get(conflictKey) ?? null}
-                  onSelect={() => {
-                    setSelectedCell({ taskId: task.id, columnKey: col.id });
-                    reportFocus(task.id, col.id, false);
-                  }}
-                  onEditingChange={(ed) => reportFocus(task.id, col.id, ed)}
-                  onClearConflict={() =>
-                    setTextConflicts((prev) => {
-                      if (!prev.has(conflictKey)) return prev;
-                      const next = new Map(prev);
-                      next.delete(conflictKey);
-                      return next;
-                    })
-                  }
-                  onAcceptRemote={(remoteVal) => {
-                    if (!worksheetId) return;
-                    queryClient.setQueryData<WorksheetFullResponse>(
-                      queryKeys.worksheet(worksheetId),
-                      (old) =>
-                        old
-                          ? {
-                              ...old,
-                              tasks: old.tasks.map((t) =>
-                                t.id === task.id
-                                  ? {
-                                      ...t,
-                                      customValues: {
-                                        ...t.customValues,
-                                        [col.id]: remoteVal || null,
-                                      },
-                                    }
-                                  : t,
-                              ),
-                            }
-                          : old,
-                    );
-                  }}
-                  onCommit={(nextVal, baseVal, force) =>
-                    patchTask(
-                      task.id,
-                      { customValues: { [col.id]: nextVal || null } },
-                      { customValues: { [col.id]: baseVal || null } },
-                      force,
-                    )
-                  }
-                />
-              );
-            },
-          }),
-        );
-      }
+      defs.push(
+        columnHelper.display({
+          id: col.id,
+          header: col.name,
+          meta: { width: previewWidths[col.id] ?? col.width, isSystem: false, columnConfig: col },
+          cell: col.type === 'stage' ? StageGridCell : CustomGridCell,
+        }),
+      );
     }
 
-    // 5. 优先级
     if (!sys.priority?.hidden) {
-      const width = previewWidths.priority ?? sys.priority?.width ?? 96;
       defs.push(
         columnHelper.display({
           id: 'priority',
-          header: () => '优先级',
-          meta: { width, isSystem: true },
-          cell: ({ row }) => {
-            const task = row.original;
-            return (
-              <PriorityCellEditor
-                taskId={task.id}
-                priority={task.priority}
-                peer={peerByCell.get(`${task.id}:priority`)}
-                onSelect={(next) =>
-                  patchTask(task.id, { priority: next }, { priority: task.priority }, true)
-                }
-              />
-            );
-          },
+          header: '优先级',
+          meta: { width: previewWidths.priority ?? sys.priority?.width ?? 96, isSystem: true },
+          cell: PriorityGridCell,
         }),
       );
     }
 
-    // 6. 发布信息
     if (!sys.publish?.hidden) {
-      const width = previewWidths.publish ?? sys.publish?.width ?? 160;
       defs.push(
         columnHelper.display({
           id: 'publish',
-          header: () => '发布信息',
-          meta: { width, isSystem: true },
-          cell: ({ row }) => {
-            const task = row.original;
-            return (
-              <PublishCellEditor
-                taskId={task.id}
-                publishStatus={task.publishStatus}
-                publishedAt={task.publishedAt}
-                publishUrl={task.publishUrl}
-                peer={peerByCell.get(`${task.id}:publish`)}
-                onFocusChange={(ed) =>
-                  ed === null ? reportFocus(null, null, false) : reportFocus(task.id, 'publish', ed)
-                }
-                onSave={(patch) => patchTask(task.id, patch, undefined, true)}
-              />
-            );
-          },
+          header: '发布信息',
+          meta: { width: previewWidths.publish ?? sys.publish?.width ?? 160, isSystem: true },
+          cell: PublishGridCell,
         }),
       );
     }
 
-    // 7. 文件占位（阶段 3 启用）
     if (!sys.files?.hidden) {
-      const width = previewWidths.files ?? sys.files?.width ?? 100;
       defs.push(
         columnHelper.display({
           id: 'files',
-          header: () => '文件',
-          meta: { width, isSystem: true },
-          cell: ({ row }) => (
-            <button
-              type="button"
-              onClick={() => setDetailTaskId(row.original.id)}
-              className="flex min-h-[38px] w-full items-center gap-1 px-2 text-xs text-slate-400 hover:bg-slate-50 hover:text-slate-600 cursor-pointer"
-              title="任务文件将在阶段 3 启用，点击打开详情"
-            >
-              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">阶段 3</span>
-            </button>
-          ),
+          header: '文件',
+          meta: { width: previewWidths.files ?? sys.files?.width ?? 100, isSystem: true },
+          cell: FilesGridCell,
         }),
       );
     }
 
     return defs;
-  }, [
-    data,
-    previewWidths,
-    selectedCell,
-    peerByCell,
-    textConflicts,
-    stageConflicts,
-    users,
-    userMap,
-    worksheetId,
-    queryClient,
-    reportFocus,
-    patchTask,
-    patchStage,
-    renameWork,
-  ]);
+  }, [wsSystemColumns, wsColumns, previewWidths]);
+
+  const gridContextValue = useMemo<WorksheetGridContextValue>(
+    () => ({
+      works: data?.works ?? [],
+      users,
+      userMap,
+      selectedCell,
+      peerByCell,
+      textConflicts,
+      stageConflicts,
+      setSelectedCell,
+      reportFocus,
+      clearTextConflict,
+      clearStageConflict,
+      acceptRemoteField,
+      patchTask,
+      patchStage,
+      renameWork,
+      openDetail: setDetailTaskId,
+    }),
+    [
+      data?.works,
+      users,
+      userMap,
+      selectedCell,
+      peerByCell,
+      textConflicts,
+      stageConflicts,
+      reportFocus,
+      clearTextConflict,
+      clearStageConflict,
+      acceptRemoteField,
+      patchTask,
+      patchStage,
+      renameWork,
+    ],
+  );
 
   const mainTable = useTable({
     features: TABLE_FEATURES,
@@ -1202,7 +1238,6 @@ export function WorksheetDetailPage() {
     getRowId: (row) => row.id,
   });
 
-  // 行拖动排序
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const handleRowDragEnd = async (ev: DragEndEvent) => {
     if (isFilteredOrSorted || !worksheetId) return;
@@ -1364,319 +1399,330 @@ export function WorksheetDetailPage() {
     });
 
   return (
-    <div className="space-y-4">
-      {/* 顶部工具栏 */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className={cn('h-3.5 w-3.5 shrink-0 rounded-full', wsColor.dot)} />
-          <h1 className="truncate text-xl font-semibold text-slate-900">{data.worksheet.name}</h1>
-          <span className="shrink-0 text-xs text-slate-500">
-            未发布 {data.tasks.length - totalPublishedCount} · 已发布 {totalPublishedCount}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* 在线用户头像条 */}
-          {onlineUsers.length > 0 && (
-            <div
-              data-testid="presence-bar"
-              className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1"
-            >
-              <span className="text-[11px] text-slate-400">在线：</span>
-              {onlineUsers.map((peer) => {
-                const color = peerColorForUser(peer.userId);
-                return (
-                  <span
-                    key={peer.userId}
-                    title={
-                      peer.focus
-                        ? `${peer.displayName}${peer.focus.editing ? '（正在编辑）' : '（正在查看）'}`
-                        : `${peer.displayName}（在线）`
-                    }
-                    className={cn(
-                      'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                      color.bg,
-                      color.text,
-                    )}
-                  >
-                    {peer.displayName}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-
-          <Button type="button" size="sm" variant="secondary" onClick={() => setColModalOpen(true)}>
-            <Columns3 className="mr-1 h-4 w-4" />
-            列设置
-          </Button>
-          <Button type="button" size="sm" variant="secondary" onClick={() => setLogsOpen(true)}>
-            <History className="mr-1 h-4 w-4" />
-            修改记录
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              const el = document.getElementById('worksheet-quick-add-input');
-              el?.focus();
-            }}
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            新建任务
-          </Button>
-        </div>
-      </div>
-
-      {/* 本地筛选与排序栏 */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1">
-          {(
-            [
-              ['all', '全部'],
-              ['mine', '我的'],
-              ['not_started', '未开始'],
-              ['in_progress', '进行中'],
-              ['all_stages_done', '全工序已完成'],
-            ] as const
-          ).map(([val, label]) => (
-            <button
-              key={val}
-              type="button"
-              onClick={() => setStatusChip(val)}
-              className={cn(
-                'rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
-                statusChip === val
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              placeholder="表内筛选关键词…"
-              aria-label="表内筛选关键词"
-              className="h-8 w-40 pl-8 text-xs"
-            />
+    <WorksheetGridContext.Provider value={gridContextValue}>
+      <div className="space-y-4">
+        {/* 顶部工具栏 */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className={cn('h-3.5 w-3.5 shrink-0 rounded-full', wsColor.dot)} />
+            <h1 className="truncate text-xl font-semibold text-slate-900">{data.worksheet.name}</h1>
+            <span className="shrink-0 text-xs text-slate-500">
+              未发布 {data.tasks.length - totalPublishedCount} · 已发布 {totalPublishedCount}
+            </span>
           </div>
 
-          <Select
-            aria-label="按作品筛选"
-            value={workFilter}
-            onChange={(e) => setWorkFilter(e.target.value)}
-            className="h-8 w-32 py-1 text-xs"
-          >
-            <option value="">全部作品</option>
-            {data.works.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            {onlineUsers.length > 0 && (
+              <div
+                data-testid="presence-bar"
+                className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1"
+              >
+                <span className="text-[11px] text-slate-400">在线：</span>
+                {onlineUsers.map((peer) => {
+                  const color = peerColorForUser(peer.userId);
+                  return (
+                    <span
+                      key={peer.userId}
+                      title={
+                        peer.focus
+                          ? `${peer.displayName}${peer.focus.editing ? '（正在编辑）' : '（正在查看）'}`
+                          : `${peer.displayName}（在线）`
+                      }
+                      className={cn(
+                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                        color.bg,
+                        color.text,
+                      )}
+                    >
+                      {peer.displayName}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
-          <Select
-            aria-label="按负责人筛选"
-            value={assigneeFilter}
-            onChange={(e) => setAssigneeFilter(e.target.value)}
-            className="h-8 w-32 py-1 text-xs"
-          >
-            <option value="">全部负责人</option>
-            {users.map((u) => (
-              <option key={`u:${u.id}`} value={`u:${u.id}`}>
-                {u.displayName}
-              </option>
-            ))}
-            {textAssigneeOptions.map((name) => (
-              <option key={`t:${name}`} value={`t:${name}`}>
-                {name}（文本）
-              </option>
-            ))}
-          </Select>
-
-          <Select
-            aria-label="本地排序"
-            value={localSort}
-            onChange={(e) => setLocalSort(e.target.value as LocalSort)}
-            className="h-8 w-36 py-1 text-xs"
-          >
-            <option value="manual">默认手动顺序</option>
-            <option value="title">按标题排序</option>
-            <option value="priority">按优先级排序</option>
-            <option value="work">按作品排序</option>
-          </Select>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => setColModalOpen(true)}
+            >
+              <Columns3 className="mr-1 h-4 w-4" />
+              列设置
+            </Button>
+            <Button type="button" size="sm" variant="secondary" onClick={() => setLogsOpen(true)}>
+              <History className="mr-1 h-4 w-4" />
+              修改记录
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                const el = document.getElementById('worksheet-quick-add-input');
+                el?.focus();
+              }}
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              新建任务
+            </Button>
+          </div>
         </div>
 
-        {isFilteredOrSorted && (
-          <div className="w-full text-xs text-slate-500">
-            恢复默认顺序后可拖动调整行序
+        {/* 本地筛选与排序栏 */}
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <div className="flex flex-wrap items-center gap-1">
+            {(
+              [
+                ['all', '全部'],
+                ['mine', '我的'],
+                ['not_started', '未开始'],
+                ['in_progress', '进行中'],
+                ['all_stages_done', '全工序已完成'],
+              ] as const
+            ).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setStatusChip(val)}
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
+                  statusChip === val
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <div className="relative">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="表内筛选关键词…"
+                aria-label="表内筛选关键词"
+                className="h-8 w-40 pl-8 text-xs"
+              />
+            </div>
+
+            <Select
+              aria-label="按作品筛选"
+              value={workFilter}
+              onChange={(e) => setWorkFilter(e.target.value)}
+              className="h-8 w-32 py-1 text-xs"
+            >
+              <option value="">全部作品</option>
+              {data.works.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              aria-label="按负责人筛选"
+              value={assigneeFilter}
+              onChange={(e) => setAssigneeFilter(e.target.value)}
+              className="h-8 w-32 py-1 text-xs"
+            >
+              <option value="">全部负责人</option>
+              {users.map((u) => (
+                <option key={`u:${u.id}`} value={`u:${u.id}`}>
+                  {u.displayName}
+                </option>
+              ))}
+              {textAssigneeOptions.map((name) => (
+                <option key={`t:${name}`} value={`t:${name}`}>
+                  {name}（文本）
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              aria-label="本地排序"
+              value={localSort}
+              onChange={(e) => setLocalSort(e.target.value as LocalSort)}
+              className="h-8 w-36 py-1 text-xs"
+            >
+              <option value="manual">默认手动顺序</option>
+              <option value="title">按标题排序</option>
+              <option value="priority">按优先级排序</option>
+              <option value="work">按作品排序</option>
+            </Select>
+          </div>
+
+          {isFilteredOrSorted && (
+            <div className="w-full text-xs text-slate-500">
+              恢复默认顺序后可拖动调整行序
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusChip('all');
+                  setAssigneeFilter('');
+                  setWorkFilter('');
+                  setKeyword('');
+                  setLocalSort('manual');
+                }}
+                className="ml-2 font-medium text-sky-700 underline cursor-pointer"
+              >
+                重置筛选与排序
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 顶部“已发布”折叠区 */}
+        {totalPublishedCount > 0 && (
+          <div
+            data-testid="published-section"
+            className="overflow-hidden rounded-lg border border-emerald-200 bg-white"
+          >
             <button
               type="button"
-              onClick={() => {
-                setStatusChip('all');
-                setAssigneeFilter('');
-                setWorkFilter('');
-                setKeyword('');
-                setLocalSort('manual');
-              }}
-              className="ml-2 font-medium text-sky-700 underline cursor-pointer"
+              onClick={() => setPublishedExpanded((v) => !v)}
+              className="flex w-full items-center justify-between bg-emerald-50/70 px-3.5 py-2 text-left text-sm font-medium text-emerald-900 hover:bg-emerald-50 cursor-pointer"
             >
-              重置筛选与排序
+              <span className="inline-flex items-center gap-1.5">
+                {publishedExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+                已发布（{publishedTasks.length} 条）
+              </span>
+              <span className="text-xs font-normal text-emerald-700">
+                {publishedExpanded ? '点击收起' : '默认收起，点击展开查看或编辑'}
+              </span>
             </button>
+
+            {publishedExpanded && (
+              <div className="overflow-x-auto border-t border-emerald-100">
+                <table className="w-max min-w-full border-collapse">
+                  {renderTableHeaders(publishedTable)}
+                  <tbody>{renderRows(publishedTable, false)}</tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
-      </div>
 
-      {/* 顶部“已发布”折叠区（仅 publishStatus === 'published'） */}
-      {totalPublishedCount > 0 && (
-        <div
-          data-testid="published-section"
-          className="overflow-hidden rounded-lg border border-emerald-200 bg-white"
-        >
-          <button
-            type="button"
-            onClick={() => setPublishedExpanded((v) => !v)}
-            className="flex w-full items-center justify-between bg-emerald-50/70 px-3.5 py-2 text-left text-sm font-medium text-emerald-900 hover:bg-emerald-50 cursor-pointer"
+        {/* 在指定行下方插入的快捷表单 */}
+        {insertingAfterId && (
+          <form
+            onSubmit={handleInsertSubmit}
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2"
           >
-            <span className="inline-flex items-center gap-1.5">
-              {publishedExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-              已发布（{publishedTasks.length} 条）
-            </span>
-            <span className="text-xs font-normal text-emerald-700">
-              {publishedExpanded ? '点击收起' : '默认收起，点击展开查看或编辑'}
-            </span>
-          </button>
-
-          {publishedExpanded && (
-            <div className="overflow-x-auto border-t border-emerald-100">
-              <table className="w-max min-w-full border-collapse">
-                {renderTableHeaders(publishedTable)}
-                <tbody>{renderRows(publishedTable, false)}</tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 在指定行下方插入的快捷表单 */}
-      {insertingAfterId && (
-        <form
-          onSubmit={handleInsertSubmit}
-          className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2"
-        >
-          <span className="text-xs font-medium text-sky-900">在选中行下方插入新任务：</span>
-          <Input
-            value={insertTitle}
-            onChange={(e) => setInsertTitle(e.target.value)}
-            placeholder="输入新任务标题回车确认"
-            className="h-8 max-w-sm text-xs"
-            autoFocus
-            maxLength={200}
-          />
-          <Button type="submit" size="sm" disabled={createTaskMutation.isPending}>
-            插入
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setInsertingAfterId(null)}>
-            取消
-          </Button>
-        </form>
-      )}
-
-      {/* 主表格（未发布任务） */}
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs">
-        <div className="overflow-x-auto" data-testid="worksheet-table-scroll">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={(ev) => void handleRowDragEnd(ev)}
-          >
-            <SortableContext
-              items={activeTasks.map((t) => t.id)}
-              strategy={verticalListSortingStrategy}
+            <span className="text-xs font-medium text-sky-900">在选中行下方插入新任务：</span>
+            <Input
+              value={insertTitle}
+              onChange={(e) => setInsertTitle(e.target.value)}
+              placeholder="输入新任务标题回车确认"
+              className="h-8 max-w-sm text-xs"
+              autoFocus
+              maxLength={200}
+            />
+            <Button type="submit" size="sm" disabled={createTaskMutation.isPending}>
+              插入
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setInsertingAfterId(null)}
             >
-              <table
-                className="w-max min-w-full border-collapse"
-                data-testid="worksheet-main-table"
+              取消
+            </Button>
+          </form>
+        )}
+
+        {/* 主表格（未发布任务） */}
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xs">
+          <div className="overflow-x-auto" data-testid="worksheet-table-scroll">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(ev) => void handleRowDragEnd(ev)}
+            >
+              <SortableContext
+                items={activeTasks.map((t) => t.id)}
+                strategy={verticalListSortingStrategy}
               >
-                {renderTableHeaders(mainTable)}
-                <tbody>
-                  {activeTasks.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={visibleColumns.length + 2}
-                        className="py-10 text-center text-sm text-slate-400"
-                      >
-                        {isFilteredOrSorted
-                          ? '没有符合筛选条件的任务'
-                          : '暂无未发布任务，在下方输入标题即可新建'}
-                      </td>
-                    </tr>
-                  ) : (
-                    renderRows(mainTable, dragEnabled)
-                  )}
-                </tbody>
-              </table>
-            </SortableContext>
-          </DndContext>
+                <table
+                  className="w-max min-w-full border-collapse"
+                  data-testid="worksheet-main-table"
+                >
+                  {renderTableHeaders(mainTable)}
+                  <tbody>
+                    {activeTasks.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={visibleColumns.length + 2}
+                          className="py-10 text-center text-sm text-slate-400"
+                        >
+                          {isFilteredOrSorted
+                            ? '没有符合筛选条件的任务'
+                            : '暂无未发布任务，在下方输入标题即可新建'}
+                        </td>
+                      </tr>
+                    ) : (
+                      renderRows(mainTable, dragEnabled)
+                    )}
+                  </tbody>
+                </table>
+              </SortableContext>
+            </DndContext>
+          </div>
+
+          <form
+            onSubmit={handleQuickAdd}
+            className="flex items-center gap-2 border-t border-slate-200 bg-slate-50/70 px-3 py-2"
+          >
+            <Plus className="h-4 w-4 shrink-0 text-slate-400" />
+            <input
+              id="worksheet-quick-add-input"
+              value={quickAddTitle}
+              onChange={(e) => setQuickAddTitle(e.target.value)}
+              placeholder="输入新任务标题并按回车添加…"
+              aria-label="新建任务标题"
+              maxLength={200}
+              className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              variant="secondary"
+              disabled={createTaskMutation.isPending || !quickAddTitle.trim()}
+            >
+              添加任务
+            </Button>
+          </form>
         </div>
 
-        {/* 底部快捷新增任务行 */}
-        <form
-          onSubmit={handleQuickAdd}
-          className="flex items-center gap-2 border-t border-slate-200 bg-slate-50/70 px-3 py-2"
-        >
-          <Plus className="h-4 w-4 shrink-0 text-slate-400" />
-          <input
-            id="worksheet-quick-add-input"
-            value={quickAddTitle}
-            onChange={(e) => setQuickAddTitle(e.target.value)}
-            placeholder="输入新任务标题并按回车添加…"
-            aria-label="新建任务标题"
-            maxLength={200}
-            className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            variant="secondary"
-            disabled={createTaskMutation.isPending || !quickAddTitle.trim()}
-          >
-            添加任务
-          </Button>
-        </form>
+        <ColumnManagerModal
+          open={colModalOpen}
+          onOpenChange={setColModalOpen}
+          worksheet={data.worksheet}
+          columns={data.columns}
+          boardColumns={data.boardColumns}
+        />
+
+        <ChangeLogDrawer
+          worksheetId={data.worksheet.id}
+          open={logsOpen}
+          onOpenChange={setLogsOpen}
+        />
+
+        <TaskDetailDrawer
+          worksheetId={data.worksheet.id}
+          taskId={detailTaskId}
+          open={Boolean(detailTaskId)}
+          onClose={() => setDetailTaskId(null)}
+          showLocateButton={false}
+        />
       </div>
-
-      {/* 列管理弹窗 */}
-      <ColumnManagerModal
-        open={colModalOpen}
-        onOpenChange={setColModalOpen}
-        worksheet={data.worksheet}
-        columns={data.columns}
-        boardColumns={data.boardColumns}
-      />
-
-      {/* 修改记录抽屉 */}
-      <ChangeLogDrawer worksheetId={data.worksheet.id} open={logsOpen} onOpenChange={setLogsOpen} />
-
-      {/* 任务详情侧栏 */}
-      <TaskDetailDrawer
-        worksheetId={data.worksheet.id}
-        taskId={detailTaskId}
-        open={Boolean(detailTaskId)}
-        onClose={() => setDetailTaskId(null)}
-        showLocateButton={false}
-      />
-    </div>
+    </WorksheetGridContext.Provider>
   );
 }

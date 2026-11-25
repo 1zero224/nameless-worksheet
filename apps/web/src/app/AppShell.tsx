@@ -113,9 +113,9 @@ export function AppShell() {
         <NavLink
           to="/worksheets"
           onClick={onNavigate}
-          title="管理或新建工作表"
+          title="管理或新建"
           className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-          aria-label="管理或新建工作表"
+          aria-label="新建或配置"
         >
           <Plus className="h-3.5 w-3.5" />
         </NavLink>
@@ -123,13 +123,7 @@ export function AppShell() {
 
       <div className="flex flex-col gap-0.5" data-testid="sidebar-worksheets">
         {worksheets.length === 0 ? (
-          <NavLink
-            to="/worksheets"
-            onClick={onNavigate}
-            className="rounded-md px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-          >
-            暂无工作表，去新建…
-          </NavLink>
+          <div className="px-3 py-1.5 text-xs text-slate-400">暂无条目</div>
         ) : (
           worksheets.map((ws) => {
             const colorStyle = WORKSHEET_COLOR_STYLES[ws.color] ?? WORKSHEET_COLOR_STYLES.sky;
