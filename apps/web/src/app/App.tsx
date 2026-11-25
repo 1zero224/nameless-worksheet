@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes, useNavigate } from 'react-router';
 import { configureApiClient } from '@/api/client.js';
 import { AppShell } from '@/app/AppShell.js';
 import { RequireAuth, RequirePermission, useMe } from '@/app/AuthContext.js';
+import { ToastProvider } from '@/components/ui/overlays.js';
 import { AdminRealtimePage } from '@/pages/AdminRealtimePage.js';
 import { AdminUsersPage } from '@/pages/AdminUsersPage.js';
 import { InviteRegisterPage } from '@/pages/InviteRegisterPage.js';
@@ -58,9 +59,9 @@ function AppRoutes() {
           <Route index element={<PlaceholderPage title="首页" />} />
           <Route path="/my-tasks" element={<PlaceholderPage title="我的任务" />} />
           <Route path="/worksheets" element={<PlaceholderPage title="工作表" />} />
+          <Route path="/worksheets/:id" element={<PlaceholderPage title="工作表详情" />} />
           <Route path="/search" element={<PlaceholderPage title="资源检索" />} />
           <Route path="/references" element={<PlaceholderPage title="参考资料" />} />
-          <Route path="/archive" element={<PlaceholderPage title="归档" />} />
           <Route path="/settings" element={<SettingsPage />} />
 
           <Route
@@ -96,9 +97,11 @@ function AppRoutes() {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

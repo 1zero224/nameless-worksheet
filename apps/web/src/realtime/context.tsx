@@ -103,6 +103,9 @@ export function useRealtimeScope(scope: Scope | null, handlers: ScopeHandlers): 
         onEvent: (ev) => handlersRef.current.onEvent?.(ev),
         onResync: (c) => handlersRef.current.onResync?.(c),
         onError: (code, msg) => handlersRef.current.onError?.(code, msg),
+        onPresenceSnapshot: (peers) => handlersRef.current.onPresenceSnapshot?.(peers),
+        onPresenceUpdate: (peer) => handlersRef.current.onPresenceUpdate?.(peer),
+        onPresenceLeave: (connId) => handlersRef.current.onPresenceLeave?.(connId),
       },
     );
   }, [client, scopeType, scopeId]);

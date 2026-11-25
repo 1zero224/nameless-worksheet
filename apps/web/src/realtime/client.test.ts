@@ -183,4 +183,57 @@ describe('RealtimeClient 单元测试', () => {
     vi.advanceTimersByTime(60_000);
     expect(sockets).toHaveLength(1);
   });
+
+  it('支持工作表在线状态（presence）发送与 snapshot/update/leave 回调', () => {
+    const sockets: FakeWebSocket[] = [];
+    const client = new RealtimeClient({
+      url: 'ws://test/api/realtime',
+      createWebSocket: () => {
+        const s = new FakeWebSocket();
+        sockets.push(s);
+        return s;
+      },
+      jitterFn: () => 0,
+    });
+
+    const scope = { type: 'worksheet', id: '00000000-0000-7000-8000-000000000009' };
+    const snapshots: unknown[] = [];
+    const updates: unknown[] = [];
+    const leaves: string[] = [];
+
+    client.subscribe(scope, {
+      onPresenceSnapshot: (peers) => snapshots.push(peers),
+      onPresenceUpdate: (peer) => updates.push(peer),
+      onPresenceLeave: (connId) => leaves.push(connId),
+    });
+
+    client.start();
+    sockets[0]!.open();
+    sockets[0]!.receive({ t: 'hello', connId: 'c1', protocol: 1 });
+    sockets[0]!.receive({ t: 'subscribed', scope, cursor: '1' });
+
+    const focus = {
+      taskId: '00000000-0000-7000-8000-000000000010',
+      columnKey: 'title',
+      editing: true,
+    };
+    client.sendPresence(scope, focus);
+    expect(sockets[0]!.sent[1]).toEqual({ t: 'presence', scope, focus });
+
+    const peer = {
+      connId: 'c2',
+      userId: '00000000-0000-7000-8000-000000000020',
+      displayName: '小陈',
+      focus,
+    };
+    sockets[0]!.receive({ t: 'presence_snapshot', scope, peers: [peer] });
+    sockets[0]!.receive({ t: 'presence_update', scope, peer: { ...peer, focus: null } });
+    sockets[0]!.receive({ t: 'presence_leave', scope, connId: 'c2' });
+
+    expect(snapshots).toEqual([[peer]]);
+    expect(updates).toEqual([{ ...peer, focus: null }]);
+    expect(leaves).toEqual(['c2']);
+
+    client.stop();
+  });
 });

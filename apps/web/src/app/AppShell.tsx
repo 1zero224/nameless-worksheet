@@ -1,9 +1,14 @@
-import { type Permission, ROLE_LABELS } from '@nw/shared';
+import { type Permission, ROLE_LABELS, type WorksheetSummary } from '@nw/shared';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus } from 'lucide-react';
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router';
+import { NavLink, Outlet, useLocation } from 'react-router';
+import { apiFetch } from '@/api/client.js';
+import { queryKeys } from '@/api/keys.js';
 import { useMe } from '@/app/AuthContext.js';
+import { WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import { cn } from '@/components/ui/primitives.js';
-import { useRealtimeStatus } from '@/realtime/context.js';
+import { useRealtimeScope, useRealtimeStatus } from '@/realtime/context.js';
 
 interface NavItem {
   to: string;
@@ -12,14 +17,11 @@ interface NavItem {
   end?: boolean;
 }
 
-const MAIN_NAV: NavItem[] = [
+const TOP_NAV: NavItem[] = [
   { to: '/', label: '首页', end: true },
   { to: '/my-tasks', label: '我的任务' },
-  { to: '/worksheets', label: '工作表' },
   { to: '/search', label: '资源检索' },
   { to: '/references', label: '参考资料' },
-  { to: '/archive', label: '归档' },
-  { to: '/settings', label: '个人设置' },
 ];
 
 const ADMIN_NAV: NavItem[] = [
@@ -32,6 +34,35 @@ export function AppShell() {
   const { data: me } = useMe();
   const { status } = useRealtimeStatus();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const location = useLocation();
+  const queryClient = useQueryClient();
+
+  const { data: worksheets = [] } = useQuery<WorksheetSummary[]>({
+    queryKey: queryKeys.worksheets,
+    queryFn: () => apiFetch<WorksheetSummary[]>('/api/worksheets'),
+    enabled: Boolean(me),
+  });
+
+  // 订阅项目级实时通道，同步左侧工作表列表、看板列与用户显示名变化
+  useRealtimeScope(me ? { type: 'project', id: me.project.id } : null, {
+    onEvent: (ev) => {
+      if (ev.type === 'worksheet.changed') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.worksheets });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.board });
+      } else if (ev.type === 'board_columns.changed') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.boardColumns });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.board });
+      } else if (ev.type === 'user.updated') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.users });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.me });
+      }
+    },
+    onResync: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.worksheets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.boardColumns });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users });
+    },
+  });
 
   if (!me) return null;
 
@@ -39,51 +70,105 @@ export function AppShell() {
     (item) => !item.permission || me.permissions.includes(item.permission),
   );
 
+  // 工作表与首页看板使用全宽布局，其余页面保持合适最大宽度
+  const isFullWidthPage = location.pathname === '/' || location.pathname.startsWith('/worksheets/');
+
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+      isActive
+        ? 'bg-slate-900 text-white'
+        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900',
+    );
+
   const renderNav = (onNavigate?: () => void) => (
-    <nav className="flex flex-1 flex-col gap-1 px-3 py-4" aria-label="主导航">
-      {MAIN_NAV.map((item) => (
+    <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4" aria-label="主导航">
+      {TOP_NAV.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
           end={item.end}
           onClick={onNavigate}
-          className={({ isActive }) =>
-            cn(
-              'rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              isActive
-                ? 'bg-slate-900 text-white'
-                : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900',
-            )
-          }
+          className={navLinkClass}
         >
           {item.label}
         </NavLink>
       ))}
 
-      {visibleAdminNav.length > 0 && (
-        <>
-          <div className="mt-4 mb-1 px-3 text-xs font-semibold tracking-wider text-slate-400">
-            管理
-          </div>
-          {visibleAdminNav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                cn(
-                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900',
-                )
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </>
-      )}
+      {/* 工作表分组（实时列出所有未删工作表） */}
+      <div className="mt-4 mb-1 flex items-center justify-between px-3">
+        <NavLink
+          to="/worksheets"
+          end
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            cn(
+              'text-xs font-semibold tracking-wider transition-colors',
+              isActive ? 'text-slate-900' : 'text-slate-400 hover:text-slate-700',
+            )
+          }
+        >
+          工作表
+        </NavLink>
+        <NavLink
+          to="/worksheets"
+          onClick={onNavigate}
+          title="管理或新建工作表"
+          className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          aria-label="管理或新建工作表"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </NavLink>
+      </div>
+
+      <div className="flex flex-col gap-0.5" data-testid="sidebar-worksheets">
+        {worksheets.length === 0 ? (
+          <NavLink
+            to="/worksheets"
+            onClick={onNavigate}
+            className="rounded-md px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            暂无工作表，去新建…
+          </NavLink>
+        ) : (
+          worksheets.map((ws) => {
+            const colorStyle = WORKSHEET_COLOR_STYLES[ws.color] ?? WORKSHEET_COLOR_STYLES.sky;
+            return (
+              <NavLink
+                key={ws.id}
+                to={`/worksheets/${ws.id}`}
+                onClick={onNavigate}
+                className={navLinkClass}
+              >
+                <span className={cn('h-2 w-2 shrink-0 rounded-full', colorStyle.dot)} />
+                <span className="truncate">{ws.name}</span>
+              </NavLink>
+            );
+          })
+        )}
+      </div>
+
+      {/* 底部个人设置与管理 */}
+      <div className="mt-auto pt-4">
+        <div className="border-t border-slate-200 pt-3">
+          <NavLink to="/settings" onClick={onNavigate} className={navLinkClass}>
+            个人设置
+          </NavLink>
+
+          {visibleAdminNav.length > 0 && (
+            <>
+              <div className="mt-3 mb-1 px-3 text-xs font-semibold tracking-wider text-slate-400">
+                管理
+              </div>
+              {visibleAdminNav.map((item) => (
+                <NavLink key={item.to} to={item.to} onClick={onNavigate} className={navLinkClass}>
+                  {item.label}
+                </NavLink>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
     </nav>
   );
 
@@ -153,7 +238,7 @@ export function AppShell() {
           <span className="truncate text-xs text-slate-500">{me.user.displayName}</span>
         </header>
 
-        {/* 断线重连提示条（8.8） */}
+        {/* 断线重连提示条 */}
         {showDisconnectBanner && (
           <div
             role="status"
@@ -163,7 +248,12 @@ export function AppShell() {
           </div>
         )}
 
-        <main className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6">
+        <main
+          className={cn(
+            'w-full min-w-0 flex-1 p-4 sm:p-6',
+            !isFullWidthPage && 'mx-auto max-w-5xl',
+          )}
+        >
           <Outlet />
         </main>
       </div>

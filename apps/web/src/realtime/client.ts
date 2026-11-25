@@ -1,5 +1,7 @@
 import {
   CLOSE_UNAUTHENTICATED,
+  type PresenceFocus,
+  type PresencePeer,
   type RealtimeEventMessage,
   type Scope,
   type ServerMessage,
@@ -23,6 +25,9 @@ export interface ScopeHandlers {
   onEvent?: (event: RealtimeEventMessage) => void;
   onResync?: (cursor: string) => void;
   onError?: (code: string, message: string) => void;
+  onPresenceSnapshot?: (peers: PresencePeer[]) => void;
+  onPresenceUpdate?: (peer: PresencePeer) => void;
+  onPresenceLeave?: (connId: string) => void;
 }
 
 export interface RealtimeClientOptions {
@@ -192,6 +197,18 @@ export class RealtimeClient {
     };
   }
 
+  /** 上报当前连接在指定工作表的单元格焦点状态（null 表示离开单元格） */
+  sendPresence(scope: Scope, focus: PresenceFocus | null): void {
+    const key = scopeKey(scope);
+    if (!this.scopes.has(key)) return;
+    if (this.status !== 'connected' || this.ws?.readyState !== WS_OPEN) return;
+    try {
+      this.ws.send(JSON.stringify({ t: 'presence', scope, focus }));
+    } catch {
+      // ignore send errors
+    }
+  }
+
   /** 等待某范围收到 subscribed 后再拉取 HTTP 初始数据 */
   waitForSubscribed(scope: Scope): Promise<string> {
     const key = scopeKey(scope);
@@ -318,6 +335,27 @@ export class RealtimeClient {
       const entry = this.scopes.get(scopeKey(msg.scope));
       if (!entry) return;
       for (const h of entry.handlers) h.onError?.(msg.code, msg.message);
+      return;
+    }
+
+    if (msg.t === 'presence_snapshot') {
+      const entry = this.scopes.get(scopeKey(msg.scope));
+      if (!entry) return;
+      for (const h of entry.handlers) h.onPresenceSnapshot?.(msg.peers);
+      return;
+    }
+
+    if (msg.t === 'presence_update') {
+      const entry = this.scopes.get(scopeKey(msg.scope));
+      if (!entry) return;
+      for (const h of entry.handlers) h.onPresenceUpdate?.(msg.peer);
+      return;
+    }
+
+    if (msg.t === 'presence_leave') {
+      const entry = this.scopes.get(scopeKey(msg.scope));
+      if (!entry) return;
+      for (const h of entry.handlers) h.onPresenceLeave?.(msg.connId);
     }
   }
 
