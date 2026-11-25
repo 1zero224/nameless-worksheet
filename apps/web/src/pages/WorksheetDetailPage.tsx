@@ -67,6 +67,7 @@ import { useMe } from '@/app/AuthContext.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import { peerColorForUser, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import {
+  ConfirmDialog,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -90,7 +91,12 @@ import {
 import { ChangeLogDrawer } from '@/components/worksheet/ChangeLogDrawer.js';
 import { ColumnHeaderMenu } from '@/components/worksheet/ColumnHeaderMenu.js';
 import { ColumnManagerModal } from '@/components/worksheet/ColumnManagerModal.js';
-import { FieldVisibilityPopover } from '@/components/worksheet/FieldVisibilityPopover.js';
+import { CreateWorkPopover } from '@/components/worksheet/CreateWorkPopover.js';
+import {
+  FieldVisibilityPopover,
+  isSystemColumnHidden,
+} from '@/components/worksheet/FieldVisibilityPopover.js';
+import { InlineAddSegmentRow, WorkBannerRow } from '@/components/worksheet/WorkBannerRow.js';
 import { useRealtimeClient, useRealtimeScope } from '@/realtime/context.js';
 
 const TABLE_FEATURES = tableFeatures({});
@@ -102,12 +108,23 @@ type LocalSort = 'manual' | 'title' | 'priority' | 'work';
 
 const PRIORITY_RANK: Record<Priority, number> = { urgent: 0, high: 1, normal: 2 };
 
+type DisplayBlock =
+  | { kind: 'standalone'; key: string; tasks: TaskDetail[] }
+  | { kind: 'work'; key: string; work: Work; tasks: TaskDetail[]; isEmptyPending: boolean };
+
 function sortTasksByKey(list: TaskDetail[]): TaskDetail[] {
   return [...list].sort((a, b) => {
     if (a.sortOrder < b.sortOrder) return -1;
     if (a.sortOrder > b.sortOrder) return 1;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
+}
+
+function isTaskAllStagesDone(task: TaskDetail, stageCols: ColumnConfig[]): boolean {
+  const applicable = stageCols
+    .map((c) => getEffectiveStageCell(task, c.id))
+    .filter((cell) => cell.status !== 'na');
+  return applicable.length > 0 && applicable.every((cell) => cell.status === 'done');
 }
 
 // ---- 稳定单元格上下文（避免 FlexRender 因列定义变更而卸载单元格、丢失输入态/IME） ----
@@ -460,7 +477,7 @@ function SortableTableRow({
               {...(dragEnabled ? listeners : {})}
               disabled={!dragEnabled}
               aria-label={`拖动排序 ${task.title}`}
-              title={dragEnabled ? '拖动调整行序' : '恢复默认顺序后可拖动调整行序'}
+              title={dragEnabled ? '拖动调整行序或跨作品移动' : '恢复默认顺序后可拖动调整行序'}
               className={cn(
                 'flex h-5 w-4 items-center justify-center rounded text-slate-400',
                 dragEnabled
@@ -543,6 +560,7 @@ export function WorksheetDetailPage() {
   const quickAddInputRef = useRef<HTMLInputElement | null>(null);
   const insertInputRef = useRef<HTMLInputElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [scrollContainerEl, setScrollContainerEl] = useState<HTMLDivElement | null>(null);
   const editNonceRef = useRef(1);
 
   const [textConflicts, setTextConflicts] = useState<Map<string, ActiveCellConflict>>(new Map());
@@ -561,6 +579,16 @@ export function WorksheetDetailPage() {
     x: number;
     y: number;
   } | null>(null);
+
+  // 作品大标题横幅相关状态
+  const [pendingWorks, setPendingWorks] = useState<Work[]>([]);
+  const [collapsedWorkIds, setCollapsedWorkIds] = useState<Set<string>>(new Set());
+  const [addingSegmentWorkId, setAddingSegmentWorkId] = useState<string | null>(null);
+  const [ungroupingWork, setUngroupingWork] = useState<{
+    work: Work;
+    tasks: TaskDetail[];
+  } | null>(null);
+  const [ungroupPending, setUngroupPending] = useState(false);
 
   const [statusChip, setStatusChip] = useState<StatusChip>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
@@ -587,7 +615,25 @@ export function WorksheetDetailPage() {
     setPreviewWidths({});
     setInsertingAfterId(null);
     setRowContextMenu(null);
+    setPendingWorks([]);
+    setCollapsedWorkIds(new Set());
+    setAddingSegmentWorkId(null);
+    setUngroupingWork(null);
   }, [worksheetId]);
+
+  // 追踪表格滚动容器可视宽度，确保作品大标题横幅在宽表横向滚动时仍完整贴合视口
+  useEffect(() => {
+    const el = scrollContainerEl;
+    if (!el) return;
+    const syncWidth = () => {
+      el.style.setProperty('--ws-scroll-w', `${el.clientWidth}px`);
+    };
+    syncWidth();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(syncWidth);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [scrollContainerEl]);
 
   // 插入行展开时自动聚焦输入框
   useEffect(() => {
@@ -686,6 +732,7 @@ export function WorksheetDetailPage() {
         queryClient.setQueryData<WorksheetFullResponse>(qKey, (old) =>
           old ? { ...old, works: old.works.map((w) => (w.id === work.id ? work : w)) } : old,
         );
+        setPendingWorks((prev) => prev.map((w) => (w.id === work.id ? work : w)));
         return;
       }
 
@@ -698,6 +745,9 @@ export function WorksheetDetailPage() {
             work && !old.works.some((w) => w.id === work.id) ? [...old.works, work] : old.works;
           return { ...old, works: nextWorks, tasks: sortTasksByKey([...old.tasks, task]) };
         });
+        if (work) {
+          setPendingWorks((prev) => prev.filter((w) => w.id !== work.id));
+        }
         return;
       }
 
@@ -858,7 +908,15 @@ export function WorksheetDetailPage() {
   });
 
   const userMap = useMemo(() => new Map(users.map((u) => [u.id, u.displayName])), [users]);
-  const workMap = useMemo(() => new Map((data?.works ?? []).map((w) => [w.id, w])), [data?.works]);
+
+  const allWorks = useMemo(() => {
+    const serverWorks = data?.works ?? [];
+    const seen = new Set(serverWorks.map((w) => w.id));
+    const extras = pendingWorks.filter((pw) => !seen.has(pw.id));
+    return [...serverWorks, ...extras];
+  }, [data?.works, pendingWorks]);
+
+  const workMap = useMemo(() => new Map(allWorks.map((w) => [w.id, w])), [allWorks]);
 
   const locateTaskId = searchParams.get('taskId');
   useEffect(() => {
@@ -867,6 +925,14 @@ export function WorksheetDetailPage() {
     if (!target) return;
     if (target.publishStatus === 'published') {
       setPublishedExpanded(true);
+    }
+    if (target.workId) {
+      setCollapsedWorkIds((prev) => {
+        if (!prev.has(target.workId!)) return prev;
+        const next = new Set(prev);
+        next.delete(target.workId!);
+        return next;
+      });
     }
     setDetailTaskId(target.id);
     setHighlightedTaskId(target.id);
@@ -1035,18 +1101,103 @@ export function WorksheetDetailPage() {
     [data?.tasks],
   );
 
+  // 将未发布任务组织为「作品大标题横幅块」+「无作品独立平铺块」
+  const displayBlocks = useMemo<DisplayBlock[]>(() => {
+    const blocks: DisplayBlock[] = [];
+    const tasksByWorkId = new Map<string, TaskDetail[]>();
+    for (const task of activeTasks) {
+      if (task.workId) {
+        const list = tasksByWorkId.get(task.workId);
+        if (list) list.push(task);
+        else tasksByWorkId.set(task.workId, [task]);
+      }
+    }
+
+    const emittedWorkIds = new Set<string>();
+    for (const task of activeTasks) {
+      if (!task.workId) {
+        const last = blocks[blocks.length - 1];
+        if (last && last.kind === 'standalone') {
+          last.tasks.push(task);
+        } else {
+          blocks.push({
+            kind: 'standalone',
+            key: `standalone-${blocks.length}`,
+            tasks: [task],
+          });
+        }
+      } else if (!emittedWorkIds.has(task.workId)) {
+        emittedWorkIds.add(task.workId);
+        const work = workMap.get(task.workId) ?? {
+          id: task.workId,
+          worksheetId: worksheetId ?? '',
+          name: '未命名作品',
+          createdAt: '',
+          updatedAt: '',
+        };
+        blocks.push({
+          kind: 'work',
+          key: `work-${work.id}`,
+          work,
+          tasks: tasksByWorkId.get(task.workId) ?? [],
+          isEmptyPending: false,
+        });
+      }
+    }
+
+    // 刚新建但尚未录入分段的空作品，立即渲染横幅引导输入首条分段
+    const kw = keyword.trim().toLowerCase();
+    for (const pw of pendingWorks) {
+      if (emittedWorkIds.has(pw.id)) continue;
+      if (workFilter && workFilter !== pw.id) continue;
+      if (kw && !pw.name.toLowerCase().includes(kw)) continue;
+      blocks.push({
+        kind: 'work',
+        key: `work-${pw.id}`,
+        work: pw,
+        tasks: [],
+        isEmptyPending: true,
+      });
+    }
+
+    return blocks;
+  }, [activeTasks, workMap, worksheetId, pendingWorks, workFilter, keyword]);
+
+  // 展平当前主表所有可见任务行（按渲染顺序，跳过已折叠作品内的行）
+  const visualActiveTasks = useMemo(() => {
+    const list: TaskDetail[] = [];
+    for (const block of displayBlocks) {
+      if (block.kind === 'standalone') {
+        list.push(...block.tasks);
+      } else if (!collapsedWorkIds.has(block.work.id)) {
+        list.push(...block.tasks);
+      }
+    }
+    return list;
+  }, [displayBlocks, collapsedWorkIds]);
+
   const createTaskMutation = useMutation({
-    mutationFn: (payload: { title: string; afterTaskId?: string | null }) =>
+    mutationFn: (payload: { title: string; afterTaskId?: string | null; workId?: string | null }) =>
       apiFetch<TaskDetail>(`/api/worksheets/${worksheetId}/tasks`, {
         method: 'POST',
         body: payload,
       }),
     onSuccess: (created) => {
       if (!worksheetId) return;
+      const pendingMatch = created.workId
+        ? pendingWorks.find((w) => w.id === created.workId)
+        : undefined;
       queryClient.setQueryData<WorksheetFullResponse>(queryKeys.worksheet(worksheetId), (old) => {
         if (!old || old.tasks.some((t) => t.id === created.id)) return old;
-        return { ...old, tasks: sortTasksByKey([...old.tasks, created]) };
+        const nextWorks =
+          pendingMatch && !old.works.some((w) => w.id === pendingMatch.id)
+            ? [...old.works, pendingMatch]
+            : old.works;
+        return { ...old, works: nextWorks, tasks: sortTasksByKey([...old.tasks, created]) };
       });
+      if (pendingMatch) {
+        setPendingWorks((prev) => prev.filter((w) => w.id !== pendingMatch.id));
+      }
       void queryClient.invalidateQueries({ queryKey: queryKeys.worksheets });
       void queryClient.invalidateQueries({ queryKey: queryKeys.board });
     },
@@ -1078,6 +1229,9 @@ export function WorksheetDetailPage() {
         old ? { ...old, tasks: old.tasks.map((t) => (t.id === updated.id ? updated : t)) } : old,
       );
       if (changes.workName !== undefined || changes.workId !== undefined) {
+        if (updated.workId) {
+          setPendingWorks((prev) => prev.filter((w) => w.id !== updated.workId));
+        }
         refetchWorksheet();
       }
       void queryClient.invalidateQueries({ queryKey: queryKeys.worksheets });
@@ -1157,17 +1311,82 @@ export function WorksheetDetailPage() {
   const renameWork = useCallback(
     async (targetWorkId: string, newName: string) => {
       if (!worksheetId) return;
-      const updated = await apiFetch<Work>(`/api/worksheets/${worksheetId}/works/${targetWorkId}`, {
-        method: 'PATCH',
-        body: { name: newName },
-      });
-      queryClient.setQueryData<WorksheetFullResponse>(queryKeys.worksheet(worksheetId), (old) =>
-        old ? { ...old, works: old.works.map((w) => (w.id === updated.id ? updated : w)) } : old,
-      );
-      pushToast({ message: '作品名已更新', variant: 'success' });
+      try {
+        const updated = await apiFetch<Work>(
+          `/api/worksheets/${worksheetId}/works/${targetWorkId}`,
+          {
+            method: 'PATCH',
+            body: { name: newName },
+          },
+        );
+        queryClient.setQueryData<WorksheetFullResponse>(queryKeys.worksheet(worksheetId), (old) =>
+          old ? { ...old, works: old.works.map((w) => (w.id === updated.id ? updated : w)) } : old,
+        );
+        setPendingWorks((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
+        void queryClient.invalidateQueries({ queryKey: queryKeys.board });
+        pushToast({ message: '作品名已更新', variant: 'success' });
+      } catch (err) {
+        pushToast({
+          message: err instanceof ApiError ? err.message : '重命名作品失败',
+          variant: 'error',
+        });
+        throw err;
+      }
     },
     [worksheetId, queryClient, pushToast],
   );
+
+  const handleConfirmUngroupWork = useCallback(async () => {
+    if (!ungroupingWork || !worksheetId) return;
+    setUngroupPending(true);
+    try {
+      const { work, tasks } = ungroupingWork;
+      for (const task of tasks) {
+        await apiFetch(`/api/tasks/${task.id}`, {
+          method: 'PATCH',
+          body: { changes: { workId: null }, force: true },
+        });
+      }
+      setUngroupingWork(null);
+      if (addingSegmentWorkId === work.id) {
+        setAddingSegmentWorkId(null);
+      }
+      setPendingWorks((prev) => prev.filter((w) => w.id !== work.id));
+      refetchWorksheet();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.board });
+      pushToast({
+        message: `已将「${work.name}」下 ${tasks.length} 条任务移出为独立任务`,
+        variant: 'info',
+      });
+    } catch (err) {
+      pushToast({
+        message: err instanceof ApiError ? err.message : '解散分组失败',
+        variant: 'error',
+      });
+    } finally {
+      setUngroupPending(false);
+    }
+  }, [ungroupingWork, worksheetId, addingSegmentWorkId, refetchWorksheet, queryClient, pushToast]);
+
+  const toggleWorkCollapsed = useCallback((workId: string) => {
+    setCollapsedWorkIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(workId)) next.delete(workId);
+      else next.add(workId);
+      return next;
+    });
+  }, []);
+
+  const openAddSegmentForWork = useCallback((workId: string) => {
+    setCollapsedWorkIds((prev) => {
+      if (!prev.has(workId)) return prev;
+      const next = new Set(prev);
+      next.delete(workId);
+      return next;
+    });
+    setInsertingAfterId(null);
+    setAddingSegmentWorkId(workId);
+  }, []);
 
   const clearTextConflict = useCallback((key: string) => {
     setTextConflicts((prev) => {
@@ -1258,7 +1477,7 @@ export function WorksheetDetailPage() {
     defs.push(
       columnHelper.display({
         id: 'title',
-        header: '标题',
+        header: '标题 / 分段',
         meta: {
           width: previewWidths.title ?? sys.title?.width ?? 220,
           isSystem: true,
@@ -1270,7 +1489,8 @@ export function WorksheetDetailPage() {
       }),
     );
 
-    if (!sys.work?.hidden) {
+    // 「作品」列默认隐藏（大标题横幅已表达归属），仍可在「字段显隐」手动开启
+    if (!isSystemColumnHidden(sys, 'work')) {
       defs.push(
         columnHelper.display({
           id: 'work',
@@ -1285,7 +1505,7 @@ export function WorksheetDetailPage() {
       );
     }
 
-    if (!sys.divisionNote?.hidden) {
+    if (!isSystemColumnHidden(sys, 'divisionNote')) {
       defs.push(
         columnHelper.display({
           id: 'divisionNote',
@@ -1318,7 +1538,7 @@ export function WorksheetDetailPage() {
       );
     }
 
-    if (!sys.priority?.hidden) {
+    if (!isSystemColumnHidden(sys, 'priority')) {
       defs.push(
         columnHelper.display({
           id: 'priority',
@@ -1333,7 +1553,7 @@ export function WorksheetDetailPage() {
       );
     }
 
-    if (!sys.publish?.hidden) {
+    if (!isSystemColumnHidden(sys, 'publish')) {
       defs.push(
         columnHelper.display({
           id: 'publish',
@@ -1348,7 +1568,7 @@ export function WorksheetDetailPage() {
       );
     }
 
-    if (!sys.files?.hidden) {
+    if (!isSystemColumnHidden(sys, 'files')) {
       defs.push(
         columnHelper.display({
           id: 'files',
@@ -1381,19 +1601,25 @@ export function WorksheetDetailPage() {
   }, [visibleColumns]);
 
   const focusCellElement = useCallback((taskId: string, columnKey: string) => {
-    requestAnimationFrame(() => {
+    const focusNow = () => {
       const el = document.querySelector<HTMLElement>(`[data-testid="cell-${taskId}-${columnKey}"]`);
-      if (!el) return;
+      if (!el) return false;
       el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       const focusable = el.matches('button') ? el : el.querySelector<HTMLElement>('button');
       focusable?.focus({ preventScroll: true });
-    });
+      return true;
+    };
+    if (!focusNow()) {
+      requestAnimationFrame(() => {
+        focusNow();
+      });
+    }
   }, []);
 
   const moveFromCell = useCallback(
     (taskId: string, columnKey: string, direction: 'down' | 'right' | 'left') => {
-      const list = activeTasks.some((t) => t.id === taskId)
-        ? activeTasks
+      const list = visualActiveTasks.some((t) => t.id === taskId)
+        ? visualActiveTasks
         : publishedExpanded && publishedTasks.some((t) => t.id === taskId)
           ? publishedTasks
           : null;
@@ -1430,7 +1656,7 @@ export function WorksheetDetailPage() {
       focusCellElement(targetTask.id, targetCol);
     },
     [
-      activeTasks,
+      visualActiveTasks,
       publishedTasks,
       publishedExpanded,
       visibleColumnKeys,
@@ -1439,12 +1665,21 @@ export function WorksheetDetailPage() {
     ],
   );
 
-  // 单元格键盘导航（方向键 / Tab / Shift+Tab / Enter / F2 / 键入字符 / Esc）
+  // 单元格键盘导航（顺畅跨越作品大标题横幅并在可见任务行之间移动）
   useEffect(() => {
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
       if (!selectedCell) return;
       if (activeEditorRef.current) return;
-      if (colModalOpen || logsOpen || detailTaskId || rowContextMenu || insertingAfterId) return;
+      if (
+        colModalOpen ||
+        logsOpen ||
+        detailTaskId ||
+        rowContextMenu ||
+        insertingAfterId ||
+        ungroupingWork
+      ) {
+        return;
+      }
 
       const target = e.target as HTMLElement | null;
       if (
@@ -1459,8 +1694,8 @@ export function WorksheetDetailPage() {
         return;
       }
 
-      const list = activeTasks.some((t) => t.id === selectedCell.taskId)
-        ? activeTasks
+      const list = visualActiveTasks.some((t) => t.id === selectedCell.taskId)
+        ? visualActiveTasks
         : publishedExpanded && publishedTasks.some((t) => t.id === selectedCell.taskId)
           ? publishedTasks
           : null;
@@ -1567,7 +1802,8 @@ export function WorksheetDetailPage() {
     detailTaskId,
     rowContextMenu,
     insertingAfterId,
-    activeTasks,
+    ungroupingWork,
+    visualActiveTasks,
     publishedTasks,
     publishedExpanded,
     visibleColumnKeys,
@@ -1579,7 +1815,7 @@ export function WorksheetDetailPage() {
 
   const gridContextValue = useMemo<WorksheetGridContextValue>(
     () => ({
-      works: data?.works ?? [],
+      works: allWorks,
       users,
       userMap,
       selectedCell,
@@ -1599,7 +1835,7 @@ export function WorksheetDetailPage() {
       openDetail: setDetailTaskId,
     }),
     [
-      data?.works,
+      allWorks,
       users,
       userMap,
       selectedCell,
@@ -1622,7 +1858,7 @@ export function WorksheetDetailPage() {
   const mainTable = useTable({
     features: TABLE_FEATURES,
     columns: visibleColumns,
-    data: activeTasks,
+    data: visualActiveTasks,
     getRowId: (row) => row.id,
   });
 
@@ -1638,16 +1874,65 @@ export function WorksheetDetailPage() {
     if (isFilteredOrSorted || !worksheetId) return;
     const { active, over } = ev;
     if (!over || active.id === over.id) return;
-    const oldIdx = activeTasks.findIndex((t) => t.id === active.id);
-    const newIdx = activeTasks.findIndex((t) => t.id === over.id);
-    if (oldIdx === -1 || newIdx === -1) return;
 
     const movingId = String(active.id);
-    const targetList = activeTasks.filter((t) => t.id !== movingId);
+    const overId = String(over.id);
+    const movingTask = visualActiveTasks.find((t) => t.id === movingId);
+    if (!movingTask) return;
+
+    // 情况 1：拖放到作品大标题横幅上 -> 移入该作品末尾
+    if (overId.startsWith('work-drop:')) {
+      const targetWorkId = overId.slice('work-drop:'.length);
+      const targetWorkTasks = activeTasks.filter(
+        (t) => t.workId === targetWorkId && t.id !== movingId,
+      );
+      const lastTarget = targetWorkTasks[targetWorkTasks.length - 1] ?? null;
+
+      try {
+        if (movingTask.workId !== targetWorkId) {
+          await patchTask(movingId, { workId: targetWorkId }, { workId: movingTask.workId }, true);
+        }
+        if (lastTarget) {
+          const { updates } = await apiFetch<{
+            updates: Array<{ taskId: string; sortOrder: string }>;
+          }>(`/api/worksheets/${worksheetId}/tasks/reorder`, {
+            method: 'POST',
+            body: { taskId: movingId, afterTaskId: lastTarget.id, beforeTaskId: null },
+          });
+          const map = new Map(updates.map((u) => [u.taskId, u.sortOrder]));
+          queryClient.setQueryData<WorksheetFullResponse>(
+            queryKeys.worksheet(worksheetId),
+            (old) => {
+              if (!old) return old;
+              const next = old.tasks.map((t) => {
+                const s = map.get(t.id);
+                return s !== undefined ? { ...t, sortOrder: s } : t;
+              });
+              return { ...old, tasks: sortTasksByKey(next) };
+            },
+          );
+        }
+      } catch {
+        refetchWorksheet();
+      }
+      return;
+    }
+
+    // 情况 2：拖放到另一任务行（同作品内排序，或跨作品/独立区互拖同步更新 workId + sortOrder）
+    const oldIdx = visualActiveTasks.findIndex((t) => t.id === movingId);
+    const newIdx = visualActiveTasks.findIndex((t) => t.id === overId);
+    if (oldIdx === -1 || newIdx === -1) return;
+
+    const overTask = visualActiveTasks[newIdx];
+    const targetWorkId = overTask ? overTask.workId : null;
+    const targetList = visualActiveTasks.filter((t) => t.id !== movingId);
     const afterTaskId = newIdx > 0 ? (targetList[newIdx - 1]?.id ?? null) : null;
     const beforeTaskId = newIdx < targetList.length ? (targetList[newIdx]?.id ?? null) : null;
 
     try {
+      if (movingTask.workId !== targetWorkId) {
+        await patchTask(movingId, { workId: targetWorkId }, { workId: movingTask.workId }, true);
+      }
       const { updates } = await apiFetch<{ updates: Array<{ taskId: string; sortOrder: string }> }>(
         `/api/worksheets/${worksheetId}/tasks/reorder`,
         {
@@ -1675,7 +1960,6 @@ export function WorksheetDetailPage() {
     if (!title) return;
     createTaskMutation.mutate({ title });
     setQuickAddTitle('');
-    // 保持焦点支持回车连续录入多条任务
     requestAnimationFrame(() => {
       quickAddInputRef.current?.focus();
     });
@@ -1685,7 +1969,12 @@ export function WorksheetDetailPage() {
     e.preventDefault();
     const title = insertTitle.trim();
     if (!title || !insertingAfterId) return;
-    createTaskMutation.mutate({ title, afterTaskId: insertingAfterId });
+    const anchor = data?.tasks.find((t) => t.id === insertingAfterId);
+    createTaskMutation.mutate({
+      title,
+      afterTaskId: insertingAfterId,
+      workId: anchor?.workId ?? null,
+    });
     setInsertingAfterId(null);
     setInsertTitle('');
   };
@@ -1716,6 +2005,7 @@ export function WorksheetDetailPage() {
 
   const wsColor = WORKSHEET_COLOR_STYLES[data.worksheet.color] ?? WORKSHEET_COLOR_STYLES.sky;
   const dragEnabled = !isFilteredOrSorted;
+  const totalColSpan = visibleColumns.length + 2;
 
   const renderTableHeaders = (tableInstance: typeof mainTable, stickyTop: boolean) => (
     <thead
@@ -1788,111 +2078,118 @@ export function WorksheetDetailPage() {
     </thead>
   );
 
-  const renderRows = (tableInstance: typeof mainTable, allowDrag: boolean) =>
-    tableInstance.getRowModel().rows.map((row, idx) => {
-      const task = row.original;
-      const rowSelected = selectedCell?.taskId === task.id;
-      return (
-        <Fragment key={row.id}>
-          <SortableTableRow
-            task={task}
-            rowNumber={idx + 1}
-            dragEnabled={allowDrag}
-            rowSelected={rowSelected}
-            highlighted={highlightedTaskId === task.id}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setRowContextMenu({
-                task,
-                x: Math.min(e.clientX, window.innerWidth - 170),
-                y: Math.min(e.clientY, window.innerHeight - 130),
-              });
-            }}
-            onInsertBelow={() => {
-              setInsertingAfterId(task.id);
-              setInsertTitle('');
-            }}
-            onOpenDetail={() => setDetailTaskId(task.id)}
-            onDelete={() => void deleteTask(task)}
-          >
-            {row.getAllCells().map((cell) => {
-              const meta = cell.column.columnDef.meta as
-                | { width?: number; stickyTitle?: boolean }
-                | undefined;
-              const width = meta?.width ?? 140;
-              return (
-                <td
-                  key={cell.id}
-                  style={{ width, minWidth: width }}
-                  className={cn(
-                    'border-r border-slate-200/80 p-0 align-middle',
-                    meta?.stickyTitle &&
-                      'sticky left-[40px] z-20 bg-white group-hover:bg-slate-50 shadow-[2px_0_4px_-2px_rgba(15,23,42,0.06)]',
-                  )}
-                >
-                  <tableInstance.FlexRender cell={cell} />
-                </td>
-              );
-            })}
-          </SortableTableRow>
+  const renderSingleRow = (
+    tableInstance: typeof mainTable,
+    row: ReturnType<typeof mainTable.getRowModel>['rows'][number],
+    rowNumber: number,
+    allowDrag: boolean,
+  ) => {
+    const task = row.original;
+    const rowSelected = selectedCell?.taskId === task.id;
+    return (
+      <Fragment key={row.id}>
+        <SortableTableRow
+          task={task}
+          rowNumber={rowNumber}
+          dragEnabled={allowDrag}
+          rowSelected={rowSelected}
+          highlighted={highlightedTaskId === task.id}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setRowContextMenu({
+              task,
+              x: Math.min(e.clientX, window.innerWidth - 170),
+              y: Math.min(e.clientY, window.innerHeight - 130),
+            });
+          }}
+          onInsertBelow={() => {
+            setAddingSegmentWorkId(null);
+            setInsertingAfterId(task.id);
+            setInsertTitle('');
+          }}
+          onOpenDetail={() => setDetailTaskId(task.id)}
+          onDelete={() => void deleteTask(task)}
+        >
+          {row.getAllCells().map((cell) => {
+            const meta = cell.column.columnDef.meta as
+              | { width?: number; stickyTitle?: boolean }
+              | undefined;
+            const width = meta?.width ?? 140;
+            return (
+              <td
+                key={cell.id}
+                style={{ width, minWidth: width }}
+                className={cn(
+                  'border-r border-slate-200/80 p-0 align-middle',
+                  meta?.stickyTitle &&
+                    'sticky left-[40px] z-20 bg-white group-hover:bg-slate-50 shadow-[2px_0_4px_-2px_rgba(15,23,42,0.06)]',
+                )}
+              >
+                <tableInstance.FlexRender cell={cell} />
+              </td>
+            );
+          })}
+        </SortableTableRow>
 
-          {/* 在该行下方贴合网格原地插入新行 */}
-          {insertingAfterId === task.id && (
-            <tr
-              data-testid="inline-insert-row"
-              className="h-9 border-b border-sky-200 bg-sky-50/60"
-            >
-              <td className="sticky left-0 z-20 h-9 w-10 min-w-10 border-r border-slate-200/80 bg-sky-50 text-center text-sky-600">
-                <Plus className="mx-auto h-3.5 w-3.5" />
-              </td>
-              <td colSpan={visibleColumns.length + 1} className="h-9 p-0 align-middle">
-                <form
-                  onSubmit={handleInsertSubmit}
-                  className="sticky left-[40px] flex h-9 w-full max-w-lg items-center gap-1.5 px-2"
+        {/* 在该行下方贴合网格原地插入新行 */}
+        {insertingAfterId === task.id && (
+          <tr data-testid="inline-insert-row" className="h-9 border-b border-sky-200 bg-sky-50/60">
+            <td className="sticky left-0 z-20 h-9 w-10 min-w-10 border-r border-slate-200/80 bg-sky-50 text-center text-sky-600">
+              <Plus className="mx-auto h-3.5 w-3.5" />
+            </td>
+            <td colSpan={visibleColumns.length + 1} className="h-9 p-0 align-middle">
+              <form
+                onSubmit={handleInsertSubmit}
+                className="sticky left-[40px] flex h-9 w-full max-w-lg items-center gap-1.5 px-2"
+              >
+                <input
+                  ref={insertInputRef}
+                  value={insertTitle}
+                  onChange={(e) => setInsertTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setInsertingAfterId(null);
+                    }
+                  }}
+                  placeholder="输入新任务标题回车确认"
+                  className="h-7 min-w-0 flex-1 rounded border border-sky-400 bg-white px-2 text-[13px] text-slate-900 outline-none focus:ring-2 focus:ring-sky-500/20"
+                  maxLength={200}
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  disabled={createTaskMutation.isPending}
                 >
-                  <input
-                    ref={insertInputRef}
-                    value={insertTitle}
-                    onChange={(e) => setInsertTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setInsertingAfterId(null);
-                      }
-                    }}
-                    placeholder="输入新任务标题回车确认"
-                    className="h-7 min-w-0 flex-1 rounded border border-sky-400 bg-white px-2 text-[13px] text-slate-900 outline-none focus:ring-2 focus:ring-sky-500/20"
-                    maxLength={200}
-                  />
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="h-7 px-2.5 text-xs"
-                    disabled={createTaskMutation.isPending}
-                  >
-                    插入
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => setInsertingAfterId(null)}
-                  >
-                    取消
-                  </Button>
-                </form>
-              </td>
-            </tr>
-          )}
-        </Fragment>
-      );
-    });
+                  插入
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setInsertingAfterId(null)}
+                >
+                  取消
+                </Button>
+              </form>
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    );
+  };
+
+  // 建立主表可见行索引映射（支持作品大标题横幅块与独立平铺块混合渲染）
+  const mainRowLookup = new Map(
+    mainTable.getRowModel().rows.map((r, idx) => [r.original.id, { row: r, rowNumber: idx + 1 }]),
+  );
 
   return (
     <WorksheetGridContext.Provider value={gridContextValue}>
       <div className="flex h-full min-h-0 flex-col bg-white">
-        {/* 上层极简顶栏（44px）：表名、统计、在线状态、修改记录 */}
+        {/* 上层极简顶栏（44px）：表名、统计、+ 新建作品、在线状态、修改记录 */}
         <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 px-3">
           <div className="flex min-w-0 items-center gap-2">
             <SidebarExpandButton />
@@ -1905,7 +2202,26 @@ export function WorksheetDetailPage() {
             </span>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <CreateWorkPopover
+              worksheetId={data.worksheet.id}
+              onCreated={(createdWork) => {
+                setPendingWorks((prev) =>
+                  prev.some((w) => w.id === createdWork.id) ||
+                  data.works.some((w) => w.id === createdWork.id)
+                    ? prev
+                    : [...prev, createdWork],
+                );
+                openAddSegmentForWork(createdWork.id);
+                requestAnimationFrame(() => {
+                  const banner = document.querySelector(
+                    `[data-testid="work-banner-${createdWork.id}"]`,
+                  );
+                  banner?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
+              }}
+            />
+
             {onlineUsers.length > 0 && (
               <div
                 data-testid="presence-bar"
@@ -1941,7 +2257,8 @@ export function WorksheetDetailPage() {
               className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
             >
               <History className="h-3.5 w-3.5 text-slate-400" />
-              <span>修改记录</span>
+              <span className="hidden sm:inline">修改记录</span>
+              <span className="sr-only sm:hidden">修改记录</span>
             </button>
           </div>
         </div>
@@ -1994,7 +2311,7 @@ export function WorksheetDetailPage() {
               className="w-28 sm:w-32"
               options={[
                 { value: '', label: '全部作品' },
-                ...data.works.map((w) => ({ value: w.id, label: w.name })),
+                ...allWorks.map((w) => ({ value: w.id, label: w.name })),
               ]}
             />
 
@@ -2089,7 +2406,11 @@ export function WorksheetDetailPage() {
               <div className="max-h-[34vh] overflow-auto border-t border-emerald-200/60 bg-white">
                 <table className="w-max min-w-full border-collapse">
                   {renderTableHeaders(publishedTable, true)}
-                  <tbody>{renderRows(publishedTable, false)}</tbody>
+                  <tbody>
+                    {publishedTable
+                      .getRowModel()
+                      .rows.map((row, idx) => renderSingleRow(publishedTable, row, idx + 1, false))}
+                  </tbody>
                 </table>
               </div>
             )}
@@ -2097,14 +2418,18 @@ export function WorksheetDetailPage() {
         )}
 
         {/* 主表格画布（占满剩余视口高度，内部自由横纵滚动） */}
-        <div className="min-h-0 flex-1 overflow-auto bg-white" data-testid="worksheet-table-scroll">
+        <div
+          ref={setScrollContainerEl}
+          className="min-h-0 flex-1 overflow-auto bg-white"
+          data-testid="worksheet-table-scroll"
+        >
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={(ev) => void handleRowDragEnd(ev)}
           >
             <SortableContext
-              items={activeTasks.map((t) => t.id)}
+              items={visualActiveTasks.map((t) => t.id)}
               strategy={verticalListSortingStrategy}
             >
               <table
@@ -2113,22 +2438,102 @@ export function WorksheetDetailPage() {
               >
                 {renderTableHeaders(mainTable, true)}
                 <tbody>
-                  {activeTasks.length === 0 && (
+                  {displayBlocks.length === 0 && (
                     <tr className="border-b border-slate-200/80">
                       <td
-                        colSpan={visibleColumns.length + 2}
+                        colSpan={totalColSpan}
                         className="py-10 text-center text-xs text-slate-400"
                       >
                         {isFilteredOrSorted
                           ? '没有符合筛选条件的任务'
-                          : '暂无未发布任务，点击下方「+ 新建任务」开始录入'}
+                          : '暂无未发布任务，点击顶栏「新建作品」或下方「+ 新建独立任务」开始录入'}
                       </td>
                     </tr>
                   )}
 
-                  {renderRows(mainTable, dragEnabled)}
+                  {displayBlocks.map((block) => {
+                    if (block.kind === 'standalone') {
+                      return (
+                        <Fragment key={block.key}>
+                          {block.tasks.map((task) => {
+                            const entry = mainRowLookup.get(task.id);
+                            if (!entry) return null;
+                            return renderSingleRow(
+                              mainTable,
+                              entry.row,
+                              entry.rowNumber,
+                              dragEnabled,
+                            );
+                          })}
+                        </Fragment>
+                      );
+                    }
 
-                  {/* 贴合网格的底部 `+ 新建任务` 原地行（回车连续加行） */}
+                    const collapsed = collapsedWorkIds.has(block.work.id);
+                    const doneCount = block.tasks.filter((t) =>
+                      isTaskAllStagesDone(t, stageCols),
+                    ).length;
+                    const lastTaskInWork = block.tasks[block.tasks.length - 1] ?? null;
+
+                    return (
+                      <Fragment key={block.key}>
+                        <WorkBannerRow
+                          work={block.work}
+                          colSpan={totalColSpan}
+                          taskCount={block.tasks.length}
+                          doneCount={doneCount}
+                          hasStages={stageCols.length > 0}
+                          collapsed={collapsed}
+                          dragEnabled={dragEnabled}
+                          isEmptyPending={block.isEmptyPending}
+                          onToggleCollapse={() => toggleWorkCollapsed(block.work.id)}
+                          onRename={(nextName) => renameWork(block.work.id, nextName)}
+                          onAddSegment={() => openAddSegmentForWork(block.work.id)}
+                          onUngroup={() => {
+                            if (block.isEmptyPending || block.tasks.length === 0) {
+                              setPendingWorks((prev) => prev.filter((w) => w.id !== block.work.id));
+                              if (addingSegmentWorkId === block.work.id) {
+                                setAddingSegmentWorkId(null);
+                              }
+                              pushToast({ message: '已关闭空作品横幅', variant: 'info' });
+                            } else {
+                              setUngroupingWork({ work: block.work, tasks: block.tasks });
+                            }
+                          }}
+                        />
+
+                        {!collapsed &&
+                          block.tasks.map((task) => {
+                            const entry = mainRowLookup.get(task.id);
+                            if (!entry) return null;
+                            return renderSingleRow(
+                              mainTable,
+                              entry.row,
+                              entry.rowNumber,
+                              dragEnabled,
+                            );
+                          })}
+
+                        {!collapsed && addingSegmentWorkId === block.work.id && (
+                          <InlineAddSegmentRow
+                            workName={block.work.name}
+                            colSpan={totalColSpan}
+                            pending={createTaskMutation.isPending}
+                            onSubmit={(segTitle) => {
+                              createTaskMutation.mutate({
+                                title: segTitle,
+                                workId: block.work.id,
+                                afterTaskId: lastTaskInWork?.id ?? null,
+                              });
+                            }}
+                            onCancel={() => setAddingSegmentWorkId(null)}
+                          />
+                        )}
+                      </Fragment>
+                    );
+                  })}
+
+                  {/* 贴合网格的底部 `+ 新建独立任务` 原地行（回车连续加行） */}
                   <tr className="h-9 border-b border-slate-200/80 bg-white transition-colors hover:bg-slate-50/70">
                     <td className="sticky left-0 z-20 h-9 w-10 min-w-10 border-r border-slate-200/80 bg-white text-center text-slate-400">
                       <Plus className="mx-auto h-3.5 w-3.5" />
@@ -2148,7 +2553,7 @@ export function WorksheetDetailPage() {
                               e.preventDefault();
                             }
                           }}
-                          placeholder="新建任务（输入标题，回车连续添加）"
+                          placeholder="新建独立任务（输入标题，回车连续添加）"
                           aria-label="新建任务标题"
                           maxLength={200}
                           className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none"
@@ -2200,6 +2605,7 @@ export function WorksheetDetailPage() {
               onClick={() => {
                 const t = rowContextMenu.task;
                 setRowContextMenu(null);
+                setAddingSegmentWorkId(null);
                 setInsertingAfterId(t.id);
                 setInsertTitle('');
               }}
@@ -2224,6 +2630,20 @@ export function WorksheetDetailPage() {
             </button>
           </div>
         )}
+
+        {/* 解散作品分组二次确认 */}
+        <ConfirmDialog
+          open={Boolean(ungroupingWork)}
+          onOpenChange={(open) => {
+            if (!open) setUngroupingWork(null);
+          }}
+          title="确认解散作品分组"
+          message={`确定要解散作品「${ungroupingWork?.work.name ?? ''}」的分组吗？旗下 ${ungroupingWork?.tasks.length ?? 0} 条任务将转为无作品独立任务，不会删除任何任务或分工数据。`}
+          confirmLabel="确认解散"
+          danger={false}
+          pending={ungroupPending}
+          onConfirm={() => void handleConfirmUngroupWork()}
+        />
 
         <ColumnManagerModal
           open={colModalOpen}

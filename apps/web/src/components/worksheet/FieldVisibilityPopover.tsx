@@ -38,6 +38,15 @@ const SYSTEM_TOGGLEABLE: Array<{
   { key: 'files', label: '文件' },
 ];
 
+export function isSystemColumnHidden(
+  sys: SystemColumnsConfig | undefined,
+  key: Exclude<keyof SystemColumnsConfig, 'title'>,
+): boolean {
+  // 大标题横幅已表达归属，因此「作品」列默认隐藏，用户仍可在此手动开启
+  if (key === 'work') return sys?.work?.hidden !== false;
+  return Boolean(sys?.[key]?.hidden);
+}
+
 function SortableFieldRow({
   col,
   onToggleHidden,
@@ -109,7 +118,7 @@ export function FieldVisibilityPopover({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const hiddenSystemCount = SYSTEM_TOGGLEABLE.filter((item) =>
-    Boolean(worksheet.systemColumns?.[item.key]?.hidden),
+    isSystemColumnHidden(worksheet.systemColumns, item.key),
   ).length;
   const hiddenCustomCount = columns.filter((c) => c.hidden).length;
   const hiddenTotal = hiddenSystemCount + hiddenCustomCount;
@@ -201,7 +210,7 @@ export function FieldVisibilityPopover({
                 <Eye className="h-3.5 w-3.5" />
               </div>
               {SYSTEM_TOGGLEABLE.map((item) => {
-                const hidden = Boolean(worksheet.systemColumns?.[item.key]?.hidden);
+                const hidden = isSystemColumnHidden(worksheet.systemColumns, item.key);
                 return (
                   <button
                     key={item.key}

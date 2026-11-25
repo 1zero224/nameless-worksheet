@@ -22,6 +22,7 @@ import {
   FolderOpen,
   History,
   MapPin,
+  Paperclip,
   Plus,
   Trash2,
   X,
@@ -80,6 +81,8 @@ export function TaskDetailDrawer({
   });
 
   const task = wsData?.tasks.find((t) => t.id === taskId) ?? null;
+  const currentWork =
+    task?.workId && wsData ? (wsData.works.find((w) => w.id === task.workId) ?? null) : null;
   const userMap = new Map(users.map((u) => [u.id, u.displayName]));
 
   // 本地表单态同步
@@ -243,6 +246,27 @@ export function TaskDetailDrawer({
               删除任务
             </Button>
           </div>
+
+          {/* 所属作品共用附件联动槽位（阶段 3 接入，位于侧栏顶部与文件区上方） */}
+          {currentWork && (
+            <div
+              data-testid="work-shared-attachments-slot"
+              className="rounded-lg border border-dashed border-indigo-200/90 bg-indigo-50/45 px-3 py-2.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-indigo-900">
+                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                  <span className="truncate">所属作品「{currentWork.name}」共用附件</span>
+                </span>
+                <span className="shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-medium text-indigo-600 ring-1 ring-indigo-200/70">
+                  阶段 3 接入
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-indigo-800/75">
+                后续将在此自动透出整片原片、纯音源与通用字体包，打开任意分段即可直接获取。
+              </p>
+            </div>
+          )}
 
           {/* 标题 */}
           <div>

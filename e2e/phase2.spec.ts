@@ -170,10 +170,13 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
     await expect(pageA.getByTestId('worksheet-main-table')).toContainText('片源备注');
     await pageA.keyboard.press('Escape');
 
-    // V2: 新建任务、填分工说明、新建作品、录入项目用户与纯文本负责人
+    // V2: 新建独立任务（无作品平铺，不套横幅）、填分工说明、新建作品大标题横幅与分段、录入项目用户与纯文本负责人
     await pageA.getByLabel('新建任务标题').fill('5th 花絮 P1');
     await pageA.getByLabel('新建任务标题').press('Enter');
     await expect(pageA.getByTestId('worksheet-main-table')).toContainText('5th 花絮 P1');
+    // 无作品独立任务默认平铺，不渲染作品大标题横幅；且默认隐藏冗余「作品」列
+    await expect(pageA.locator('tr[data-work-banner]')).toHaveCount(0);
+    await expect(pageA.getByTestId('col-header-work')).toHaveCount(0);
 
     // 在下方插入一行（行操作菜单 -> 贴合网格原地插入行）
     const row1 = pageA.locator('tr[data-task-row]').first();
@@ -187,12 +190,12 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
     await pageA.getByRole('button', { name: '插入', exact: true }).click();
     await expect(pageA.getByTestId('worksheet-main-table')).toContainText('5th 花絮 P2');
 
-    // 键盘方向键导航：选中标题格 -> ArrowRight 到作品 -> ArrowRight 到分工说明 -> Enter 编辑并提交
+    // 键盘方向键导航：默认隐藏作品列，标题格 ArrowRight 直接到分工说明 -> Enter 编辑并提交
     const titleCell1 = pageA.getByTestId(`cell-${task1Id}-title`);
     await titleCell1.getByRole('button').click();
     await pageA.keyboard.press('ArrowRight');
-    await pageA.keyboard.press('ArrowRight');
     const divCell = pageA.getByTestId(`cell-${task1Id}-divisionNote`);
+    await expect(divCell).toHaveClass(/ring-sky-500/);
     await pageA.keyboard.press('Enter');
     const divInput = divCell.locator('input');
     await expect(divInput).toBeVisible();
@@ -200,14 +203,69 @@ test.describe('阶段 2 端到端验收（V1–V14）', () => {
     await divInput.press('Enter');
     await expect(divCell).toContainText('P1 00:00–13:00');
 
-    // 新建作品「5th 演唱会」
-    await pageA.getByTestId(`cell-${task1Id}-work`).click();
-    await pageA.getByPlaceholder('搜索或输入新作品名回车').fill('5th 演唱会');
-    await pageA.getByRole('button', { name: /新建作品「5th 演唱会」/ }).click();
-    await expect(pageA.getByTestId(`cell-${task1Id}-work`)).toContainText('5th 演唱会');
+    // 顶栏「+ 新建作品」-> 立即渲染作品大标题横幅并自动聚焦首条分段输入 -> 连续回车添加两段
+    await pageA.getByTestId('create-work-trigger').click();
+    await pageA.getByLabel('新作品名称').fill('5th 演唱会');
+    await pageA.getByRole('button', { name: '创建作品' }).click();
 
-    // 编辑第一道工序列（时轴）：同时选项目用户「小爱」+ 纯文本「外援小王」并设进行中
-    const stageCell1 = row1.locator('td').nth(4).locator('button').first();
+    const workBanner = pageA.locator('tr[data-work-banner]').first();
+    await expect(workBanner).toBeVisible();
+    await expect(workBanner).toContainText('5th 演唱会');
+    await expect(workBanner.getByTestId('work-attachment-slots')).toBeVisible();
+
+    const segInput = pageA.getByLabel('为 5th 演唱会 添加分段');
+    await expect(segInput).toBeFocused();
+    await segInput.fill('0-36:37');
+    await segInput.press('Enter');
+    await expect(pageA.getByTestId('worksheet-main-table')).toContainText('0-36:37');
+    await segInput.fill('36:37-01:00:33');
+    await segInput.press('Enter');
+    await expect(pageA.getByTestId('worksheet-main-table')).toContainText('36:37-01:00:33');
+    await expect(workBanner).toContainText('已完成 0/2');
+    await pageA.getByTestId('inline-add-segment-row').getByRole('button', { name: '完成' }).click();
+
+    // 验证作品大标题横幅折叠/展开与原地重命名
+    await pageA.getByRole('button', { name: '折叠作品 5th 演唱会' }).click();
+    await expect(pageA.locator('tr[data-task-row]', { hasText: '0-36:37' })).toHaveCount(0);
+    await pageA.getByRole('button', { name: '展开作品 5th 演唱会' }).click();
+    const seg1Row = pageA.locator('tr[data-task-row]', { hasText: '0-36:37' });
+    await expect(seg1Row).toBeVisible();
+
+    await pageA.getByRole('button', { name: '作品操作 5th 演唱会' }).click();
+    await pageA.getByRole('menuitem', { name: '重命名作品' }).click();
+    const renameWorkInput = pageA.getByLabel('重命名作品 5th 演唱会');
+    await renameWorkInput.fill('5th 专场演唱会');
+    await renameWorkInput.press('Enter');
+    await expect(workBanner).toContainText('5th 专场演唱会');
+
+    // 验证键盘 ArrowDown 跨越作品大标题横幅（从独立行 5th 花絮 P2 跨过横幅到 0-36:37）
+    const row2ForNav = pageA.locator('tr[data-task-row]', { hasText: '5th 花絮 P2' });
+    const row2NavId = (await row2ForNav.getAttribute('data-task-row')) ?? '';
+    await pageA.getByTestId(`cell-${row2NavId}-title`).getByRole('button').click();
+    await pageA.keyboard.press('ArrowDown');
+    const seg1Id = (await seg1Row.getAttribute('data-task-row')) ?? '';
+    await expect(pageA.getByTestId(`cell-${seg1Id}-title`)).toHaveClass(/ring-sky-500/);
+
+    // 打开分段任务详情侧栏 -> 顶部可见「所属作品共用附件（阶段 3 接入）」联动槽位
+    await seg1Row.hover();
+    await pageA.getByRole('button', { name: '打开 0-36:37 详情' }).click();
+    const segDrawer = pageA.getByTestId('task-detail-drawer');
+    await expect(segDrawer.getByTestId('work-shared-attachments-slot')).toContainText(
+      '所属作品「5th 专场演唱会」共用附件',
+    );
+    await pageA.getByRole('button', { name: '关闭侧栏' }).click();
+
+    // 验证「作品」列仍可在「字段显隐」中手动开启并关闭
+    await pageA.getByTestId('field-visibility-trigger').click();
+    const fieldPopover = pageA.locator('[data-radix-popper-content-wrapper]');
+    await fieldPopover.getByRole('button', { name: '作品', exact: true }).click();
+    await expect(pageA.getByTestId('col-header-work')).toBeVisible();
+    await fieldPopover.getByRole('button', { name: '作品', exact: true }).click();
+    await expect(pageA.getByTestId('col-header-work')).toHaveCount(0);
+    await pageA.keyboard.press('Escape');
+
+    // 编辑第一道工序列（时轴）：默认隐藏作品列后位于 td.nth(3)，同时选项目用户「小爱」+ 纯文本「外援小王」并设进行中
+    const stageCell1 = row1.locator('td').nth(3).locator('button').first();
     await stageCell1.click();
     const stagePopover = pageA.locator('[data-radix-popper-content-wrapper]');
     await stagePopover.getByRole('button', { name: '进行中', exact: true }).click();

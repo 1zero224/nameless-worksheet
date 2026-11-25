@@ -30,6 +30,7 @@ import { queryKeys } from '@/api/keys.js';
 import { ConfirmDialog, ModalDialog, useToast } from '@/components/ui/overlays.js';
 import { Alert, Button, cn, Input, Label } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
+import { isSystemColumnHidden } from '@/components/worksheet/FieldVisibilityPopover.js';
 
 const SYSTEM_TOGGLEABLE: Array<{
   key: Exclude<keyof SystemColumnsConfig, 'title'>;
@@ -300,7 +301,7 @@ export function ColumnManagerModal({
                 标题（冻结常显）
               </span>
               {SYSTEM_TOGGLEABLE.map((item) => {
-                const hidden = Boolean(worksheet.systemColumns?.[item.key]?.hidden);
+                const hidden = isSystemColumnHidden(worksheet.systemColumns, item.key);
                 return (
                   <button
                     key={item.key}

@@ -346,7 +346,7 @@ export function InlineTextCell({
               enterEdit();
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === 'F2') {
+              if ((e.key === 'Enter' || e.key === 'F2') && selected) {
                 e.preventDefault();
                 e.stopPropagation();
                 onSelect();
