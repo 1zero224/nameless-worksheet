@@ -1,9 +1,13 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { can } from '@nw/shared';
+import { asc, eq } from 'drizzle-orm';
+import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp, scrubTokenUrl } from '../src/app.js';
 import { runInit, runResetLink } from '../src/cli.js';
 import { ConfigError, loadConfig } from '../src/config.js';
-import { createPool, runMigrations } from '../src/db/index.js';
+import { createDb, createPool, runMigrations, schema } from '../src/db/index.js';
 import {
   createIsolatedDatabase,
   createTestEnv,
@@ -96,6 +100,20 @@ describe('T3 CLI init 与 reset-link', () => {
       });
       expect(res.resetUrl.startsWith('https://example.test/reset/')).toBe(true);
 
+      // 阶段 2 T2: init 自动补种 4 个默认看板列
+      const pool = createPool(isolated.databaseUrl, 2);
+      try {
+        const db = createDb(pool);
+        const cols = await db
+          .select({ name: schema.boardColumns.name, sortOrder: schema.boardColumns.sortOrder })
+          .from(schema.boardColumns)
+          .where(eq(schema.boardColumns.projectId, res.projectId))
+          .orderBy(asc(schema.boardColumns.sortOrder));
+        expect(cols.map((c) => c.name)).toEqual(['时轴', '翻译', '校对', '嵌字']);
+      } finally {
+        await pool.end();
+      }
+
       await expect(
         runInit(isolated.databaseUrl, 'https://example.test', {
           projectName: '第二个项目',
@@ -107,6 +125,42 @@ describe('T3 CLI init 与 reset-link', () => {
       const reset = await runResetLink(isolated.databaseUrl, 'https://example.test', 'ADMIN_01');
       expect(reset.resetUrl.startsWith('https://example.test/reset/')).toBe(true);
       expect(reset.resetUrl).not.toBe(res.resetUrl);
+    } finally {
+      await isolated.drop();
+    }
+  });
+
+  it('阶段 2 T2: 在已有阶段 1 项目数据的库上运行 0001 迁移自动补种 4 个默认看板列且可重复执行', async () => {
+    const isolated = await createIsolatedDatabase();
+    try {
+      // 清空后重跑 0000 模拟阶段 1 数据库，插入一个旧项目，再跑 0001 迁移
+      const client = new pg.Client({ connectionString: isolated.databaseUrl });
+      await client.connect();
+      try {
+        await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+        await client.query('DROP SCHEMA IF EXISTS drizzle CASCADE;');
+        const initSql = readFileSync(
+          path.resolve(process.cwd(), 'apps/server/drizzle/0000_init.sql'),
+          'utf8',
+        );
+        for (const stmt of initSql.split('--> statement-breakpoint')) {
+          if (stmt.trim()) await client.query(stmt);
+        }
+        await client.query(`INSERT INTO "projects" ("name") VALUES ('已有旧项目')`);
+        const phase2Sql = readFileSync(
+          path.resolve(process.cwd(), 'apps/server/drizzle/0001_phase2_worksheets.sql'),
+          'utf8',
+        );
+        for (const stmt of phase2Sql.split('--> statement-breakpoint')) {
+          if (stmt.trim()) await client.query(stmt);
+        }
+        const { rows } = await client.query<{ name: string }>(
+          `SELECT name FROM board_columns ORDER BY sort_order ASC`,
+        );
+        expect(rows.map((r) => r.name)).toEqual(['时轴', '翻译', '校对', '嵌字']);
+      } finally {
+        await client.end();
+      }
     } finally {
       await isolated.drop();
     }

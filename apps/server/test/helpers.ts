@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { ServerMessage } from '@nw/shared';
+import { DEFAULT_BOARD_COLUMN_NAMES, generateNKeysBetween, type ServerMessage } from '@nw/shared';
 import type { FastifyInstance } from 'fastify';
 import pg from 'pg';
 import WebSocket from 'ws';
@@ -116,6 +116,7 @@ export interface SeededProject {
   name: string;
   admin: SeededUser;
   user: SeededUser;
+  boardColumns: Array<{ id: string; name: string; sortOrder: string }>;
 }
 
 async function seedProject(db: Db, suffix: string): Promise<SeededProject> {
@@ -153,12 +154,29 @@ async function seedProject(db: Db, suffix: string): Promise<SeededProject> {
     { projectId: project.id, userId: userRow.id, role: 'user' },
   ]);
 
+  const boardKeys = generateNKeysBetween(null, null, DEFAULT_BOARD_COLUMN_NAMES.length);
+  const seededBoardColumns = await db
+    .insert(schema.boardColumns)
+    .values(
+      DEFAULT_BOARD_COLUMN_NAMES.map((name, i) => ({
+        projectId: project.id,
+        name,
+        sortOrder: boardKeys[i] ?? `a${i}`,
+      })),
+    )
+    .returning({
+      id: schema.boardColumns.id,
+      name: schema.boardColumns.name,
+      sortOrder: schema.boardColumns.sortOrder,
+    });
+
   const adminSess = await createSession(db, adminRow.id, 'test-agent', 30);
   const userSess = await createSession(db, userRow.id, 'test-agent', 30);
 
   return {
     id: project.id,
     name: project.name,
+    boardColumns: seededBoardColumns,
     admin: {
       id: adminRow.id,
       loginName: adminRow.loginName,

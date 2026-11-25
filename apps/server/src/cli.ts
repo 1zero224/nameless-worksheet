@@ -1,4 +1,9 @@
-import { displayNameSchema, loginNameSchema } from '@nw/shared';
+import {
+  DEFAULT_BOARD_COLUMN_NAMES,
+  displayNameSchema,
+  generateNKeysBetween,
+  loginNameSchema,
+} from '@nw/shared';
 import { and, eq, isNull } from 'drizzle-orm';
 import { deleteAllUserSessions } from './auth/session.js';
 import { hashToken, newToken } from './auth/tokens.js';
@@ -61,6 +66,15 @@ export async function runInit(
         expiresAt,
         createdBy: null,
       });
+
+      const boardKeys = generateNKeysBetween(null, null, DEFAULT_BOARD_COLUMN_NAMES.length);
+      await tx.insert(schema.boardColumns).values(
+        DEFAULT_BOARD_COLUMN_NAMES.map((name, i) => ({
+          projectId: project.id,
+          name,
+          sortOrder: boardKeys[i] ?? `a${i}`,
+        })),
+      );
 
       return { projectId: project.id, userId: user.id };
     });
