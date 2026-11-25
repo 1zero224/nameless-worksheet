@@ -390,6 +390,7 @@ function FilesGridCell({ row }: { row: { original: TaskDetail } }) {
 function SortableTableRow({
   task,
   rowNumber,
+  inWorkGroup = false,
   dragEnabled,
   rowSelected,
   highlighted,
@@ -401,6 +402,7 @@ function SortableTableRow({
 }: {
   task: TaskDetail;
   rowNumber: number;
+  inWorkGroup?: boolean;
   dragEnabled: boolean;
   rowSelected: boolean;
   highlighted: boolean;
@@ -428,8 +430,14 @@ function SortableTableRow({
         highlighted && 'bg-amber-50 ring-2 ring-inset ring-amber-400 transition-colors',
       )}
     >
-      {/* 极窄 40px 行号列：默认显行号，悬停/选中切为拖拽手柄 + 展开详情 */}
+      {/* 极窄 40px 行号列：默认显行号，悬停/选中切为拖拽手柄 + 展开详情；作品子行左侧带细色条标明归属 */}
       <td className="sticky left-0 z-20 h-9 w-10 min-w-10 max-w-10 border-r border-slate-200/80 bg-white p-0 text-center group-hover:bg-slate-50">
+        {inWorkGroup && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-indigo-400/75"
+          />
+        )}
         <div className="relative flex h-9 w-10 items-center justify-center">
           <span
             className={cn(
@@ -2037,6 +2045,7 @@ export function WorksheetDetailPage() {
     row: ReturnType<typeof mainTable.getRowModel>['rows'][number],
     rowNumber: number,
     allowDrag: boolean,
+    inWorkGroup = false,
   ) => {
     const task = row.original;
     const rowSelected = selectedCell?.taskId === task.id;
@@ -2045,6 +2054,7 @@ export function WorksheetDetailPage() {
         <SortableTableRow
           task={task}
           rowNumber={rowNumber}
+          inWorkGroup={inWorkGroup}
           dragEnabled={allowDrag}
           rowSelected={rowSelected}
           highlighted={highlightedTaskId === task.id}
@@ -2405,7 +2415,7 @@ export function WorksheetDetailPage() {
                     </tr>
                   )}
 
-                  {displayBlocks.map((block) => {
+                  {displayBlocks.map((block, blockIdx) => {
                     if (block.kind === 'standalone') {
                       return (
                         <Fragment key={block.key}>
@@ -2417,6 +2427,7 @@ export function WorksheetDetailPage() {
                               entry.row,
                               entry.rowNumber,
                               dragEnabled,
+                              false,
                             );
                           })}
                         </Fragment>
@@ -2428,9 +2439,21 @@ export function WorksheetDetailPage() {
                       isTaskAllStagesDone(t, stageCols),
                     ).length;
                     const lastTaskInWork = block.tasks[block.tasks.length - 1] ?? null;
+                    const prevIsWork = blockIdx > 0 && displayBlocks[blockIdx - 1]?.kind === 'work';
+                    const nextIsWork = displayBlocks[blockIdx + 1]?.kind === 'work';
 
                     return (
                       <Fragment key={block.key}>
+                        {/* 作品区域上方视觉间隔（避免与上一个作品底部间隔重复叠加） */}
+                        {!prevIsWork && (
+                          <tr data-work-spacer="top" className="h-3 bg-slate-100/80">
+                            <td
+                              colSpan={totalColSpan}
+                              className="border-b border-slate-300/80 p-0"
+                            />
+                          </tr>
+                        )}
+
                         <WorkBannerRow
                           work={block.work}
                           colSpan={totalColSpan}
@@ -2465,6 +2488,7 @@ export function WorksheetDetailPage() {
                               entry.row,
                               entry.rowNumber,
                               dragEnabled,
+                              true,
                             );
                           })}
 
@@ -2483,6 +2507,19 @@ export function WorksheetDetailPage() {
                             onCancel={() => setAddingSegmentWorkId(null)}
                           />
                         )}
+
+                        {/* 作品最下方子任务下方视觉间隔，与后续独立任务/下一作品/底行清晰区分 */}
+                        <tr data-work-spacer="bottom" className="h-3 bg-slate-100/80">
+                          <td
+                            colSpan={totalColSpan}
+                            className={cn(
+                              'border-t border-slate-300/80 p-0',
+                              nextIsWork
+                                ? 'border-b border-slate-300/80'
+                                : 'border-b border-slate-200/80',
+                            )}
+                          />
+                        </tr>
                       </Fragment>
                     );
                   })}

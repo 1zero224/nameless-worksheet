@@ -190,8 +190,8 @@ export function WorkBannerRow({
       data-testid={`work-banner-${work.id}`}
       data-work-banner={work.id}
       className={cn(
-        'h-[38px] border-b border-slate-200/90 bg-slate-50/90 transition-colors',
-        isOver && 'bg-sky-50/90 ring-2 ring-inset ring-sky-400',
+        'h-[38px] border-b border-indigo-200/70 bg-indigo-50/40 transition-colors',
+        isOver && 'bg-sky-100/70 ring-2 ring-inset ring-sky-400',
       )}
     >
       <td colSpan={colSpan} className="p-0 align-middle">
@@ -376,6 +376,10 @@ export function InlineAddSegmentRow({
       className="h-9 border-b border-indigo-200/80 bg-indigo-50/40"
     >
       <td className="sticky left-0 z-20 h-9 w-10 min-w-10 border-r border-slate-200/80 bg-indigo-50/80 text-center text-indigo-500">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-indigo-400/75"
+        />
         <Plus className="mx-auto h-3.5 w-3.5" />
       </td>
       <td colSpan={colSpan - 1} className="h-9 p-0 align-middle">
