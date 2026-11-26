@@ -1,6 +1,7 @@
 import {
   normalizeText,
   type SearchDocItem,
+  type SearchDocSheetItem,
   type SearchResponse,
   type SearchTaskItem,
   type StageCell,
@@ -173,7 +174,7 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
       }
 
       if (wsRows.length === 0) {
-        const empty: SearchResponse = { items: [], total: 0, docs };
+        const empty: SearchResponse = { items: [], total: 0, docs, docSheets: [] };
         return empty;
       }
 
@@ -311,7 +312,7 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
             stageColsByWs.set(col.worksheetId, arr);
           }
           arr.push({ id: col.id, name: col.name });
-        } else if (col.type === 'text') {
+        } else if (col.type === 'text' || col.type === 'date') {
           let arr = textColIdsByWs.get(col.worksheetId);
           if (!arr) {
             arr = [];
@@ -342,6 +343,7 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
       });
 
       const matched: SearchTaskItem[] = [];
+      const matchedDocSheets: SearchDocSheetItem[] = [];
 
       for (const task of taskRows) {
         const ws = wsMap.get(task.worksheetId);
@@ -370,13 +372,14 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
           continue;
         }
 
-        let matchedArtifactNames: string[] | undefined;
-        if (needle) {
-          const textColIds = textColIdsByWs.get(task.worksheetId) ?? [];
-          const customTexts = textColIds
-            .map((cid) => task.customValues?.[cid] ?? '')
-            .filter((v): v is string => Boolean(v));
+        const textColIds = textColIdsByWs.get(task.worksheetId) ?? [];
+        const customTexts = textColIds
+          .map((cid) => task.customValues?.[cid] ?? '')
+          .filter((v): v is string => Boolean(v));
 
+        let matchedArtifactNames: string[] | undefined;
+        let matchedSnippet: string | undefined;
+        if (needle) {
           const haystacks: string[] = [
             task.title,
             workName ?? '',
@@ -406,6 +409,29 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
 
           const fieldHit = haystacks.some((h) => h.toLowerCase().includes(needle));
           if (!fieldHit && artHits.length === 0) continue;
+
+          if (ws.kind === 'free') {
+            const hitText = customTexts.find((v) => v.toLowerCase().includes(needle));
+            matchedSnippet = (hitText ?? customTexts.slice(0, 3).join(' · '))
+              .replace(/\s+/g, ' ')
+              .slice(0, 120);
+          }
+        }
+
+        // 未限定 worksheetId/status 时，将通用文档在线自由表命中项归入 docSheets 分区
+        if (ws.placement === 'docs' && !worksheetId && !status) {
+          if (matchedDocSheets.length < 20) {
+            const previewCols = customTexts.slice(0, 3).join(' · ').replace(/\s+/g, ' ');
+            matchedDocSheets.push({
+              worksheetId: ws.id,
+              worksheetName: ws.name,
+              taskId: task.id,
+              workName,
+              title: task.title || previewCols.slice(0, 80) || '空白行',
+              snippet: matchedSnippet ?? previewCols.slice(0, 120),
+            });
+          }
+          continue;
         }
 
         matched.push({
@@ -417,10 +443,13 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
           worksheetId: ws.id,
           worksheetName: ws.name,
           worksheetColor: ws.color as WorksheetColor,
+          worksheetKind: ws.kind,
+          worksheetPlacement: ws.placement,
           workId: task.workId,
           workName,
           stages,
           ...(matchedArtifactNames ? { matchedArtifactNames } : {}),
+          ...(matchedSnippet ? { matchedSnippet } : {}),
         });
       }
 
@@ -428,6 +457,7 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
         items: matched.slice(offset, offset + limit),
         total: matched.length,
         docs,
+        docSheets: matchedDocSheets,
       };
       return res;
     },

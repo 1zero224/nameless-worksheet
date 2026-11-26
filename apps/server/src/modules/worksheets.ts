@@ -35,6 +35,8 @@ export function toWorksheetDto(row: typeof schema.worksheets.$inferSelect): Work
     id: row.id,
     name: row.name,
     color: row.color as WorksheetColor,
+    kind: row.kind,
+    placement: row.placement,
     sortOrder: row.sortOrder,
     systemColumns: row.systemColumns ?? {},
     createdAt: row.createdAt.toISOString(),
@@ -123,11 +125,20 @@ function mergeSystemColumns(
 export async function listWorksheetSummaries(
   db: Db | Tx,
   projectId: string,
+  opts?: { placement?: 'topbar' | 'docs' | 'all' },
 ): Promise<WorksheetSummary[]> {
+  const conditions = [
+    eq(schema.worksheets.projectId, projectId),
+    isNull(schema.worksheets.deletedAt),
+  ];
+  if (opts?.placement && opts.placement !== 'all') {
+    conditions.push(eq(schema.worksheets.placement, opts.placement));
+  }
+
   const wsRows = await db
     .select()
     .from(schema.worksheets)
-    .where(and(eq(schema.worksheets.projectId, projectId), isNull(schema.worksheets.deletedAt)))
+    .where(and(...conditions))
     .orderBy(ascC(schema.worksheets.sortOrder), asc(schema.worksheets.id));
 
   if (wsRows.length === 0) return [];
@@ -137,6 +148,7 @@ export async function listWorksheetSummaries(
       worksheetId: schema.tasks.worksheetId,
       total: sql<number>`count(*)::int`,
       unpublished: sql<number>`count(*) FILTER (WHERE ${schema.tasks.publishStatus} = 'unpublished')::int`,
+      shelved: sql<number>`count(*) FILTER (WHERE ${schema.tasks.publishStatus} = 'shelved')::int`,
     })
     .from(schema.tasks)
     .where(and(eq(schema.tasks.projectId, projectId), isNull(schema.tasks.deletedAt)))
@@ -149,6 +161,7 @@ export async function listWorksheetSummaries(
       ...toWorksheetDto(ws),
       totalTaskCount: c?.total ?? 0,
       unpublishedTaskCount: c?.unpublished ?? 0,
+      shelvedTaskCount: c?.shelved ?? 0,
     };
   });
 }
@@ -160,10 +173,19 @@ export function registerWorksheetRoutes(
   const { db, bus } = deps;
 
   // GET /api/worksheets
-  app.get('/api/worksheets', { config: { access: 'authenticated' } }, async (request) => {
-    const auth = request.auth!;
-    return listWorksheetSummaries(db, auth.projectId);
-  });
+  app.get<{ Querystring: { placement?: string } }>(
+    '/api/worksheets',
+    { config: { access: 'authenticated' } },
+    async (request) => {
+      const auth = request.auth!;
+      const rawPlacement = request.query?.placement;
+      const placement =
+        rawPlacement === 'topbar' || rawPlacement === 'docs' || rawPlacement === 'all'
+          ? rawPlacement
+          : 'all';
+      return listWorksheetSummaries(db, auth.projectId, { placement });
+    },
+  );
 
   // POST /api/worksheets
   app.post(
@@ -173,6 +195,12 @@ export function registerWorksheetRoutes(
       const auth = request.auth!;
       const body = parseBody(createWorksheetBodySchema, request.body);
       const originConnId = readOriginConnId(request);
+
+      const placement = body.placement ?? 'topbar';
+      const kind =
+        placement === 'docs' || body.template === 'free_blank' || body.kind === 'free'
+          ? ('free' as const)
+          : ('task' as const);
 
       try {
         const { result } = await withTx(
@@ -200,6 +228,8 @@ export function registerWorksheetRoutes(
                 projectId: auth.projectId,
                 name: body.name,
                 color: body.color,
+                kind,
+                placement,
                 sortOrder,
               })
               .returning();
@@ -209,7 +239,35 @@ export function registerWorksheetRoutes(
               WORKSHEET_TEMPLATES.find((t) => t.id === body.template) ?? WORKSHEET_TEMPLATES[0]!;
             const createdColumns: ColumnConfig[] = [];
 
-            if (tmpl.stageNames.length > 0) {
+            if (kind === 'free') {
+              const initCols =
+                body.initialColumns && body.initialColumns.length > 0
+                  ? body.initialColumns
+                  : [
+                      { name: '列 1', type: 'text' as const, width: 180 },
+                      { name: '列 2', type: 'text' as const, width: 180 },
+                      { name: '列 3', type: 'text' as const, width: 180 },
+                    ];
+              const colKeys = generateNKeysBetween(null, null, initCols.length);
+              const colRows = await tx
+                .insert(schema.columnConfigs)
+                .values(
+                  initCols.map((c, i) => ({
+                    projectId: auth.projectId,
+                    worksheetId: ws.id,
+                    name: c.name,
+                    type: c.type,
+                    sortOrder: colKeys[i] ?? `a${i}`,
+                    width: c.width ?? 180,
+                    hidden: false,
+                    boardColumnId: null,
+                  })),
+                )
+                .returning();
+              for (const row of colRows) {
+                createdColumns.push(toColumnConfigDto(row));
+              }
+            } else if (tmpl.stageNames.length > 0) {
               const boardCols = await tx
                 .select()
                 .from(schema.boardColumns)
@@ -251,8 +309,9 @@ export function registerWorksheetRoutes(
               taskId: null,
               actorUserId: auth.userId,
               action: 'worksheet.created',
-              summary: `新建了工作表「${ws.name}」`,
-              changes: { name: ws.name, color: ws.color, template: tmpl.id },
+              summary:
+                kind === 'free' ? `新建了自由表格「${ws.name}」` : `新建了工作表「${ws.name}」`,
+              changes: { name: ws.name, color: ws.color, kind, placement, template: tmpl.id },
             });
 
             emit({
@@ -289,34 +348,64 @@ export function registerWorksheetRoutes(
         { projectId: auth.projectId, userId: auth.userId, originConnId },
         async ({ tx, emit }) => {
           const existing = await tx
-            .select({ id: schema.worksheets.id })
+            .select({
+              id: schema.worksheets.id,
+              placement: schema.worksheets.placement,
+              sortOrder: schema.worksheets.sortOrder,
+            })
             .from(schema.worksheets)
             .where(
               and(
                 eq(schema.worksheets.projectId, auth.projectId),
                 isNull(schema.worksheets.deletedAt),
               ),
-            );
+            )
+            .orderBy(ascC(schema.worksheets.sortOrder), asc(schema.worksheets.id));
 
           const uniqueIds = new Set(body.orderedIds);
-          if (uniqueIds.size !== body.orderedIds.length || uniqueIds.size !== existing.length) {
-            throw new AppError('VALIDATION_FAILED', '排序列表与当前工作表不匹配');
+          if (uniqueIds.size !== body.orderedIds.length) {
+            throw new AppError('VALIDATION_FAILED', '排序列表包含重复工作表');
           }
-          const existingSet = new Set(existing.map((w) => w.id));
+          const existingMap = new Map(existing.map((w) => [w.id, w]));
           for (const id of body.orderedIds) {
-            if (!existingSet.has(id)) throw notFound();
+            if (!existingMap.has(id)) throw notFound();
           }
 
-          const keys = generateNKeysBetween(null, null, body.orderedIds.length);
+          let finalOrderIds: string[];
+          if (uniqueIds.size === existing.length) {
+            finalOrderIds = body.orderedIds;
+          } else {
+            // 支持按 placement（topbar / docs）局部重排
+            const topbarRows = existing.filter((w) => w.placement === 'topbar');
+            const docsRows = existing.filter((w) => w.placement === 'docs');
+            const topbarIds = new Set(topbarRows.map((w) => w.id));
+            const docsIds = new Set(docsRows.map((w) => w.id));
+
+            if (
+              uniqueIds.size === topbarIds.size &&
+              body.orderedIds.every((id) => topbarIds.has(id))
+            ) {
+              finalOrderIds = [...body.orderedIds, ...docsRows.map((w) => w.id)];
+            } else if (
+              uniqueIds.size === docsIds.size &&
+              body.orderedIds.every((id) => docsIds.has(id))
+            ) {
+              finalOrderIds = [...topbarRows.map((w) => w.id), ...body.orderedIds];
+            } else {
+              throw new AppError('VALIDATION_FAILED', '排序列表与当前工作表不匹配');
+            }
+          }
+
+          const keys = generateNKeysBetween(null, null, finalOrderIds.length);
           const now = new Date();
-          for (let i = 0; i < body.orderedIds.length; i++) {
+          for (let i = 0; i < finalOrderIds.length; i++) {
             await tx
               .update(schema.worksheets)
               .set({ sortOrder: keys[i]!, updatedAt: now })
               .where(
                 and(
                   eq(schema.worksheets.projectId, auth.projectId),
-                  eq(schema.worksheets.id, body.orderedIds[i]!),
+                  eq(schema.worksheets.id, finalOrderIds[i]!),
                   isNull(schema.worksheets.deletedAt),
                 ),
               );

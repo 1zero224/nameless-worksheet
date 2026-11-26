@@ -1,6 +1,6 @@
 import { PUBLISH_STATUS_LABELS, type SearchResponse, STAGE_STATUS_LABELS } from '@nw/shared';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, FileText, Paperclip, Search, X } from 'lucide-react';
+import { ArrowRight, FileText, Paperclip, Search, Table2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { apiFetch } from '@/api/client.js';
@@ -112,7 +112,9 @@ export function KeywordSearchInput({
           <div className="flex items-center justify-between gap-2 border-b border-black/[0.06] bg-[#fafafa] px-3 py-2">
             <span className="text-[11px] font-medium text-zinc-500">
               跨表与资源检索
-              {data ? ` · ${data.total} 条任务 / ${data.docs.length} 篇通用文档` : ''}
+              {data
+                ? ` · ${data.total} 条工作表 / ${data.docs.length + (data.docSheets?.length ?? 0)} 项通用文档`
+                : ''}
             </span>
             <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600 cursor-pointer select-none">
               <input
@@ -131,17 +133,50 @@ export function KeywordSearchInput({
           >
             {isFetching && !data ? (
               <div className="py-6 text-center text-xs text-zinc-400">正在跨表检索…</div>
-            ) : !data || (data.items.length === 0 && data.docs.length === 0) ? (
+            ) : !data ||
+              (data.items.length === 0 &&
+                data.docs.length === 0 &&
+                (data.docSheets?.length ?? 0) === 0) ? (
               <div className="py-6 text-center text-xs text-zinc-400">
                 没有找到匹配的任务、资源或通用文档
               </div>
             ) : (
               <>
-                {data.docs.length > 0 && (
+                {(data.docs.length > 0 || (data.docSheets?.length ?? 0) > 0) && (
                   <div data-testid="search-docs-section" className="divide-y divide-black/[0.04]">
                     <div className="bg-zinc-50/90 px-3 py-1.5 text-[11px] font-semibold text-zinc-500">
-                      通用文档（{data.docs.length}）
+                      通用文档（{data.docs.length + (data.docSheets?.length ?? 0)}）
                     </div>
+                    {(data.docSheets ?? []).map((row) => (
+                      <button
+                        key={`sheet-${row.worksheetId}-${row.taskId}`}
+                        type="button"
+                        data-testid={`search-doc-sheet-result-${row.taskId}`}
+                        onClick={() => {
+                          setFocused(false);
+                          navigate(`/docs?sheetId=${row.worksheetId}&taskId=${row.taskId}`);
+                        }}
+                        className="flex w-full items-center justify-between gap-2.5 px-3 py-2 text-left transition-colors hover:bg-black/[0.03] cursor-pointer"
+                      >
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <Table2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                            <span className="truncate text-[11px] font-medium text-zinc-500">
+                              {row.worksheetName}
+                            </span>
+                            {row.workName && (
+                              <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-700">
+                                {row.workName}
+                              </span>
+                            )}
+                          </div>
+                          <div className="truncate text-xs font-medium text-zinc-900">
+                            {row.snippet || row.title}
+                          </div>
+                        </div>
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                      </button>
+                    ))}
                     {data.docs.map((doc) => (
                       <button
                         key={doc.artifactId}
@@ -177,7 +212,11 @@ export function KeywordSearchInput({
                     data-testid={`search-result-${item.taskId}`}
                     onClick={() => {
                       setFocused(false);
-                      navigate(`/worksheets/${item.worksheetId}?taskId=${item.taskId}`);
+                      navigate(
+                        item.worksheetPlacement === 'docs'
+                          ? `/docs?sheetId=${item.worksheetId}&taskId=${item.taskId}`
+                          : `/worksheets/${item.worksheetId}?taskId=${item.taskId}`,
+                      );
                     }}
                     className="flex w-full items-start justify-between gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] cursor-pointer"
                   >
@@ -196,11 +235,22 @@ export function KeywordSearchInput({
                             {PUBLISH_STATUS_LABELS.published}
                           </span>
                         )}
+                        {item.publishStatus === 'shelved' && (
+                          <span className="rounded-full bg-zinc-200 px-1.5 py-0 text-[10px] font-medium text-zinc-700">
+                            {PUBLISH_STATUS_LABELS.shelved}
+                          </span>
+                        )}
                       </div>
 
                       <div className="truncate text-xs font-semibold text-zinc-950">
-                        {item.taskTitle}
+                        {item.taskTitle || item.matchedSnippet || '空白行'}
                       </div>
+
+                      {item.matchedSnippet && item.matchedSnippet !== item.taskTitle && (
+                        <div className="truncate text-[11px] text-zinc-500">
+                          {item.matchedSnippet}
+                        </div>
+                      )}
 
                       {item.matchedArtifactNames && item.matchedArtifactNames.length > 0 && (
                         <div className="inline-flex max-w-full items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 text-[10.5px] text-zinc-600">

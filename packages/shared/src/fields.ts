@@ -46,6 +46,8 @@ export type Role = z.infer<typeof roleSchema>;
 export const ROLE_LABELS: Record<Role, string> = { admin: '管理员', user: '普通用户' };
 
 export const INVITE_EXPIRY_DAYS = [1, 7, 30] as const;
+export const CLAIM_LINK_DEFAULT_TTL_DAYS = 30;
+export const claimTokenSchema = z.string().trim().min(16).max(256);
 
 // ---- 请求体 ----
 
@@ -70,6 +72,27 @@ export const registerBodySchema = z
       ctx.addIssue({ code: 'custom', path: ['password'], message: PASSWORD_EQUALS_LOGIN_NAME });
     }
   });
+
+export const claimCompleteBodySchema = z
+  .object({
+    loginName: loginNameSchema,
+    displayName: displayNameSchema.optional(),
+    password: passwordSchema,
+  })
+  .superRefine((v, ctx) => {
+    if (passwordMatchesLoginName(v.password, v.loginName)) {
+      ctx.addIssue({ code: 'custom', path: ['password'], message: PASSWORD_EQUALS_LOGIN_NAME });
+    }
+  });
+
+export const createClaimLinkBodySchema = z.object({
+  ttlDays: z
+    .number({ error: '有效期必须是数字' })
+    .int({ error: '有效期必须是整数' })
+    .min(1, { error: '有效期为 1–90 天' })
+    .max(90, { error: '有效期为 1–90 天' })
+    .default(CLAIM_LINK_DEFAULT_TTL_DAYS),
+});
 
 export const resetPasswordBodySchema = z.object({ password: passwordSchema });
 

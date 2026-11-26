@@ -19,7 +19,7 @@ import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { type Db, schema, type Tx } from '../db/index.js';
 import { withTx } from '../db/tx.js';
-import { AppError, notFound, uniqueViolation } from '../errors.js';
+import { AppError, fieldError, notFound, uniqueViolation } from '../errors.js';
 import type { EventBus } from '../realtime/bus.js';
 import { findActiveWorksheet, recordChangeLog } from './change-logs.js';
 import { ascC, parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
@@ -266,6 +266,55 @@ async function findLastTaskActorName(
   return row?.displayName ?? null;
 }
 
+function deriveFreeRowTitle(
+  customValues: Record<string, string | null>,
+  orderedCols: Array<{ id: string }>,
+): string {
+  for (const col of orderedCols) {
+    const raw = customValues[col.id];
+    if (typeof raw === 'string') {
+      const cleaned = raw.replace(/\s+/g, ' ').trim();
+      if (cleaned.length > 0) {
+        return [...cleaned].slice(0, 200).join('');
+      }
+    }
+  }
+  return '';
+}
+
+function validateCustomValuesMap(
+  rawValues: Record<string, string | null>,
+  customColMap: Map<string, { id: string; type: 'stage' | 'text' | 'date' | 'link' }>,
+): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const [colId, rawVal] of Object.entries(rawValues)) {
+    const col = customColMap.get(colId);
+    if (!col || col.type === 'stage') {
+      throw new AppError('VALIDATION_FAILED', '目标自定义列不存在');
+    }
+    if (col.type === 'text') {
+      const r = nullableCustomTextSchema.safeParse(rawVal);
+      if (!r.success) {
+        throw new AppError('VALIDATION_FAILED', r.error.issues[0]?.message ?? '文本无效');
+      }
+      out[colId] = r.data;
+    } else if (col.type === 'date') {
+      const r = nullableDateSchema.safeParse(rawVal);
+      if (!r.success) {
+        throw new AppError('VALIDATION_FAILED', r.error.issues[0]?.message ?? '日期无效');
+      }
+      out[colId] = r.data;
+    } else {
+      const r = nullableHttpUrlSchema.safeParse(rawVal);
+      if (!r.success) {
+        throw new AppError('VALIDATION_FAILED', r.error.issues[0]?.message ?? '链接无效');
+      }
+      out[colId] = r.data;
+    }
+  }
+  return out;
+}
+
 export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: EventBus }): void {
   const { db, bus } = deps;
 
@@ -286,6 +335,37 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
         async ({ tx, emit }) => {
           const ws = await findActiveWorksheet(tx, auth.projectId, worksheetId);
           if (!ws) throw notFound();
+
+          if (ws.kind === 'task' && (!body.title || body.title.length === 0)) {
+            throw fieldError('title', '请填写任务标题');
+          }
+
+          let validatedCustom: Record<string, string | null> = {};
+          let initialTitle = body.title ?? '';
+
+          if (ws.kind === 'free' || body.customValues) {
+            const colRows = await tx
+              .select()
+              .from(schema.columnConfigs)
+              .where(
+                and(
+                  eq(schema.columnConfigs.projectId, auth.projectId),
+                  eq(schema.columnConfigs.worksheetId, worksheetId),
+                  isNull(schema.columnConfigs.deletedAt),
+                ),
+              )
+              .orderBy(ascC(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id));
+
+            const customColMap = new Map(
+              colRows.filter((c) => c.type !== 'stage').map((c) => [c.id, c]),
+            );
+            if (body.customValues) {
+              validatedCustom = validateCustomValuesMap(body.customValues, customColMap);
+            }
+            if (ws.kind === 'free' && initialTitle.length === 0) {
+              initialTitle = deriveFreeRowTitle(validatedCustom, colRows);
+            }
+          }
 
           const { workId, work } = await resolveWork(
             tx,
@@ -308,9 +388,10 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
               projectId: auth.projectId,
               worksheetId,
               workId,
-              title: body.title,
+              title: initialTitle,
               divisionNote: body.divisionNote ?? '',
               priority: body.priority ?? 'normal',
+              customValues: validatedCustom,
               sortOrder,
             })
             .returning();
@@ -324,7 +405,12 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
             taskId: created.id,
             actorUserId: auth.userId,
             action: 'task.created',
-            summary: `新建了任务「${created.title}」`,
+            summary:
+              ws.kind === 'free'
+                ? created.title
+                  ? `新增了行「${created.title}」`
+                  : '新增了空白行'
+                : `新建了任务「${created.title}」`,
             changes: { title: created.title, ...(work ? { workName: work.name } : {}) },
           });
 
@@ -341,11 +427,13 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
             type: 'task.created',
             payload: { task: dto, work },
           });
-          emit({
-            scope: { type: 'project', id: auth.projectId },
-            type: 'board.task_changed',
-            payload: { worksheetId, taskId: created.id, action: 'task.created' },
-          });
+          if (ws.kind === 'task') {
+            emit({
+              scope: { type: 'project', id: auth.projectId },
+              type: 'board.task_changed',
+              payload: { worksheetId, taskId: created.id, action: 'task.created' },
+            });
+          }
 
           return dto;
         },
@@ -389,6 +477,10 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
 
           const { changes, baseValues, force } = body;
 
+          if (ws.kind === 'task' && changes.title !== undefined && changes.title.length === 0) {
+            throw fieldError('title', '请填写任务标题');
+          }
+
           // 加载自定义列元数据以便校验与生成中文修改记录标签
           const customColRows = await tx
             .select()
@@ -399,42 +491,16 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
                 eq(schema.columnConfigs.worksheetId, existing.worksheetId),
                 isNull(schema.columnConfigs.deletedAt),
               ),
-            );
+            )
+            .orderBy(ascC(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id));
           const customColMap = new Map(
             customColRows.filter((c) => c.type !== 'stage').map((c) => [c.id, c]),
           );
 
           // 校验 customValues
-          const validatedCustom: Record<string, string | null> = {};
-          if (changes.customValues) {
-            for (const [colId, rawVal] of Object.entries(changes.customValues)) {
-              const col = customColMap.get(colId);
-              if (!col) {
-                throw new AppError('VALIDATION_FAILED', '目标自定义列不存在');
-              }
-              let parsedVal: string | null;
-              if (col.type === 'text') {
-                const r = nullableCustomTextSchema.safeParse(rawVal);
-                if (!r.success) {
-                  throw new AppError('VALIDATION_FAILED', r.error.issues[0]?.message ?? '文本无效');
-                }
-                parsedVal = r.data;
-              } else if (col.type === 'date') {
-                const r = nullableDateSchema.safeParse(rawVal);
-                if (!r.success) {
-                  throw new AppError('VALIDATION_FAILED', r.error.issues[0]?.message ?? '日期无效');
-                }
-                parsedVal = r.data;
-              } else {
-                const r = nullableHttpUrlSchema.safeParse(rawVal);
-                if (!r.success) {
-                  throw new AppError('VALIDATION_FAILED', r.error.issues[0]?.message ?? '链接无效');
-                }
-                parsedVal = r.data;
-              }
-              validatedCustom[colId] = parsedVal;
-            }
-          }
+          const validatedCustom = changes.customValues
+            ? validateCustomValuesMap(changes.customValues, customColMap)
+            : {};
 
           // 字段级冲突检测（第 5.6 节）
           if (!force && baseValues) {
@@ -619,6 +685,19 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
             patch.customValues = changedCustomPatch;
           }
 
+          // 自由表格自动把首个非空列值镜像同步到 title（用于搜索与修改记录摘要）
+          let effectiveNextTitle = nextTitle;
+          if (
+            ws.kind === 'free' &&
+            changes.title === undefined &&
+            Object.keys(changedCustomPatch).length > 0
+          ) {
+            effectiveNextTitle = deriveFreeRowTitle(nextCustomValues, customColRows);
+            if (effectiveNextTitle !== existing.title) {
+              patch.title = effectiveNextTitle;
+            }
+          }
+
           if (diffs.length === 0) {
             const cells = await loadTaskStageCells(
               tx,
@@ -634,7 +713,7 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
           const [updated] = await tx
             .update(schema.tasks)
             .set({
-              title: nextTitle,
+              title: effectiveNextTitle,
               workId: nextWorkId,
               divisionNote: nextDivisionNote,
               priority: nextPriority,
@@ -652,13 +731,14 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
           patch.revision = nextRevision;
           patch.updatedAt = now.toISOString();
 
+          const summaryTitle = effectiveNextTitle || '空白行';
           await recordChangeLog(tx, {
             projectId: auth.projectId,
             worksheetId: existing.worksheetId,
             taskId: existing.id,
             actorUserId: auth.userId,
             action: 'task.updated',
-            summary: `修改了《${nextTitle}》的${diffs.map((d) => d.label).join('、')}`,
+            summary: `修改了《${summaryTitle}》的${diffs.map((d) => d.label).join('、')}`,
             changes: { diffs },
           });
 
@@ -677,15 +757,17 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
               actorDisplayName: auth.displayName,
             },
           });
-          emit({
-            scope: { type: 'project', id: auth.projectId },
-            type: 'board.task_changed',
-            payload: {
-              worksheetId: existing.worksheetId,
-              taskId: existing.id,
-              action: 'task.updated',
-            },
-          });
+          if (ws.kind === 'task') {
+            emit({
+              scope: { type: 'project', id: auth.projectId },
+              type: 'board.task_changed',
+              payload: {
+                worksheetId: existing.worksheetId,
+                taskId: existing.id,
+                action: 'task.updated',
+              },
+            });
+          }
 
           const cells = await loadTaskStageCells(tx, auth.projectId, existing.worksheetId, taskId);
           return toTaskDetailDto(updated, cells);

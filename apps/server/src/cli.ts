@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import {
   DEFAULT_BOARD_COLUMN_NAMES,
   displayNameSchema,
@@ -9,6 +10,9 @@ import { deleteAllUserSessions } from './auth/session.js';
 import { hashToken, newToken } from './auth/tokens.js';
 import { type Config, ConfigError, loadConfig } from './config.js';
 import { createDb, createPool, runMigrations, schema } from './db/index.js';
+import { importWorkbook, resetProjectData } from './importer/migrate-workbook.js';
+import { exportProjectSnapshot } from './importer/snapshot.js';
+import { createStorageDriver } from './storage/index.js';
 
 function parseFlag(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
@@ -50,7 +54,7 @@ export async function runInit(
 
       const [user] = await tx
         .insert(schema.users)
-        .values({ loginName, displayName, passwordHash: null })
+        .values({ loginName, displayName, passwordHash: null, claimedAt: now })
         .returning({ id: schema.users.id });
       if (!user) throw new Error('创建管理员失败');
 
@@ -191,7 +195,76 @@ async function main() {
     return;
   }
 
-  console.error('未知命令。可用命令：migrate | init | reset-link');
+  if (cmd === 'reset-project-data') {
+    const keepAdmin = parseFlag(args, '--keep-admin');
+    const confirmed = args.includes('--confirm-wipe-test-data');
+    if (!keepAdmin || !confirmed) {
+      console.error('用法：cli reset-project-data --keep-admin <登录名> --confirm-wipe-test-data');
+      process.exit(1);
+    }
+    const pool = createPool(config.databaseUrl, 2);
+    const db = createDb(pool);
+    try {
+      const res = await resetProjectData({ db, keepAdminLoginName: keepAdmin });
+      console.log(
+        `测试数据已安全清空：项目 ${res.projectId}，已保留管理员 ${res.keptAdminDisplayName}（${keepAdmin}）及默认 4 个看板列。`,
+      );
+    } finally {
+      await pool.end();
+    }
+    return;
+  }
+
+  if (cmd === 'import-workbook') {
+    const filePath = parseFlag(args, '--file');
+    const adminDisplayName = parseFlag(args, '--admin-display-name') ?? '1zero';
+    const dryRun = args.includes('--dry-run');
+    const skipBackupDoc = args.includes('--skip-backup-doc');
+    const snapshotOut = parseFlag(args, '--snapshot-out');
+
+    if (!filePath) {
+      console.error(
+        '用法：cli import-workbook --file <xlsxPath> --admin-display-name <name> [--dry-run] [--snapshot-out <jsonPath>] [--skip-backup-doc]',
+      );
+      process.exit(1);
+    }
+
+    const pool = createPool(config.databaseUrl, 4);
+    const db = createDb(pool);
+    const storage = dryRun ? undefined : await createStorageDriver(config);
+    try {
+      const [proj] = await db.select({ id: schema.projects.id }).from(schema.projects).limit(1);
+      if (!proj) {
+        throw new Error('数据库尚未初始化，请先执行 cli init');
+      }
+
+      const { report } = await importWorkbook({
+        db,
+        storage,
+        projectId: proj.id,
+        filePath,
+        adminDisplayName,
+        dryRun,
+        skipBackupDoc,
+      });
+
+      console.log(JSON.stringify(report, null, 2));
+
+      if (snapshotOut && !dryRun) {
+        const snap = await exportProjectSnapshot(db, proj.id);
+        writeFileSync(snapshotOut, JSON.stringify(snap, null, 2), 'utf8');
+        console.log(`快照已写出：${snapshotOut}`);
+      }
+    } finally {
+      if (storage?.close) await storage.close();
+      await pool.end();
+    }
+    return;
+  }
+
+  console.error(
+    '未知命令。可用命令：migrate | init | reset-link | reset-project-data | import-workbook',
+  );
   process.exit(1);
 }
 

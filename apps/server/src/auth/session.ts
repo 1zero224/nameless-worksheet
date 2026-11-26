@@ -1,4 +1,4 @@
-import { and, eq, gt, ne } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, ne } from 'drizzle-orm';
 import type { FastifyReply } from 'fastify';
 import type { Config } from '../config.js';
 import { type Db, type Queryable, schema } from '../db/index.js';
@@ -94,10 +94,18 @@ export async function findActiveSession(db: Db, token: string): Promise<SessionL
     .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
     .innerJoin(schema.memberships, eq(schema.memberships.userId, schema.users.id))
     .innerJoin(schema.projects, eq(schema.projects.id, schema.memberships.projectId))
-    .where(and(eq(schema.sessions.tokenHash, tokenHash), gt(schema.sessions.expiresAt, now)))
+    .where(
+      and(
+        eq(schema.sessions.tokenHash, tokenHash),
+        gt(schema.sessions.expiresAt, now),
+        isNotNull(schema.users.loginName),
+      ),
+    )
     .limit(1);
 
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row || row.loginName === null) return null;
+  return { ...row, loginName: row.loginName };
 }
 
 export async function maybeRenewSession(

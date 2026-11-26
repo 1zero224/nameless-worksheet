@@ -118,9 +118,11 @@ export function FieldVisibilityPopover({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  const hiddenSystemCount = SYSTEM_TOGGLEABLE.filter((item) =>
-    isSystemColumnHidden(worksheet.systemColumns, item.key),
-  ).length;
+  const isFree = worksheet.kind === 'free';
+  const hiddenSystemCount = isFree
+    ? 0
+    : SYSTEM_TOGGLEABLE.filter((item) => isSystemColumnHidden(worksheet.systemColumns, item.key))
+        .length;
   const hiddenCustomCount = columns.filter((c) => c.hidden).length;
   const hiddenTotal = hiddenSystemCount + hiddenCustomCount;
 
@@ -203,39 +205,45 @@ export function FieldVisibilityPopover({
 
       <PopoverContent align="end" className="w-64 p-2.5">
         <div className="space-y-2.5">
-          <div>
-            <div className="mb-1.5 px-1 text-[11px] font-semibold text-slate-400">固定列</div>
-            <div className="space-y-0.5">
-              <div className="flex items-center justify-between px-1.5 py-1 text-xs text-slate-400">
-                <span>标题（冻结常显）</span>
-                <Eye className="h-3.5 w-3.5" />
+          {!isFree && (
+            <div>
+              <div className="mb-1.5 px-1 text-[11px] font-semibold text-slate-400">固定列</div>
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between px-1.5 py-1 text-xs text-slate-400">
+                  <span>标题（冻结常显）</span>
+                  <Eye className="h-3.5 w-3.5" />
+                </div>
+                {SYSTEM_TOGGLEABLE.map((item) => {
+                  const hidden = isSystemColumnHidden(worksheet.systemColumns, item.key);
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() =>
+                        toggleSystemMutation.mutate({ [item.key]: { hidden: !hidden } })
+                      }
+                      className="flex w-full items-center justify-between rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-slate-50 cursor-pointer"
+                    >
+                      <span className={hidden ? 'text-slate-400 line-through' : 'text-slate-700'}>
+                        {item.label}
+                      </span>
+                      {hidden ? (
+                        <EyeOff className="h-3.5 w-3.5 text-slate-300" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5 text-sky-600" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-              {SYSTEM_TOGGLEABLE.map((item) => {
-                const hidden = isSystemColumnHidden(worksheet.systemColumns, item.key);
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => toggleSystemMutation.mutate({ [item.key]: { hidden: !hidden } })}
-                    className="flex w-full items-center justify-between rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-slate-50 cursor-pointer"
-                  >
-                    <span className={hidden ? 'text-slate-400 line-through' : 'text-slate-700'}>
-                      {item.label}
-                    </span>
-                    {hidden ? (
-                      <EyeOff className="h-3.5 w-3.5 text-slate-300" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5 text-sky-600" />
-                    )}
-                  </button>
-                );
-              })}
             </div>
-          </div>
+          )}
 
-          <div className="border-t border-slate-100 pt-2">
+          <div className={cn(!isFree && 'border-t border-slate-100 pt-2')}>
             <div className="mb-1.5 flex items-center justify-between px-1">
-              <span className="text-[11px] font-semibold text-slate-400">工序与自定义列</span>
+              <span className="text-[11px] font-semibold text-slate-400">
+                {isFree ? '自由列' : '工序与自定义列'}
+              </span>
               <span className="text-[10px] text-slate-400">可拖拽排序</span>
             </div>
             {columns.length === 0 ? (

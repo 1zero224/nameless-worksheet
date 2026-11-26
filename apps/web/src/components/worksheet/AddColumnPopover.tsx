@@ -4,6 +4,7 @@ import {
   COLUMN_TYPES,
   type ColumnConfig,
   type ColumnType,
+  type WorksheetKind,
 } from '@nw/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -22,6 +23,7 @@ import { SelectField } from '@/components/ui/select.js';
 
 export function AddColumnPopover({
   worksheetId,
+  worksheetKind = 'task',
   columns,
   boardColumns,
   controlledOpen,
@@ -29,12 +31,16 @@ export function AddColumnPopover({
   anchorRect,
 }: {
   worksheetId: string;
+  worksheetKind?: WorksheetKind;
   columns: ColumnConfig[];
   boardColumns: BoardColumn[];
   controlledOpen?: boolean;
   onControlledOpenChange?: (open: boolean) => void;
   anchorRect?: { x: number; y: number; width: number; height: number } | null;
 }) {
+  const isFree = worksheetKind === 'free';
+  const availableTypes = isFree ? COLUMN_TYPES.filter((t) => t !== 'stage') : COLUMN_TYPES;
+  const defaultType: ColumnType = isFree ? 'text' : 'stage';
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
 
@@ -45,7 +51,7 @@ export function AddColumnPopover({
   const setOpen = (next: boolean) => {
     if (next) {
       setName('');
-      setType('stage');
+      setType(defaultType);
       setBoardColumnId('auto');
       setErr(null);
     }
@@ -57,7 +63,7 @@ export function AddColumnPopover({
   };
 
   const [name, setName] = useState('');
-  const [type, setType] = useState<ColumnType>('stage');
+  const [type, setType] = useState<ColumnType>(defaultType);
   const [boardColumnId, setBoardColumnId] = useState<string>('auto');
   const [err, setErr] = useState<string | null>(null);
 
@@ -81,7 +87,7 @@ export function AddColumnPopover({
     },
     onSuccess: () => {
       setName('');
-      setType('stage');
+      setType(defaultType);
       setBoardColumnId('auto');
       setErr(null);
       setOpen(false);
@@ -153,8 +159,12 @@ export function AddColumnPopover({
 
           <div>
             <div className="mb-1 text-xs text-zinc-500">列类型</div>
-            <div className="grid grid-cols-4 gap-1" role="radiogroup" aria-label="列类型">
-              {COLUMN_TYPES.map((t) => (
+            <div
+              className={cn('grid gap-1', isFree ? 'grid-cols-3' : 'grid-cols-4')}
+              role="radiogroup"
+              aria-label="列类型"
+            >
+              {availableTypes.map((t) => (
                 <button
                   key={t}
                   type="button"

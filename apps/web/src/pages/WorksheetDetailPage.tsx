@@ -71,8 +71,16 @@ function sortTasksByKey(list: TaskDetail[]): TaskDetail[] {
   });
 }
 
-export function WorksheetDetailPage() {
-  const { id: worksheetId } = useParams<{ id: string }>();
+export function WorksheetDetailPage({
+  embeddedWorksheetId,
+  onEmbeddedDeleted,
+}: {
+  embeddedWorksheetId?: string;
+  onEmbeddedDeleted?: () => void;
+} = {}) {
+  const { id: routeWorksheetId } = useParams<{ id: string }>();
+  const worksheetId = embeddedWorksheetId ?? routeWorksheetId;
+  const isEmbedded = Boolean(embeddedWorksheetId);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { data: me } = useMe();
@@ -96,6 +104,7 @@ export function WorksheetDetailPage() {
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [detailFocusFiles, setDetailFocusFiles] = useState(false);
   const [publishedExpanded, setPublishedExpanded] = useState(false);
+  const [shelvedExpanded, setShelvedExpanded] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
 
   // 作品大标题横幅状态
@@ -130,6 +139,7 @@ export function WorksheetDetailPage() {
     setTextConflicts(new Map());
     setStageConflicts(new Map());
     setPublishedExpanded(false);
+    setShelvedExpanded(false);
     setPendingWorks([]);
     setCollapsedWorkIds(new Set());
     setAddingSegmentWorkId(null);
@@ -175,7 +185,11 @@ export function WorksheetDetailPage() {
         const p = ev.payload as { worksheetId: string };
         if (p.worksheetId === worksheetId) {
           pushToast({ message: '此工作表已被删除', variant: 'info' });
-          navigate('/worksheets', { replace: true });
+          if (isEmbedded) {
+            onEmbeddedDeleted?.();
+          } else {
+            navigate('/worksheets', { replace: true });
+          }
         }
         return;
       }
@@ -412,6 +426,8 @@ export function WorksheetDetailPage() {
     if (!target) return;
     if (target.publishStatus === 'published') {
       setPublishedExpanded(true);
+    } else if (target.publishStatus === 'shelved') {
+      setShelvedExpanded(true);
     }
     if (target.workId) {
       const targetWorkId = target.workId;
@@ -569,6 +585,8 @@ export function WorksheetDetailPage() {
     [keyword, workFilter, stageCols, statusChip, me, assigneeFilter, workMap, userMap, localSort],
   );
 
+  const isFreeTable = data?.worksheet.kind === 'free';
+
   const publishedTasks = useMemo(
     () =>
       applyFilterAndSort(
@@ -576,15 +594,26 @@ export function WorksheetDetailPage() {
       ),
     [data?.tasks, applyFilterAndSort],
   );
+  const shelvedTasks = useMemo(
+    () =>
+      applyFilterAndSort((data?.tasks ?? EMPTY_TASKS).filter((t) => t.publishStatus === 'shelved')),
+    [data?.tasks, applyFilterAndSort],
+  );
   const activeTasks = useMemo(
     () =>
       applyFilterAndSort(
-        (data?.tasks ?? EMPTY_TASKS).filter((t) => t.publishStatus !== 'published'),
+        isFreeTable
+          ? (data?.tasks ?? EMPTY_TASKS)
+          : (data?.tasks ?? EMPTY_TASKS).filter((t) => t.publishStatus === 'unpublished'),
       ),
-    [data?.tasks, applyFilterAndSort],
+    [data?.tasks, isFreeTable, applyFilterAndSort],
   );
   const totalPublishedCount = useMemo(
     () => (data?.tasks ?? EMPTY_TASKS).filter((t) => t.publishStatus === 'published').length,
+    [data?.tasks],
+  );
+  const totalShelvedCount = useMemo(
+    () => (data?.tasks ?? EMPTY_TASKS).filter((t) => t.publishStatus === 'shelved').length,
     [data?.tasks],
   );
 
@@ -687,7 +716,12 @@ export function WorksheetDetailPage() {
   }, [displayBlocks, collapsedWorkIds]);
 
   const createTaskMutation = useMutation({
-    mutationFn: (payload: { title: string; afterTaskId?: string | null; workId?: string | null }) =>
+    mutationFn: (payload: {
+      title?: string;
+      afterTaskId?: string | null;
+      workId?: string | null;
+      customValues?: Record<string, string | null>;
+    }) =>
       apiFetch<TaskDetail>(`/api/worksheets/${worksheetId}/tasks`, {
         method: 'POST',
         body: payload,
@@ -766,6 +800,8 @@ export function WorksheetDetailPage() {
       const prevTask = data?.tasks.find((t) => t.id === taskId);
       if (prevTask?.publishStatus === 'unpublished' && updated.publishStatus === 'published') {
         pushToast({ message: '已移入顶部“已发布”折叠区', variant: 'info' });
+      } else if (prevTask?.publishStatus === 'unpublished' && updated.publishStatus === 'shelved') {
+        pushToast({ message: '已移入顶部“已搁置”折叠区', variant: 'info' });
       }
       queryClient.setQueryData<WorksheetFullResponse>(queryKeys.worksheet(worksheetId), (old) =>
         old ? { ...old, tasks: old.tasks.map((t) => (t.id === updated.id ? updated : t)) } : old,
@@ -1126,36 +1162,39 @@ export function WorksheetDetailPage() {
         />
         <AddColumnPopover
           worksheetId={data.worksheet.id}
+          worksheetKind={data.worksheet.kind}
           columns={data.columns}
           boardColumns={data.boardColumns}
         />
-        <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />
+        {!isFreeTable && <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />}
 
-        <div className="flex flex-wrap items-center gap-0.5">
-          {(
-            [
-              ['all', '全部'],
-              ['mine', '我的'],
-              ['not_started', '未开始'],
-              ['in_progress', '进行中'],
-              ['all_stages_done', '全工序已完成'],
-            ] as const
-          ).map(([val, label]) => (
-            <button
-              key={val}
-              type="button"
-              onClick={() => setStatusChip(val)}
-              className={cn(
-                'rounded-md px-2 py-1 text-xs font-medium transition-colors cursor-pointer',
-                statusChip === val
-                  ? 'bg-black/[0.07] text-zinc-950'
-                  : 'text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900',
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {!isFreeTable && (
+          <div className="flex flex-wrap items-center gap-0.5">
+            {(
+              [
+                ['all', '全部'],
+                ['mine', '我的'],
+                ['not_started', '未开始'],
+                ['in_progress', '进行中'],
+                ['all_stages_done', '全工序已完成'],
+              ] as const
+            ).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setStatusChip(val)}
+                className={cn(
+                  'rounded-md px-2 py-1 text-xs font-medium transition-colors cursor-pointer',
+                  statusChip === val
+                    ? 'bg-black/[0.07] text-zinc-950'
+                    : 'text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
           <KeywordSearchInput
@@ -1167,38 +1206,42 @@ export function WorksheetDetailPage() {
             className="w-36 sm:w-44"
           />
 
-          <SelectField
-            aria-label="按作品筛选"
-            size="xs"
-            value={workFilter}
-            onValueChange={setWorkFilter}
-            className="w-28 sm:w-32"
-            options={[
-              { value: '', label: '全部作品' },
-              ...allWorks.map((w) => ({ value: w.id, label: w.name })),
-            ]}
-          />
+          {(!isFreeTable || allWorks.length > 0) && (
+            <SelectField
+              aria-label="按作品筛选"
+              size="xs"
+              value={workFilter}
+              onValueChange={setWorkFilter}
+              className="w-28 sm:w-32"
+              options={[
+                { value: '', label: '全部作品' },
+                ...allWorks.map((w) => ({ value: w.id, label: w.name })),
+              ]}
+            />
+          )}
 
-          <SelectField
-            aria-label="按负责人筛选"
-            size="xs"
-            value={assigneeFilter}
-            onValueChange={setAssigneeFilter}
-            className="w-28 sm:w-32"
-            options={[
-              { value: '', label: '全部负责人' },
-              ...users.map((u) => ({
-                value: `u:${u.id}`,
-                label: u.displayName,
-                group: '项目用户',
-              })),
-              ...textAssigneeOptions.map((name) => ({
-                value: `t:${name}`,
-                label: name,
-                group: '纯文本负责人',
-              })),
-            ]}
-          />
+          {!isFreeTable && (
+            <SelectField
+              aria-label="按负责人筛选"
+              size="xs"
+              value={assigneeFilter}
+              onValueChange={setAssigneeFilter}
+              className="w-28 sm:w-32"
+              options={[
+                { value: '', label: '全部负责人' },
+                ...users.map((u) => ({
+                  value: `u:${u.id}`,
+                  label: u.displayName,
+                  group: '项目用户',
+                })),
+                ...textAssigneeOptions.map((name) => ({
+                  value: `t:${name}`,
+                  label: name,
+                  group: '纯文本负责人',
+                })),
+              ]}
+            />
+          )}
 
           <SelectField
             aria-label="本地排序"
@@ -1208,12 +1251,20 @@ export function WorksheetDetailPage() {
             value={localSort}
             onValueChange={(v) => setLocalSort(v as LocalSort)}
             className="w-32 sm:w-36"
-            options={[
-              { value: 'manual', label: '默认顺序' },
-              { value: 'title', label: '按标题排序' },
-              { value: 'priority', label: '按优先级排序' },
-              { value: 'work', label: '按作品排序' },
-            ]}
+            options={
+              isFreeTable
+                ? [
+                    { value: 'manual', label: '默认顺序' },
+                    { value: 'title', label: '按首列排序' },
+                    { value: 'work', label: '按作品排序' },
+                  ]
+                : [
+                    { value: 'manual', label: '默认顺序' },
+                    { value: 'title', label: '按标题排序' },
+                    { value: 'priority', label: '按优先级排序' },
+                    { value: 'work', label: '按作品排序' },
+                  ]
+            }
           />
 
           {isFilteredOrSorted && (
@@ -1236,96 +1287,194 @@ export function WorksheetDetailPage() {
         </div>
       </div>
 
-      {/* 顶部紧凑 30px「已发布（N 条）」折叠条 */}
-      {totalPublishedCount > 0 && (
-        <div
-          data-testid="published-section"
-          className="shrink-0 border-b border-black/[0.08] bg-[#ECFDF5]/60"
-        >
-          <button
-            type="button"
-            onClick={() => setPublishedExpanded((v) => !v)}
-            className="flex h-[30px] w-full items-center justify-between px-3 text-left text-xs font-medium text-emerald-900 transition-colors hover:bg-[#ECFDF5] cursor-pointer"
-          >
-            <span className="inline-flex items-center gap-1.5">
-              {publishedExpanded ? (
-                <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5" />
-              )}
-              已发布（{publishedTasks.length} 条）
-            </span>
-            <span className="text-[11px] font-normal text-emerald-700/80">
-              {publishedExpanded ? '收起' : '展开查看'}
-            </span>
-          </button>
+      {/* 顶部紧凑 30px「已发布（N 条）」与「已搁置（M 条）」折叠条（制作工作表专用） */}
+      {!isFreeTable && (totalPublishedCount > 0 || totalShelvedCount > 0) && (
+        <div className="shrink-0 border-b border-black/[0.08]">
+          <div className="flex flex-wrap items-stretch divide-x divide-black/[0.08]">
+            {totalPublishedCount > 0 && (
+              <div
+                data-testid="published-section"
+                className={cn(
+                  'min-w-0 bg-[#ECFDF5]/60',
+                  publishedExpanded ? 'w-full border-b border-black/[0.06]' : 'flex-1',
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => setPublishedExpanded((v) => !v)}
+                  className="flex h-[30px] w-full items-center justify-between gap-2 px-3 text-left text-xs font-medium text-emerald-900 transition-colors hover:bg-[#ECFDF5] cursor-pointer"
+                >
+                  <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+                    {publishedExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span className="truncate">已发布（{publishedTasks.length} 条）</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] font-normal text-emerald-700/80">
+                    {publishedExpanded ? '收起' : '展开查看'}
+                  </span>
+                </button>
 
-          {publishedExpanded && (
-            <div className="max-h-[30vh] divide-y divide-black/[0.05] overflow-y-auto border-t border-black/[0.06] bg-white">
-              {publishedTasks.map((task) => {
-                const w = task.workId ? workMap.get(task.workId) : null;
-                return (
-                  <div
-                    key={task.id}
-                    className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs hover:bg-black/[0.02]"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      {w && (
-                        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">
-                          {w.name}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setDetailTaskId(task.id)}
-                        className="truncate font-medium text-zinc-900 hover:text-blue-600 cursor-pointer"
-                      >
-                        {task.title}
-                      </button>
-                      {task.publishedAt && (
-                        <span className="shrink-0 text-[11px] text-zinc-400 tabular-nums">
-                          {task.publishedAt}
-                        </span>
-                      )}
-                      {task.publishUrl && /^https?:\/\//i.test(task.publishUrl) && (
-                        <a
-                          href={task.publishUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label="打开发布链接"
-                          className="shrink-0 text-blue-600 hover:underline"
+                {publishedExpanded && (
+                  <div className="max-h-[30vh] divide-y divide-black/[0.05] overflow-y-auto border-t border-black/[0.06] bg-white">
+                    {publishedTasks.map((task) => {
+                      const w = task.workId ? workMap.get(task.workId) : null;
+                      return (
+                        <div
+                          key={task.id}
+                          className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs hover:bg-black/[0.02]"
                         >
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-2 text-[11px]"
-                        onClick={() =>
-                          void patchTask(task.id, { publishStatus: 'unpublished' }, undefined, true)
-                        }
-                      >
-                        改为未发布
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-2 text-[11px]"
-                        onClick={() => setDetailTaskId(task.id)}
-                      >
-                        详情
-                      </Button>
-                    </div>
+                          <div className="flex min-w-0 items-center gap-2">
+                            {w && (
+                              <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">
+                                {w.name}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setDetailTaskId(task.id)}
+                              className="truncate font-medium text-zinc-900 hover:text-blue-600 cursor-pointer"
+                            >
+                              {task.title}
+                            </button>
+                            {task.publishedAt && (
+                              <span className="shrink-0 text-[11px] text-zinc-400 tabular-nums">
+                                {task.publishedAt}
+                              </span>
+                            )}
+                            {task.publishUrl && /^https?:\/\//i.test(task.publishUrl) && (
+                              <a
+                                href={task.publishUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="打开发布链接"
+                                className="shrink-0 text-blue-600 hover:underline"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[11px]"
+                              onClick={() =>
+                                void patchTask(
+                                  task.id,
+                                  { publishStatus: 'unpublished' },
+                                  undefined,
+                                  true,
+                                )
+                              }
+                            >
+                              改为未发布
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[11px]"
+                              onClick={() => setDetailTaskId(task.id)}
+                            >
+                              详情
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+
+            {totalShelvedCount > 0 && (
+              <div
+                data-testid="shelved-section"
+                className={cn('min-w-0 bg-zinc-100/80', shelvedExpanded ? 'w-full' : 'flex-1')}
+              >
+                <button
+                  type="button"
+                  onClick={() => setShelvedExpanded((v) => !v)}
+                  className="flex h-[30px] w-full items-center justify-between gap-2 px-3 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200/60 cursor-pointer"
+                >
+                  <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+                    {shelvedExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span className="truncate">已搁置（{shelvedTasks.length} 条）</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] font-normal text-zinc-500">
+                    {shelvedExpanded ? '收起' : '展开查看'}
+                  </span>
+                </button>
+
+                {shelvedExpanded && (
+                  <div className="max-h-[30vh] divide-y divide-black/[0.05] overflow-y-auto border-t border-black/[0.06] bg-white">
+                    {shelvedTasks.map((task) => {
+                      const w = task.workId ? workMap.get(task.workId) : null;
+                      return (
+                        <div
+                          key={task.id}
+                          className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs hover:bg-black/[0.02]"
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            {w && (
+                              <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">
+                                {w.name}
+                              </span>
+                            )}
+                            <span className="shrink-0 rounded bg-zinc-200/80 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
+                              已搁置
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setDetailTaskId(task.id)}
+                              className="truncate font-medium text-zinc-700 hover:text-blue-600 cursor-pointer"
+                            >
+                              {task.title}
+                            </button>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[11px]"
+                              onClick={() =>
+                                void patchTask(
+                                  task.id,
+                                  { publishStatus: 'unpublished' },
+                                  undefined,
+                                  true,
+                                )
+                              }
+                            >
+                              改为未发布
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[11px]"
+                              onClick={() => setDetailTaskId(task.id)}
+                            >
+                              详情
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

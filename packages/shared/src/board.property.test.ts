@@ -20,6 +20,7 @@ import {
   STAGE_STATUSES,
   type StageCell,
   WORKSHEET_COLORS,
+  WORKSHEET_KINDS,
   type Work,
 } from './worksheet.js';
 
@@ -59,15 +60,17 @@ const boardWorldArb: fc.Arbitrary<BoardComputeInput> = fc
     return fc
       .tuple(
         fc.array(fc.constantFrom(...WORKSHEET_COLORS), { minLength: wsCount, maxLength: wsCount }),
+        fc.array(fc.constantFrom(...WORKSHEET_KINDS), { minLength: wsCount, maxLength: wsCount }),
         fc.array(fc.integer({ min: 0, max: 6 }), { minLength: wsCount, maxLength: wsCount }),
         fc.array(fc.integer({ min: 0, max: 5 }), { minLength: wsCount, maxLength: wsCount }),
         fc.array(fc.integer({ min: 0, max: 2 }), { minLength: wsCount, maxLength: wsCount }),
       )
-      .chain(([colors, stageCounts, taskCounts, workCounts]) => {
+      .chain(([colors, kinds, stageCounts, taskCounts, workCounts]) => {
         const worksheets: BoardWorksheetInput[] = wsKeys.map((sortOrder, i) => ({
           id: `ws-${i}`,
           name: `工作表${i}`,
           color: colors[i] ?? 'sky',
+          kind: kinds[i] ?? 'task',
           sortOrder,
         }));
 
@@ -227,15 +230,16 @@ function naiveBoardOracle(input: BoardComputeInput): {
     a.sortOrder < b.sortOrder ? -1 : a.sortOrder > b.sortOrder ? 1 : a.id.localeCompare(b.id),
   );
   const boardColIds = new Set(boardColOrder.map((c) => c.id));
-  const wsIds = new Set(input.worksheets.map((w) => w.id));
+  const wsMap = new Map(input.worksheets.map((w) => [w.id, w]));
 
   const cardKeys = new Set<string>();
   const myInProgressKeys = new Set<string>();
   let myPendingCount = 0;
 
   for (const task of input.tasks) {
-    if (!wsIds.has(task.worksheetId)) continue;
-    if (task.publishStatus === 'published') continue;
+    const ws = wsMap.get(task.worksheetId);
+    if (!ws || ws.kind === 'free') continue;
+    if (task.publishStatus === 'published' || task.publishStatus === 'shelved') continue;
 
     const wsStages = input.stageColumns.filter(
       (c) => c.worksheetId === task.worksheetId && c.type === 'stage',
@@ -286,6 +290,7 @@ describe('board.ts 看板与我的任务属性测试 + 差分 Oracle（fast-chec
         const oracle = naiveBoardOracle(world);
 
         const taskMap = new Map(world.tasks.map((t) => [t.id, t]));
+        const wsMap = new Map(world.worksheets.map((w) => [w.id, w]));
         const colMap = new Map(world.stageColumns.map((c) => [c.id, c]));
         const boardColIds = new Set(world.boardColumns.map((b) => b.id));
 
@@ -296,9 +301,10 @@ describe('board.ts 看板与我的任务属性测试 + 差分 Oracle（fast-chec
           expect(actualCardKeys.has(key)).toBe(false);
           actualCardKeys.add(key);
 
-          // 2. 已发布任务绝不上看板
+          // 2. 已发布/已搁置任务与自由表格绝不上看板
           const task = taskMap.get(card.taskId);
           expect(task?.publishStatus).toBe('unpublished');
+          expect(wsMap.get(card.worksheetId)?.kind).not.toBe('free');
 
           // 3. 卡片必对应本工作表存在的有效映射工序列，且该工序既非 na 也非 done
           expect(boardColIds.has(card.boardColumnId)).toBe(true);
@@ -339,10 +345,12 @@ describe('board.ts 看板与我的任务属性测试 + 差分 Oracle（fast-chec
         expect(board.myPendingCount).toBe(oracle.myPendingCount);
         expect(myTasks.notStarted.length).toBe(board.myPendingCount);
 
-        // 6. “我的任务”绝不混入纯文本负责人或 na 工序，且已发布任务只落入 completed
+        // 6. “我的任务”绝不混入纯文本负责人、na 工序、自由表格或已搁置任务，且已发布任务只落入 completed
         for (const item of [...myTasks.inProgress, ...myTasks.notStarted, ...myTasks.completed]) {
           expect(isUserAssigned(item.stageAssignees, world.currentUserId)).toBe(true);
           expect(item.stageStatus).not.toBe('na');
+          expect(item.publishStatus).not.toBe('shelved');
+          expect(wsMap.get(item.worksheetId)?.kind).not.toBe('free');
         }
         for (const item of [...myTasks.inProgress, ...myTasks.notStarted]) {
           expect(item.publishStatus).toBe('unpublished');

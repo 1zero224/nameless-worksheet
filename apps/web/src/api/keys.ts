@@ -4,6 +4,7 @@ export const queryKeys = {
   invites: ['invites'] as const,
   invitePreview: (token: string) => ['invites', 'preview', token] as const,
   resetPreview: (token: string) => ['password-resets', 'preview', token] as const,
+  claimPreview: (token: string) => ['account-claims', 'preview', token] as const,
   boardColumns: ['board-columns'] as const,
   worksheets: ['worksheets'] as const,
   worksheet: (id: string) => ['worksheets', id] as const,

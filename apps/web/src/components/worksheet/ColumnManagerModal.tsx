@@ -166,8 +166,10 @@ export function ColumnManagerModal({
   const { pushToast } = useToast();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
+  const isFree = worksheet.kind === 'free';
+  const availableTypes = isFree ? COLUMN_TYPES.filter((t) => t !== 'stage') : COLUMN_TYPES;
   const [newColName, setNewColName] = useState('');
-  const [newColType, setNewColType] = useState<ColumnType>('stage');
+  const [newColType, setNewColType] = useState<ColumnType>(isFree ? 'text' : 'stage');
   const [newBoardColId, setNewBoardColId] = useState<string>('auto');
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [deletingCol, setDeletingCol] = useState<ColumnConfig | null>(null);
@@ -292,39 +294,43 @@ export function ColumnManagerModal({
         <div className="space-y-5">
           {errMsg && <Alert variant="error">{errMsg}</Alert>}
 
-          {/* 固定系统列 */}
-          <div>
-            <div className="mb-2 text-xs font-semibold text-slate-600">固定列显隐</div>
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
-                标题（冻结常显）
-              </span>
-              {SYSTEM_TOGGLEABLE.map((item) => {
-                const hidden = isSystemColumnHidden(worksheet.systemColumns, item.key);
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => toggleSystemMutation.mutate({ [item.key]: { hidden: !hidden } })}
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
-                      hidden
-                        ? 'border-slate-200 bg-white text-slate-400 line-through'
-                        : 'border-slate-900 bg-slate-900 text-white',
-                    )}
-                  >
-                    {hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                    {item.label}
-                  </button>
-                );
-              })}
+          {/* 固定系统列（仅制作工作表展示） */}
+          {!isFree && (
+            <div>
+              <div className="mb-2 text-xs font-semibold text-slate-600">固定列显隐</div>
+              <div className="flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+                  标题（冻结常显）
+                </span>
+                {SYSTEM_TOGGLEABLE.map((item) => {
+                  const hidden = isSystemColumnHidden(worksheet.systemColumns, item.key);
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() =>
+                        toggleSystemMutation.mutate({ [item.key]: { hidden: !hidden } })
+                      }
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
+                        hidden
+                          ? 'border-slate-200 bg-white text-slate-400 line-through'
+                          : 'border-slate-900 bg-slate-900 text-white',
+                      )}
+                    >
+                      {hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 可配置列列表 */}
           <div>
             <div className="mb-2 text-xs font-semibold text-slate-600">
-              工序列与自定义列（可拖动排序）
+              {isFree ? '全部自由列（可拖动排序与删除）' : '工序列与自定义列（可拖动排序）'}
             </div>
             {columns.length === 0 ? (
               <p className="rounded border border-dashed border-slate-300 py-4 text-center text-xs text-slate-500">
@@ -383,7 +389,7 @@ export function ColumnManagerModal({
                   id="new-col-type"
                   value={newColType}
                   onValueChange={(val) => setNewColType(val as ColumnType)}
-                  options={COLUMN_TYPES.map((t) => ({
+                  options={availableTypes.map((t) => ({
                     value: t,
                     label: COLUMN_TYPE_LABELS[t],
                   }))}

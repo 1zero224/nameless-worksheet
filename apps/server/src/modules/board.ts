@@ -6,7 +6,7 @@ import {
   type MyTasksResponse,
   type StageCell,
 } from '@nw/shared';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { type Db, schema } from '../db/index.js';
 import { toBoardColumnDto } from './board-columns.js';
@@ -25,7 +25,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
   app.get('/api/board', { config: { access: 'authenticated' } }, async (request) => {
     const auth = request.auth!;
 
-    const [boardColRows, worksheets] = await Promise.all([
+    const [boardColRows, allWorksheets] = await Promise.all([
       db
         .select()
         .from(schema.boardColumns)
@@ -34,6 +34,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
       listWorksheetSummaries(db, auth.projectId),
     ]);
 
+    const worksheets = allWorksheets.filter((w) => w.kind === 'task');
     const boardColumns = boardColRows.map(toBoardColumnDto);
     if (worksheets.length === 0) {
       const empty: BoardResponse = {
@@ -176,7 +177,8 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
   app.get('/api/my-tasks', { config: { access: 'authenticated' } }, async (request) => {
     const auth = request.auth!;
 
-    const worksheets = await listWorksheetSummaries(db, auth.projectId);
+    const allWorksheets = await listWorksheetSummaries(db, auth.projectId);
+    const worksheets = allWorksheets.filter((w) => w.kind === 'task');
     if (worksheets.length === 0) {
       const empty: MyTasksResponse = { inProgress: [], notStarted: [], completed: [] };
       return empty;
@@ -203,6 +205,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
           and(
             eq(schema.tasks.projectId, auth.projectId),
             inArray(schema.tasks.worksheetId, activeWsIds),
+            ne(schema.tasks.publishStatus, 'shelved'),
             isNull(schema.tasks.deletedAt),
           ),
         )

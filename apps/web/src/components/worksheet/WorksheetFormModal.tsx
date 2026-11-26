@@ -1,4 +1,9 @@
-import { WORKSHEET_TEMPLATES, type WorksheetSummary, type WorksheetTemplateId } from '@nw/shared';
+import {
+  WORKSHEET_TEMPLATES,
+  type WorksheetPlacement,
+  type WorksheetSummary,
+  type WorksheetTemplateId,
+} from '@nw/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
@@ -14,36 +19,49 @@ export function CreateWorksheetModal({
   open,
   onOpenChange,
   onCreated,
+  placement = 'topbar',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (worksheetId: string) => void;
+  placement?: WorksheetPlacement;
 }) {
+  const isDocsPlacement = placement === 'docs';
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const [name, setName] = useState('');
-  const [template, setTemplate] = useState<WorksheetTemplateId>('standard_video');
+  const [template, setTemplate] = useState<WorksheetTemplateId>(
+    isDocsPlacement ? 'free_blank' : 'standard_video',
+  );
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName('');
-      setTemplate('standard_video');
+      setTemplate(isDocsPlacement ? 'free_blank' : 'standard_video');
       setErr(null);
     }
-  }, [open]);
+  }, [open, isDocsPlacement]);
 
   const mutation = useMutation({
     mutationFn: () =>
       apiFetch<CreatedWorksheetResponse>('/api/worksheets', {
         method: 'POST',
-        body: { name, color: 'slate', template },
+        body: {
+          name,
+          color: 'slate',
+          template: isDocsPlacement ? 'free_blank' : template,
+          placement,
+        },
       }),
     onSuccess: (res) => {
       onOpenChange(false);
       setName('');
       setErr(null);
-      pushToast({ message: '工作表已创建', variant: 'success' });
+      pushToast({
+        message: isDocsPlacement ? '通用文档在线表格已创建' : '工作表已创建',
+        variant: 'success',
+      });
       void queryClient.invalidateQueries({ queryKey: queryKeys.worksheets });
       void queryClient.invalidateQueries({ queryKey: queryKeys.board });
       if (res?.worksheet?.id) {
@@ -61,60 +79,88 @@ export function CreateWorksheetModal({
     mutation.mutate();
   };
 
+  const selectedTemplateDef = WORKSHEET_TEMPLATES.find((t) => t.id === template);
+
   return (
     <ModalDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="新建工作表"
-      description="选择模板可自动生成常用工序列，并按名称自动映射到同名看板列。"
+      title={isDocsPlacement ? '新建通用文档在线表格' : '新建工作表'}
+      description={
+        isDocsPlacement
+          ? '创建空白自由表格，显示在「通用文档」顶部标签栏，全员实时协同编辑，不上首页任务看板。'
+          : '选择制作模板可自动生成常用工序列，或选择「自由表格」创建类 Excel 空白文档。'
+      }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {err && <Alert variant="error">{err}</Alert>}
         <div>
-          <Label htmlFor="ws-new-name">工作表名称</Label>
+          <Label htmlFor="ws-new-name">{isDocsPlacement ? '表格名称' : '工作表名称'}</Label>
           <Input
             id="ws-new-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="例如：视频、歌曲翻译、杂志漫画"
+            placeholder={
+              isDocsPlacement
+                ? '例如：术语翻译对照表、风格规范表'
+                : '例如：视频、歌曲翻译、相关收益'
+            }
             required
             maxLength={32}
             autoFocus
           />
         </div>
 
-        <div>
-          <Label>初始列模板</Label>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {WORKSHEET_TEMPLATES.map((t) => {
-              const selected = template === t.id;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTemplate(t.id)}
-                  aria-pressed={selected}
-                  className={cn(
-                    'rounded-lg border p-2.5 text-left transition-colors cursor-pointer',
-                    selected
-                      ? 'border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900'
-                      : 'border-black/[0.1] hover:border-black/[0.2]',
-                  )}
-                >
-                  <div className="text-sm font-medium text-zinc-900">{t.name}</div>
-                  <div className="mt-0.5 text-xs text-zinc-500">{t.description}</div>
-                </button>
-              );
-            })}
+        {!isDocsPlacement && (
+          <div>
+            <Label>初始列模板</Label>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {WORKSHEET_TEMPLATES.map((t) => {
+                const selected = template === t.id;
+                const isFree = t.id === 'free_blank';
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    data-testid={`worksheet-template-${t.id}`}
+                    onClick={() => setTemplate(t.id)}
+                    aria-pressed={selected}
+                    className={cn(
+                      'rounded-lg border p-2.5 text-left transition-colors cursor-pointer',
+                      isFree && 'sm:col-span-2',
+                      selected
+                        ? 'border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900'
+                        : 'border-black/[0.1] hover:border-black/[0.2]',
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5 text-sm font-medium text-zinc-900">
+                      <span>{t.name}</span>
+                      {isFree && (
+                        <span className="rounded bg-zinc-200/80 px-1.5 py-0 text-[10px] font-medium text-zinc-700">
+                          不上看板
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-xs text-zinc-500">{t.description}</div>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedTemplateDef?.kind === 'free' && (
+              <p className="mt-2 rounded-md border border-black/[0.08] bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-600">
+                类似 Excel
+                空白表，不含优先级、发布状态与工序，不上首页任务看板，所有列均可自由增删改名。
+              </p>
+            )}
           </div>
-        </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
             取消
           </Button>
           <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? '创建中…' : '创建工作表'}
+            {mutation.isPending ? '创建中…' : isDocsPlacement ? '创建表格' : '创建工作表'}
           </Button>
         </div>
       </form>

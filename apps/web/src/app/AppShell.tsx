@@ -272,19 +272,23 @@ export function AppShell() {
     (item) => !item.permission || me.permissions.includes(item.permission),
   );
 
+  const topbarWorksheets = worksheets.filter((w) => w.placement !== 'docs');
+  const docsWorksheets = worksheets.filter((w) => w.placement === 'docs');
+
   const isBoardActive = location.pathname === '/';
   const isDocsActive = location.pathname === '/docs';
-  const isCanvasPage = isBoardActive || /^\/worksheets\/[^/]+/.test(location.pathname);
+  const isCanvasPage =
+    isBoardActive || isDocsActive || /^\/worksheets\/[^/]+/.test(location.pathname);
 
   const handleTabsDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = worksheets.findIndex((w) => w.id === active.id);
-    const newIndex = worksheets.findIndex((w) => w.id === over.id);
+    const oldIndex = topbarWorksheets.findIndex((w) => w.id === active.id);
+    const newIndex = topbarWorksheets.findIndex((w) => w.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
-    const reordered = arrayMove(worksheets, oldIndex, newIndex);
-    queryClient.setQueryData(queryKeys.worksheets, reordered);
-    reorderWsMutation.mutate(reordered.map((w) => w.id));
+    const reorderedTopbar = arrayMove(topbarWorksheets, oldIndex, newIndex);
+    queryClient.setQueryData(queryKeys.worksheets, [...reorderedTopbar, ...docsWorksheets]);
+    reorderWsMutation.mutate(reorderedTopbar.map((w) => w.id));
   };
 
   const showDisconnectBanner = status === 'disconnected';
@@ -293,8 +297,8 @@ export function AppShell() {
     <TopBarSlotsContext.Provider value={{ rightEl: rightSlotEl }}>
       <div
         className={cn(
-          'flex w-full flex-col overflow-x-hidden',
-          isCanvasPage ? 'h-dvh overflow-hidden bg-white' : 'min-h-screen bg-[#fafafa]',
+          'flex h-dvh w-full flex-col overflow-hidden',
+          isCanvasPage ? 'bg-white' : 'bg-[#fafafa]',
         )}
       >
         {/* Teable 风格单行统一顶栏（44px）：柔和浅灰顶轨 + 浮起白底激活滑块 */}
@@ -380,10 +384,10 @@ export function AppShell() {
                   onDragEnd={handleTabsDragEnd}
                 >
                   <SortableContext
-                    items={worksheets.map((w) => w.id)}
+                    items={topbarWorksheets.map((w) => w.id)}
                     strategy={horizontalListSortingStrategy}
                   >
-                    {worksheets.map((ws) => (
+                    {topbarWorksheets.map((ws) => (
                       <SortableTopWorksheetTab
                         key={ws.id}
                         ws={ws}
@@ -490,9 +494,11 @@ export function AppShell() {
             <Outlet />
           </main>
         ) : (
-          <main className="mx-auto w-full min-w-0 max-w-5xl flex-1 p-4 sm:p-6">
-            <Outlet />
-          </main>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <main className="mx-auto w-full min-w-0 max-w-5xl p-4 sm:p-6">
+              <Outlet />
+            </main>
+          </div>
         )}
 
         {/* 顶栏原地新建/编辑/删除工作表弹窗 */}

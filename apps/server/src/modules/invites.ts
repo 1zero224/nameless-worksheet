@@ -176,6 +176,7 @@ export function registerInviteRoutes(
                 loginName: body.loginName,
                 displayName: body.displayName,
                 passwordHash,
+                claimedAt: new Date(),
               })
               .returning({
                 id: schema.users.id,
@@ -183,7 +184,7 @@ export function registerInviteRoutes(
                 displayName: schema.users.displayName,
               });
 
-            if (!user) {
+            if (!user || !user.loginName) {
               throw new Error('Failed to insert user');
             }
 

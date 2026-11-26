@@ -7,12 +7,19 @@ export { generateKeyBetween, generateNKeysBetween };
 // 控制字符（C0、DEL、C1）以及行分隔符、段分隔符
 // biome-ignore lint/suspicious/noControlCharactersInRegex: 就是要匹配控制字符
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+// 允许 \n 的控制字符正则（用于多行说明、工序备注与自由表格文本）
+// biome-ignore lint/suspicious/noControlCharactersInRegex: 就是要匹配除换行外的控制字符
+const MULTILINE_CONTROL_RE = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u2028\u2029]/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const charCount = (s: string) => [...s].length;
 
 export function normalizeText(s: string): string {
   return s.normalize('NFC').trim();
+}
+
+export function normalizeMultilineText(s: string): string {
+  return s.normalize('NFC').replace(/\r\n?/g, '\n').trim();
 }
 
 export function isValidCalendarDate(s: string): boolean {
@@ -55,6 +62,18 @@ function optionalTextSchema(label: string, max: number) {
         .string()
         .refine((s) => charCount(s) <= max, { error: `${label}最多 ${max} 个字符` })
         .refine((s) => !CONTROL_RE.test(s), { error: `${label}不能包含控制字符` }),
+    );
+}
+
+function optionalMultilineTextSchema(label: string, max: number) {
+  return z
+    .string()
+    .transform(normalizeMultilineText)
+    .pipe(
+      z
+        .string()
+        .refine((s) => charCount(s) <= max, { error: `${label}最多 ${max} 个字符` })
+        .refine((s) => !MULTILINE_CONTROL_RE.test(s), { error: `${label}不能包含控制字符` }),
     );
 }
 
@@ -113,13 +132,28 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
   urgent: '紧急',
 };
 
-export const PUBLISH_STATUSES = ['unpublished', 'published'] as const;
+export const PUBLISH_STATUSES = ['unpublished', 'published', 'shelved'] as const;
 export const publishStatusSchema = z.enum(PUBLISH_STATUSES, { error: '发布状态无效' });
 export type PublishStatus = z.infer<typeof publishStatusSchema>;
 export const PUBLISH_STATUS_LABELS: Record<PublishStatus, string> = {
   unpublished: '未发布',
   published: '已发布',
+  shelved: '已搁置',
 };
+
+export const WORKSHEET_KINDS = ['task', 'free'] as const;
+export const worksheetKindSchema = z.enum(WORKSHEET_KINDS, { error: '工作表类型无效' });
+export type WorksheetKind = z.infer<typeof worksheetKindSchema>;
+export const WORKSHEET_KIND_LABELS: Record<WorksheetKind, string> = {
+  task: '制作工作表',
+  free: '自由表格',
+};
+
+export const WORKSHEET_PLACEMENTS = ['topbar', 'docs'] as const;
+export const worksheetPlacementSchema = z.enum(WORKSHEET_PLACEMENTS, {
+  error: '工作表位置无效',
+});
+export type WorksheetPlacement = z.infer<typeof worksheetPlacementSchema>;
 
 export const STAGE_STATUSES = ['not_started', 'in_progress', 'done', 'na'] as const;
 export const stageStatusSchema = z.enum(STAGE_STATUSES, { error: '工序状态无效' });
@@ -136,6 +170,7 @@ export const WORKSHEET_TEMPLATE_IDS = [
   'song_translation',
   'magazine_manga',
   'blank',
+  'free_blank',
 ] as const;
 export const worksheetTemplateSchema = z.enum(WORKSHEET_TEMPLATE_IDS, { error: '模板无效' });
 export type WorksheetTemplateId = z.infer<typeof worksheetTemplateSchema>;
@@ -145,6 +180,7 @@ export interface WorksheetTemplateDef {
   name: string;
   description: string;
   stageNames: readonly string[];
+  kind: WorksheetKind;
 }
 
 export const WORKSHEET_TEMPLATES: readonly WorksheetTemplateDef[] = [
@@ -153,24 +189,36 @@ export const WORKSHEET_TEMPLATES: readonly WorksheetTemplateDef[] = [
     name: '标准视频',
     description: '时轴、翻译、校对、嵌字',
     stageNames: ['时轴', '翻译', '校对', '嵌字'],
+    kind: 'task',
   },
   {
     id: 'song_translation',
     name: '歌曲翻译',
     description: '日文歌词、全曲翻译、校对、润色',
     stageNames: ['日文歌词', '全曲翻译', '校对', '润色'],
+    kind: 'task',
   },
   {
     id: 'magazine_manga',
     name: '杂志 / 漫画',
     description: '翻译、校对、嵌字、排版',
     stageNames: ['翻译', '校对', '嵌字', '排版'],
+    kind: 'task',
   },
   {
     id: 'blank',
-    name: '空白工作表',
-    description: '无初始工序列，自由配置',
+    name: '空白工作表（任务表）',
+    description: '无初始工序列，保留任务固定列，可按需配置工序',
     stageNames: [],
+    kind: 'task',
+  },
+  {
+    id: 'free_blank',
+    name: '自由表格（空白文档）',
+    description:
+      '类似 Excel 空白表，不含优先级、发布状态与工序，不上首页任务看板，所有列均可自由增删改名',
+    stageNames: [],
+    kind: 'free',
   },
 ];
 
@@ -220,8 +268,9 @@ export const worksheetNameSchema = shortNameSchema('工作表名');
 export const columnNameSchema = shortNameSchema('列名');
 export const workNameSchema = requiredTextSchema('作品名', 80);
 export const taskTitleSchema = requiredTextSchema('任务标题', 200);
-export const divisionNoteSchema = optionalTextSchema('分工说明', 500);
-export const stageNoteSchema = optionalTextSchema('工序备注', 200);
+export const optionalTaskTitleSchema = optionalTextSchema('任务标题', 200);
+export const divisionNoteSchema = optionalMultilineTextSchema('分工说明', 500);
+export const stageNoteSchema = optionalMultilineTextSchema('工序备注', 200);
 
 export const columnWidthSchema = z
   .number({ error: '列宽必须是数字' })
@@ -264,14 +313,14 @@ export const nullableCustomTextSchema = z
   .union([z.string(), z.null()])
   .transform((v) => {
     if (v === null) return null;
-    const t = normalizeText(v);
+    const t = normalizeMultilineText(v);
     return t === '' ? null : t;
   })
   .pipe(
     z
       .string()
-      .refine((s) => charCount(s) <= 500, { error: '文本最多 500 个字符' })
-      .refine((s) => !CONTROL_RE.test(s), { error: '文本不能包含控制字符' })
+      .refine((s) => charCount(s) <= 2000, { error: '文本最多 2000 个字符' })
+      .refine((s) => !MULTILINE_CONTROL_RE.test(s), { error: '文本不能包含控制字符' })
       .nullable(),
   );
 
@@ -335,10 +384,21 @@ export const reorderIdsBodySchema = z.object({
   orderedIds: z.array(z.uuid()).min(1, { error: '排序列表不能为空' }),
 });
 
+export const initialFreeColumnSchema = z.object({
+  name: columnNameSchema,
+  type: z
+    .enum(['text', 'date', 'link'], { error: '自由表格仅支持文本、日期或链接列' })
+    .default('text'),
+  width: columnWidthSchema.optional(),
+});
+
 export const createWorksheetBodySchema = z.object({
   name: worksheetNameSchema,
   color: worksheetColorSchema.default('sky'),
   template: worksheetTemplateSchema.default('standard_video'),
+  kind: worksheetKindSchema.optional(),
+  placement: worksheetPlacementSchema.default('topbar'),
+  initialColumns: z.array(initialFreeColumnSchema).max(40).optional(),
 });
 
 export const updateWorksheetBodySchema = z.object({
@@ -384,17 +444,18 @@ const nullableWorkNameSchema = z
   );
 
 export const createTaskBodySchema = z.object({
-  title: taskTitleSchema,
+  title: optionalTaskTitleSchema.optional(),
   workId: z.uuid().nullable().optional(),
   workName: nullableWorkNameSchema.optional(),
   divisionNote: divisionNoteSchema.optional(),
   priority: prioritySchema.optional(),
+  customValues: z.record(z.uuid(), z.union([z.string(), z.null()])).optional(),
   afterTaskId: z.uuid().nullable().optional(),
   beforeTaskId: z.uuid().nullable().optional(),
 });
 
 export const taskEditableChangesSchema = z.object({
-  title: taskTitleSchema.optional(),
+  title: optionalTaskTitleSchema.optional(),
   workId: z.uuid().nullable().optional(),
   workName: nullableWorkNameSchema.optional(),
   divisionNote: divisionNoteSchema.optional(),
@@ -450,6 +511,8 @@ export interface Worksheet {
   id: string;
   name: string;
   color: WorksheetColor;
+  kind: WorksheetKind;
+  placement: WorksheetPlacement;
   sortOrder: string;
   systemColumns: SystemColumnsConfig;
   createdAt: string;
@@ -459,6 +522,7 @@ export interface Worksheet {
 export interface WorksheetSummary extends Worksheet {
   totalTaskCount: number;
   unpublishedTaskCount: number;
+  shelvedTaskCount?: number;
 }
 
 export interface ColumnConfig {
@@ -627,6 +691,15 @@ export interface MyTasksResponse {
   completed: MyTaskItem[];
 }
 
+export interface SearchDocSheetItem {
+  worksheetId: string;
+  worksheetName: string;
+  taskId: string;
+  workName: string | null;
+  title: string;
+  snippet: string;
+}
+
 export interface SearchTaskItem {
   taskId: string;
   taskTitle: string;
@@ -636,6 +709,8 @@ export interface SearchTaskItem {
   worksheetId: string;
   worksheetName: string;
   worksheetColor: WorksheetColor;
+  worksheetKind?: WorksheetKind;
+  worksheetPlacement?: WorksheetPlacement;
   workId: string | null;
   workName: string | null;
   stages: Array<{
@@ -647,10 +722,12 @@ export interface SearchTaskItem {
     note: string;
   }>;
   matchedArtifactNames?: string[];
+  matchedSnippet?: string;
 }
 
 export interface SearchResponse {
   items: SearchTaskItem[];
   total: number;
   docs: SearchDocItem[];
+  docSheets?: SearchDocSheetItem[];
 }

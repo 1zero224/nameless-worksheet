@@ -1,5 +1,13 @@
-import { can, type ResetLinkResponse, type UserListItem, updateRoleBodySchema } from '@nw/shared';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import {
+  type ClaimLinkResponse,
+  type ClaimStatus,
+  can,
+  createClaimLinkBodySchema,
+  type ResetLinkResponse,
+  type UserListItem,
+  updateRoleBodySchema,
+} from '@nw/shared';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { deleteAllUserSessions } from '../auth/session.js';
 import { hashToken, newToken } from '../auth/tokens.js';
@@ -27,27 +35,74 @@ export function registerUserRoutes(
     const auth = request.auth!;
     const includeAdminFields = can(auth.role, 'users.manage');
 
-    const rows = await db
-      .select({
-        id: schema.users.id,
-        displayName: schema.users.displayName,
-        loginName: schema.users.loginName,
-        role: schema.memberships.role,
-        createdAt: schema.users.createdAt,
-      })
-      .from(schema.memberships)
-      .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-      .where(eq(schema.memberships.projectId, auth.projectId))
-      .orderBy(asc(schema.users.createdAt));
+    const [rows, claimRows] = await Promise.all([
+      db
+        .select({
+          id: schema.users.id,
+          displayName: schema.users.displayName,
+          loginName: schema.users.loginName,
+          role: schema.memberships.role,
+          createdAt: schema.users.createdAt,
+          claimedAt: schema.users.claimedAt,
+        })
+        .from(schema.memberships)
+        .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
+        .where(eq(schema.memberships.projectId, auth.projectId))
+        .orderBy(asc(schema.users.createdAt)),
+      includeAdminFields
+        ? db
+            .select({
+              userId: schema.accountClaims.userId,
+              expiresAt: schema.accountClaims.expiresAt,
+            })
+            .from(schema.accountClaims)
+            .where(
+              and(
+                eq(schema.accountClaims.projectId, auth.projectId),
+                isNull(schema.accountClaims.usedAt),
+                isNull(schema.accountClaims.revokedAt),
+              ),
+            )
+            .orderBy(desc(schema.accountClaims.createdAt))
+        : Promise.resolve([]),
+    ]);
+
+    const latestClaimByUser = new Map<string, Date>();
+    for (const c of claimRows) {
+      if (!latestClaimByUser.has(c.userId)) {
+        latestClaimByUser.set(c.userId, c.expiresAt);
+      }
+    }
+    const now = new Date();
 
     return rows.map((r): UserListItem => {
       if (includeAdminFields) {
+        const isClaimed = r.claimedAt !== null || r.loginName !== null;
+        let claimStatus: ClaimStatus;
+        let claimExpiresAt: string | null = null;
+        if (isClaimed) {
+          claimStatus = 'claimed';
+        } else {
+          const latestExp = latestClaimByUser.get(r.id) ?? null;
+          if (!latestExp) {
+            claimStatus = 'none';
+          } else if (latestExp > now) {
+            claimStatus = 'active';
+            claimExpiresAt = latestExp.toISOString();
+          } else {
+            claimStatus = 'expired';
+            claimExpiresAt = latestExp.toISOString();
+          }
+        }
         return {
           id: r.id,
           displayName: r.displayName,
           role: r.role,
           loginName: r.loginName,
           createdAt: r.createdAt.toISOString(),
+          claimedAt: r.claimedAt ? r.claimedAt.toISOString() : null,
+          claimStatus,
+          claimExpiresAt,
         };
       }
       return {
@@ -164,8 +219,13 @@ export function registerUserRoutes(
 
       const deletedSessions = await db.transaction(async (tx) => {
         const target = await tx
-          .select({ userId: schema.memberships.userId })
+          .select({
+            userId: schema.memberships.userId,
+            loginName: schema.users.loginName,
+            claimedAt: schema.users.claimedAt,
+          })
           .from(schema.memberships)
+          .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
           .where(
             and(
               eq(schema.memberships.projectId, auth.projectId),
@@ -174,8 +234,12 @@ export function registerUserRoutes(
           )
           .limit(1);
 
-        if (target.length === 0) {
+        const targetRow = target[0];
+        if (!targetRow) {
           throw notFound();
+        }
+        if (targetRow.claimedAt === null || targetRow.loginName === null) {
+          throw new AppError('CONFLICT', '该用户尚未认领账号，请生成认领链接');
         }
 
         // 旧的未使用重置链接标记为已使用（不变量 4）
@@ -216,6 +280,84 @@ export function registerUserRoutes(
         expiresAt: expiresAt.toISOString(),
       };
       return res;
+    },
+  );
+
+  // POST /api/users/:id/claim-link
+  app.post<{ Params: { id: string } }>(
+    '/api/users/:id/claim-link',
+    { config: { access: { permission: 'users.manage' } } },
+    async (request, reply) => {
+      const auth = request.auth!;
+      const targetUserId = parseUuidParam(request.params.id);
+      const body = parseBody(createClaimLinkBodySchema, request.body);
+      const token = newToken();
+      const tokenHash = hashToken(token);
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + body.ttlDays * 24 * 60 * 60 * 1000);
+
+      await db.transaction(async (tx) => {
+        const [member] = await tx
+          .select({ userId: schema.memberships.userId })
+          .from(schema.memberships)
+          .where(
+            and(
+              eq(schema.memberships.projectId, auth.projectId),
+              eq(schema.memberships.userId, targetUserId),
+            ),
+          )
+          .limit(1);
+
+        if (!member) {
+          throw notFound();
+        }
+
+        const [user] = await tx
+          .select({
+            id: schema.users.id,
+            loginName: schema.users.loginName,
+            claimedAt: schema.users.claimedAt,
+          })
+          .from(schema.users)
+          .where(eq(schema.users.id, targetUserId))
+          .for('update')
+          .limit(1);
+
+        if (!user) {
+          throw notFound();
+        }
+
+        if (user.claimedAt !== null || user.loginName !== null) {
+          throw new AppError('CONFLICT', '该用户已完成认领，无需生成认领链接');
+        }
+
+        // 作废该用户此前所有未使用且未作废的认领链接
+        await tx
+          .update(schema.accountClaims)
+          .set({ revokedAt: now })
+          .where(
+            and(
+              eq(schema.accountClaims.projectId, auth.projectId),
+              eq(schema.accountClaims.userId, targetUserId),
+              isNull(schema.accountClaims.usedAt),
+              isNull(schema.accountClaims.revokedAt),
+            ),
+          );
+
+        await tx.insert(schema.accountClaims).values({
+          projectId: auth.projectId,
+          userId: targetUserId,
+          tokenHash,
+          expiresAt,
+          createdBy: auth.userId,
+        });
+      });
+
+      const res: ClaimLinkResponse = {
+        url: `${config.appOrigin}/claim/${token}`,
+        expiresAt: expiresAt.toISOString(),
+      };
+      return reply.code(201).send(res);
     },
   );
 }

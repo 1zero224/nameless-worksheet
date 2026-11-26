@@ -29,6 +29,13 @@
       "when": 1795703010377,
       "tag": "0003_phase4_r2_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795711850254,
+      "tag": "0004_phase5_free_tables_claims_import",
+      "breakpoints": true
     }
   ]
 }

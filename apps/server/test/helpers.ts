@@ -151,12 +151,14 @@ async function seedProject(db: Db, suffix: string): Promise<SeededProject> {
   const userPw = `UserPass_${suffix}_123`;
   const [adminHash, userHash] = await Promise.all([hashPassword(adminPw), hashPassword(userPw)]);
 
+  const now = new Date();
   const [adminRow] = await db
     .insert(schema.users)
     .values({
       loginName: `admin_${suffix}`,
       displayName: `管理员_${suffix}`,
       passwordHash: adminHash,
+      claimedAt: now,
     })
     .returning();
   const [userRow] = await db
@@ -165,10 +167,13 @@ async function seedProject(db: Db, suffix: string): Promise<SeededProject> {
       loginName: `user_${suffix}`,
       displayName: `普通用户_${suffix}`,
       passwordHash: userHash,
+      claimedAt: now,
     })
     .returning();
 
-  if (!adminRow || !userRow) throw new Error('seed users failed');
+  if (!adminRow || !userRow || !adminRow.loginName || !userRow.loginName) {
+    throw new Error('seed users failed');
+  }
 
   await db.insert(schema.memberships).values([
     { projectId: project.id, userId: adminRow.id, role: 'admin' },

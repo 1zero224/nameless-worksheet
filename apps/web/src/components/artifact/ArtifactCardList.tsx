@@ -143,7 +143,7 @@ export function LocationActionRow({
             aria-label="下载文件"
             title={`下载 ${filename}`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-zinc-900 px-2 text-[11px] font-medium text-white transition-colors hover:bg-zinc-800"
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
           >
             <Download className="h-3 w-3" />
             <span>下载</span>

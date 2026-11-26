@@ -66,7 +66,19 @@
 
 ---
 
-## 6. 后续阶段预留契约（差分测试与专项验证）
+## 6. 阶段 5 契约（已交付：自由表格、`/docs` 在线表格、已搁置状态、待认领用户认领与 23 表专表迁移）
 
-- **阶段 5（旧资料导入 — 差分测试 Oracle）**：以字幕组 23 张历史 Excel 工作表的小样 + 人工确认映射作为 Oracle，将“导入 → 系统结构化导出”与 Oracle 逐行差分比对，维护显式归一化白名单（全角空白/NFC 等）；同批数据重复导入 2 次数据库状态零漂移；群文件树导入直接复用阶段 3/4 的 0 入口版本与原地补传能力。
-- **阶段 6（运维与备份恢复）**：备份恢复前后执行全库关键实体（工作表、任务、工序格、资源、版本、入口）差分快照一致性校验；管理员存储统计与物理清理页直接基于软删除状态与 `blobs` 字节引用工作。
+| 路由 / 触点 | 核心用户流程 | 关键定位契约与安全判据 |
+|---|---|---|
+| 自由表格（`free_blank` / `kind = 'free'`） | 在顶栏 `+` 或 `/worksheets` 新建工作表选择「自由表格（空白文档）」（`worksheet-template-free_blank`）；无固定任务列（无标题/优先级/发布信息/文件/分工说明），默认 3 列空白文本列；所有列（含首列）均可自由增删改名改宽，工具栏 `+ 添加列` 仅提供文本/日期/链接并隐藏「工序」；单元格支持多行文本编辑（`Shift+Enter` 换行、`Enter`/失焦提交、上限 2000 字、中文 IME 安全） | 自由表格任务彻底不进入首页 `/` 看板与「我的任务」；服务端 `POST /api/worksheets/:id/columns` 拒绝在自由表格上建 `stage` 列（400）；支持作品大标题横幅分组（用于 `⭐翻译对照表⭐` 等多块并排对照表） |
+| `/docs`（通用文档双模式） | 顶部紧凑标签栏（`docs-tabs-bar`）横向展示所有 `placement = 'docs'` 在线表格（`docs-sheet-tab-<id>`，默认选中第一张如 `⭐翻译对照表⭐`，支持原地重命名/删除）、`公共文件（N）`（`docs-files-tab`）与 `+ 新建表格`（`docs-create-sheet-btn`）；有在线表格时默认展示首张在线表格（`docs-sheet-view`），无在线表格或带 `?artifactId=` / `?tab=files` 时展示公共文件 | `placement = 'docs'` 的表数据库级强制 `kind = 'free'`（`worksheets_docs_free_check`），不出现在顶栏工作表轨；融合检索命中通用文档在线表时归入「通用文档」分区并直达 `/docs?sheetId=<id>&taskId=<taskId>`；390×844 窄屏无横向溢出 |
+| 任务 `shelved`（已搁置）状态 | 制作工作表「发布信息」弹层与详情侧栏提供 `未发布 / 已发布 / 已搁置` 三态；标记「已搁置」后移出主网格并自动收纳至顶部与 `已发布（N 条）`（`published-section`）并列的 `已搁置（M 条）`（`shelved-section`）折叠条，展开后可一键「改为未发布」恢复 | `shelved` 任务不进入 `/` 任务看板与「我的任务」；`GET /api/worksheets` 返回 `shelvedTaskCount` |
+| `/admin/users` 待认领管理 & `/claim/:token` 认领页 | 管理员在 `/admin/users` 按 `全部 / 已认领 / 待认领`（`admin-users-filter-all` / `admin-users-filter-claimed` / `admin-users-filter-unclaimed`）筛选并搜索用户，查看待认领徽标与认领链接状态（`未生成 / 有效至 YYYY-MM-DD / 已过期`），点击「生成认领链接 / 重新生成链接」（`generate-claim-link-<id>`）选择有效期（默认 30 天）生成一次性链接并自动作废该用户此前所有未使用链接；未登录用户访问 `/claim/:token`（`claim-account-card`）看到预填显示名并设置登录名与密码，提交后自动登录进入 `/` 并立即可见原归属任务于「我的任务」 | 待认领用户满足数据库 CHECK 约束 `login_name IS NULL AND claimed_at IS NULL`；未认领用户禁止生成密码重置链接（409）；无效/过期/已用/被作废的认领链接统一返回 404 与文案 `认领链接无效或已过期，请联系管理员`（`claim-invalid-card`）；认领令牌在服务端日志、修改记录、实时事件与检索索引中严格零泄漏 |
+| 专表迁移 CLI（`import-workbook` / `reset-project-data`） | 运维执行 `cli reset-project-data --keep-admin <loginName> --confirm-wipe-test-data` 清空旧测试数据后，执行 `cli import-workbook --file <xlsx> --admin-display-name 1zero` 幂等导入 23 张工作表、101 位用户（25 组去重）、百度网盘作品共用资源及原版 `.xlsx` 备份至 `/docs` | 配套脱敏合成小样 Oracle 差分测试（`apps/server/test/import-diff.test.ts`），显式归一化白名单（NFC / `\r\n → \n` / 去首尾空白），连续导入 2 次数据库快照字节级零漂移；无底色但有负责人的单元格严格落 `not_started` 绝不误判 `done`；真实 `.xlsx` 永不入库 |
+
+---
+
+## 7. 后续阶段预留契约（阶段 5B / 6）
+
+- **阶段 5B（历史文件存档挂载）**：待用户下载完历史文件存档后专项接入，直接复用阶段 3/4 的 0 入口版本与原地补传能力。
+- **阶段 6（运维与备份恢复）**：备份恢复前后执行全库关键实体（工作表、任务、工序格、资源、版本、入口）差分快照一致性校验；全量导出、10 GiB 极限网络实测与管理员存储统计与物理清理页。

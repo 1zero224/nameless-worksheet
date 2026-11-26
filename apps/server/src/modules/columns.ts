@@ -52,6 +52,10 @@ export function registerColumnRoutes(app: FastifyInstance, deps: { db: Db; bus: 
             const ws = await findActiveWorksheet(tx, auth.projectId, worksheetId);
             if (!ws) throw notFound();
 
+            if (ws.kind === 'free' && body.type === 'stage') {
+              throw new AppError('VALIDATION_FAILED', '自由表格不支持新增工序列');
+            }
+
             const existingCols = await tx
               .select()
               .from(schema.columnConfigs)

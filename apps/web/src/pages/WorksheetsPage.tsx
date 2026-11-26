@@ -69,19 +69,24 @@ function SortableWorksheetRow({
         </button>
         <Table2 className="h-4 w-4 shrink-0 text-zinc-400" strokeWidth={1.75} />
         <Link
-          to={`/worksheets/${ws.id}`}
+          to={ws.placement === 'docs' ? `/docs?sheetId=${ws.id}` : `/worksheets/${ws.id}`}
           className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900 hover:underline"
         >
           {ws.name}
         </Link>
+        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">
+          {ws.placement === 'docs' ? '通用文档表' : ws.kind === 'free' ? '自由表格' : '制作工作表'}
+        </span>
         <span className="shrink-0 text-xs text-slate-500">
-          未发布 {ws.unpublishedTaskCount} / 共 {ws.totalTaskCount} 条
+          {ws.kind === 'free'
+            ? `共 ${ws.totalTaskCount} 行`
+            : `未发布 ${ws.unpublishedTaskCount}${ws.shelvedTaskCount ? ` / 搁置 ${ws.shelvedTaskCount}` : ''} / 共 ${ws.totalTaskCount} 条`}
         </span>
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
         <Link
-          to={`/worksheets/${ws.id}`}
+          to={ws.placement === 'docs' ? `/docs?sheetId=${ws.id}` : `/worksheets/${ws.id}`}
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
         >
           打开

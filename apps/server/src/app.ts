@@ -38,8 +38,10 @@ export function scrubTokenUrl(url: string): string {
   return url
     .replace(/(\/api\/invites\/by-token\/)[^/?#]+/, '$1:token')
     .replace(/(\/api\/password-resets\/)[^/?#]+/, '$1:token')
+    .replace(/(\/api\/account-claims\/)[^/?#]+/, '$1:token')
     .replace(/^(\/invite\/)[^/?#]+/, '$1:token')
-    .replace(/^(\/reset\/)[^/?#]+/, '$1:token');
+    .replace(/^(\/reset\/)[^/?#]+/, '$1:token')
+    .replace(/^(\/claim\/)[^/?#]+/, '$1:token');
 }
 
 export interface BuildAppOptions {

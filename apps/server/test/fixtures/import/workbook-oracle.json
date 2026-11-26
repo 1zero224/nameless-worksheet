@@ -1,0 +1,501 @@
+{
+  "users": [
+    { "displayName": "1zero", "role": "admin", "claimed": true },
+    { "displayName": "3t", "role": "user", "claimed": false },
+    { "displayName": "Asama", "role": "user", "claimed": false },
+    { "displayName": "tyb0v0", "role": "user", "claimed": false },
+    { "displayName": "uz", "role": "user", "claimed": false },
+    { "displayName": "二狗", "role": "user", "claimed": false },
+    { "displayName": "养得累", "role": "user", "claimed": false },
+    { "displayName": "外协机械帕鲁", "role": "user", "claimed": false },
+    { "displayName": "山里的耗子", "role": "user", "claimed": false },
+    { "displayName": "斗笠斗笠", "role": "user", "claimed": false },
+    { "displayName": "竹叶", "role": "user", "claimed": false },
+    { "displayName": "辣味糖果", "role": "user", "claimed": false }
+  ],
+  "worksheets": [
+    {
+      "importSourceKey": "sheet:长视频全熟",
+      "name": "长视频全熟",
+      "kind": "task",
+      "placement": "topbar",
+      "columns": [
+        { "name": "时轴", "type": "stage", "boardColumnName": "时轴" },
+        { "name": "翻译", "type": "stage", "boardColumnName": "翻译" },
+        { "name": "校对", "type": "stage", "boardColumnName": "校对" },
+        { "name": "后期", "type": "stage", "boardColumnName": null },
+        { "name": "压制", "type": "stage", "boardColumnName": null },
+        { "name": "源", "type": "text", "boardColumnName": null },
+        { "name": "文件命名", "type": "text", "boardColumnName": null }
+      ],
+      "works": ["示例搁置联动表", "示例特别节目第一期", "示例活跃演唱会"],
+      "tasks": [
+        {
+          "importSourceKey": "长视频全熟:R4",
+          "workName": "示例搁置联动表",
+          "title": "0-20",
+          "divisionNote": "",
+          "publishStatus": "shelved",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {},
+          "stageCells": [
+            {
+              "columnName": "时轴",
+              "assignees": ["user:山里的耗子"],
+              "status": "not_started",
+              "note": ""
+            },
+            {
+              "columnName": "翻译",
+              "assignees": ["user:3t"],
+              "status": "not_started",
+              "note": "已一校"
+            }
+          ]
+        },
+        {
+          "importSourceKey": "长视频全熟:R6",
+          "workName": "示例特别节目第一期",
+          "title": "P1 00:00 - 10:00",
+          "divisionNote": "第一行规范\n第二行规范",
+          "publishStatus": "published",
+          "publishedAt": "2025-09-21",
+          "publishUrl": null,
+          "customValues": { "源": "AniLive" },
+          "stageCells": [
+            {
+              "columnName": "时轴",
+              "assignees": ["user:竹叶", "user:养得累"],
+              "status": "done",
+              "note": "歌轴"
+            },
+            {
+              "columnName": "翻译",
+              "assignees": ["user:山里的耗子"],
+              "status": "done",
+              "note": "后半"
+            },
+            { "columnName": "校对", "assignees": ["user:斗笠斗笠"], "status": "done", "note": "" }
+          ]
+        },
+        {
+          "importSourceKey": "长视频全熟:R8",
+          "workName": "示例活跃演唱会",
+          "title": "P1 00:00 - 30:00",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {},
+          "stageCells": [
+            { "columnName": "时轴", "assignees": ["user:1zero"], "status": "done", "note": "" },
+            {
+              "columnName": "翻译",
+              "assignees": ["user:Asama"],
+              "status": "not_started",
+              "note": ""
+            },
+            {
+              "columnName": "校对",
+              "assignees": ["user:斗笠斗笠"],
+              "status": "in_progress",
+              "note": ""
+            }
+          ]
+        },
+        {
+          "importSourceKey": "长视频全熟:R9",
+          "workName": "示例活跃演唱会",
+          "title": "P2 30:00 - 60:00",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {},
+          "stageCells": [{ "columnName": "时轴", "assignees": [], "status": "na", "note": "官中" }]
+        }
+      ]
+    },
+    {
+      "importSourceKey": "sheet:切片熟肉",
+      "name": "切片熟肉",
+      "kind": "task",
+      "placement": "topbar",
+      "columns": [
+        { "name": "切片", "type": "stage", "boardColumnName": null },
+        { "name": "时轴", "type": "stage", "boardColumnName": "时轴" },
+        { "name": "翻译", "type": "stage", "boardColumnName": "翻译" },
+        { "name": "校对", "type": "stage", "boardColumnName": "校对" },
+        { "name": "美工/封面", "type": "stage", "boardColumnName": null },
+        { "name": "后期", "type": "stage", "boardColumnName": null },
+        { "name": "时长", "type": "text", "boardColumnName": null },
+        { "name": "拟标题", "type": "text", "boardColumnName": null },
+        { "name": "源", "type": "text", "boardColumnName": null }
+      ],
+      "works": [],
+      "tasks": [
+        {
+          "importSourceKey": "切片熟肉:R3",
+          "workName": null,
+          "title": "示例GPT切片",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {
+            "时长": "01:25",
+            "源": "原视频 https://example.test/video/1"
+          },
+          "stageCells": [
+            { "columnName": "时轴", "assignees": ["user:tyb0v0"], "status": "done", "note": "" },
+            { "columnName": "翻译", "assignees": ["text:GPT"], "status": "done", "note": "" }
+          ]
+        },
+        {
+          "importSourceKey": "切片熟肉:R4",
+          "workName": null,
+          "title": "示例进行中切片",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {},
+          "stageCells": [
+            { "columnName": "翻译", "assignees": [], "status": "in_progress", "note": "" },
+            {
+              "columnName": "校对",
+              "assignees": [],
+              "status": "not_started",
+              "note": "扣下当校对题"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "importSourceKey": "sheet:杂志",
+      "name": "杂志",
+      "kind": "task",
+      "placement": "topbar",
+      "columns": [
+        { "name": "翻译", "type": "stage", "boardColumnName": "翻译" },
+        { "name": "校对", "type": "stage", "boardColumnName": "校对" },
+        { "name": "嵌字/排版", "type": "stage", "boardColumnName": "嵌字" },
+        { "name": "杂志期刊", "type": "text", "boardColumnName": null },
+        { "name": "受访人员", "type": "text", "boardColumnName": null },
+        { "name": "源/链接", "type": "text", "boardColumnName": null }
+      ],
+      "works": ["剧场版总集篇场刊·前篇"],
+      "tasks": [
+        {
+          "importSourceKey": "杂志:R5",
+          "workName": "剧场版总集篇场刊·前篇",
+          "title": "前篇访谈",
+          "divisionNote": "原表 J 列标黄待核对",
+          "publishStatus": "unpublished",
+          "publishedAt": "2025-10-03",
+          "publishUrl": null,
+          "customValues": { "杂志期刊": "剧场版总集篇场刊·前篇" },
+          "stageCells": [
+            { "columnName": "翻译", "assignees": ["user:Asama"], "status": "done", "note": "" },
+            { "columnName": "校对", "assignees": [], "status": "done", "note": "" },
+            { "columnName": "嵌字/排版", "assignees": [], "status": "done", "note": "" }
+          ]
+        }
+      ]
+    },
+    {
+      "importSourceKey": "sheet:漫画",
+      "name": "漫画",
+      "kind": "task",
+      "placement": "topbar",
+      "columns": [
+        { "name": "翻译", "type": "stage", "boardColumnName": "翻译" },
+        { "name": "校对", "type": "stage", "boardColumnName": "校对" },
+        { "name": "嵌字/排版", "type": "stage", "boardColumnName": "嵌字" },
+        { "name": "漫画原名", "type": "text", "boardColumnName": null },
+        { "name": "图源/链接", "type": "text", "boardColumnName": null },
+        { "name": "备注", "type": "text", "boardColumnName": null }
+      ],
+      "works": [],
+      "tasks": [
+        {
+          "importSourceKey": "漫画:R4",
+          "workName": null,
+          "title": "示例画集",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": "2024-08-12",
+          "publishUrl": null,
+          "customValues": { "漫画原名": "示例画集原名" },
+          "stageCells": [
+            {
+              "columnName": "嵌字/排版",
+              "assignees": ["user:1zero"],
+              "status": "in_progress",
+              "note": ""
+            }
+          ]
+        },
+        {
+          "importSourceKey": "漫画:R22",
+          "workName": null,
+          "title": "示例短漫",
+          "divisionNote": "",
+          "publishStatus": "published",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": { "图源/链接": "网络" },
+          "stageCells": [
+            {
+              "columnName": "翻译",
+              "assignees": ["user:二狗"],
+              "status": "done",
+              "note": "校对：斗笠"
+            },
+            { "columnName": "校对", "assignees": ["user:斗笠斗笠"], "status": "done", "note": "" },
+            { "columnName": "嵌字/排版", "assignees": ["user:1zero"], "status": "done", "note": "" }
+          ]
+        }
+      ]
+    },
+    {
+      "importSourceKey": "sheet:广播剧",
+      "name": "广播剧",
+      "kind": "task",
+      "placement": "topbar",
+      "columns": [
+        { "name": "时轴", "type": "stage", "boardColumnName": "时轴" },
+        { "name": "翻译", "type": "stage", "boardColumnName": "翻译" },
+        { "name": "校对", "type": "stage", "boardColumnName": "校对" },
+        { "name": "美工/封面", "type": "stage", "boardColumnName": null },
+        { "name": "后期", "type": "stage", "boardColumnName": null },
+        { "name": "时长", "type": "text", "boardColumnName": null },
+        { "name": "源", "type": "text", "boardColumnName": null }
+      ],
+      "works": ["十单特典"],
+      "tasks": [
+        {
+          "importSourceKey": "广播剧:R3",
+          "workName": "十单特典",
+          "title": "示例广播剧一",
+          "divisionNote": "",
+          "publishStatus": "published",
+          "publishedAt": "2025-06-22",
+          "publishUrl": null,
+          "customValues": { "时长": "11:15" },
+          "stageCells": [
+            { "columnName": "时轴", "assignees": ["user:辣味糖果"], "status": "done", "note": "" },
+            { "columnName": "翻译", "assignees": ["user:uz"], "status": "done", "note": "日文" }
+          ]
+        },
+        {
+          "importSourceKey": "广播剧:R4",
+          "workName": "十单特典",
+          "title": "示例广播剧二",
+          "divisionNote": "",
+          "publishStatus": "published",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": { "时长": "12:00" },
+          "stageCells": [
+            { "columnName": "时轴", "assignees": ["user:辣味糖果"], "status": "done", "note": "" },
+            { "columnName": "翻译", "assignees": ["user:斗笠斗笠"], "status": "done", "note": "" }
+          ]
+        }
+      ]
+    },
+    {
+      "importSourceKey": "sheet:⭐翻译对照表⭐",
+      "name": "⭐翻译对照表⭐",
+      "kind": "free",
+      "placement": "docs",
+      "columns": [
+        { "name": "日文/原词", "type": "text", "boardColumnName": null },
+        { "name": "中文译名", "type": "text", "boardColumnName": null },
+        { "name": "说明/声优", "type": "text", "boardColumnName": null },
+        { "name": "角色/补充", "type": "text", "boardColumnName": null },
+        { "name": "备注", "type": "text", "boardColumnName": null }
+      ],
+      "works": ["通用日语", "剧中成员名", "广播用", "制作岗位"],
+      "tasks": [
+        {
+          "importSourceKey": "⭐翻译对照表⭐:jp:R2",
+          "workName": "通用日语",
+          "title": "トゲナシトゲアリ",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {
+            "日文/原词": "トゲナシトゲアリ",
+            "中文译名": "无刺有刺",
+            "说明/声优": "乐队名"
+          },
+          "stageCells": []
+        },
+        {
+          "importSourceKey": "⭐翻译对照表⭐:cast:R2",
+          "workName": "剧中成员名",
+          "title": "井芹仁菜",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {
+            "日文/原词": "井芹仁菜",
+            "中文译名": "井芹仁菜",
+            "说明/声优": "理名",
+            "角色/补充": "主唱",
+            "备注": "乐队：无刺有刺"
+          },
+          "stageCells": []
+        },
+        {
+          "importSourceKey": "⭐翻译对照表⭐:radio:R2",
+          "workName": "广播用",
+          "title": "青春相談所",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {
+            "日文/原词": "青春相談所",
+            "中文译名": "「青春咨询所」",
+            "备注": "多行注释1\n多行注释2"
+          },
+          "stageCells": []
+        },
+        {
+          "importSourceKey": "⭐翻译对照表⭐:staff:R2",
+          "workName": "制作岗位",
+          "title": "企画",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {
+            "日文/原词": "企画",
+            "中文译名": "策划"
+          },
+          "stageCells": []
+        }
+      ]
+    },
+    {
+      "importSourceKey": "sheet:相关收益",
+      "name": "相关收益",
+      "kind": "free",
+      "placement": "topbar",
+      "columns": [
+        { "name": "提现金额", "type": "text", "boardColumnName": null },
+        { "name": "预计扣除税费", "type": "text", "boardColumnName": null },
+        { "name": "预计到账金额", "type": "text", "boardColumnName": null },
+        { "name": "提现时间", "type": "text", "boardColumnName": null },
+        { "name": "到账时间", "type": "text", "boardColumnName": null },
+        { "name": "提现截图", "type": "text", "boardColumnName": null },
+        { "name": "收入备注", "type": "text", "boardColumnName": null },
+        { "name": "支出金额", "type": "text", "boardColumnName": null },
+        { "name": "手续费等", "type": "text", "boardColumnName": null },
+        { "name": "用途", "type": "text", "boardColumnName": null },
+        { "name": "支付时间", "type": "text", "boardColumnName": null },
+        { "name": "支付截图", "type": "text", "boardColumnName": null },
+        { "name": "支出备注", "type": "text", "boardColumnName": null },
+        { "name": "剩余金额", "type": "text", "boardColumnName": null }
+      ],
+      "works": [],
+      "tasks": [
+        {
+          "importSourceKey": "相关收益:R1",
+          "workName": null,
+          "title": "财务联络提示",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": { "收入备注": "财务联络提示" },
+          "stageCells": []
+        },
+        {
+          "importSourceKey": "相关收益:R5",
+          "workName": null,
+          "title": "800",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {
+            "提现金额": "800",
+            "提现时间": "2025-10-07",
+            "支出备注": "第一行支出\n第二行说明",
+            "剩余金额": "800"
+          },
+          "stageCells": []
+        }
+      ]
+    },
+    {
+      "importSourceKey": "sheet:动漫工作表（留念用）",
+      "name": "动漫工作表（留念用）",
+      "kind": "free",
+      "placement": "topbar",
+      "columns": [
+        { "name": "话数", "type": "text", "boardColumnName": null },
+        { "name": "日期", "type": "text", "boardColumnName": null },
+        { "name": "打轴 1/5", "type": "text", "boardColumnName": null },
+        { "name": "打轴 2/6", "type": "text", "boardColumnName": null },
+        { "name": "打轴 3", "type": "text", "boardColumnName": null },
+        { "name": "打轴 4", "type": "text", "boardColumnName": null },
+        { "name": "轴校", "type": "text", "boardColumnName": null },
+        { "name": "翻译 1/5", "type": "text", "boardColumnName": null },
+        { "name": "翻译 2/6", "type": "text", "boardColumnName": null },
+        { "name": "翻译 3", "type": "text", "boardColumnName": null },
+        { "name": "翻译 4", "type": "text", "boardColumnName": null },
+        { "name": "1校 P1", "type": "text", "boardColumnName": null },
+        { "name": "1校 P2", "type": "text", "boardColumnName": null },
+        { "name": "填轴支援", "type": "text", "boardColumnName": null },
+        { "name": "2校", "type": "text", "boardColumnName": null },
+        { "name": "压制", "type": "text", "boardColumnName": null },
+        { "name": "重置校对", "type": "text", "boardColumnName": null }
+      ],
+      "works": [],
+      "tasks": [
+        {
+          "importSourceKey": "动漫工作表（留念用）:R4",
+          "workName": null,
+          "title": "第一话",
+          "divisionNote": "",
+          "publishStatus": "unpublished",
+          "publishedAt": null,
+          "publishUrl": null,
+          "customValues": {
+            "话数": "第一话",
+            "日期": "2025-10-07",
+            "打轴 1/5": "帕鲁",
+            "重置校对": "伟大，无需重制"
+          },
+          "stageCells": []
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "importSourceKey": "长视频全熟:R6:C9:work_artifact",
+      "scopeKind": "work",
+      "worksheetName": "长视频全熟",
+      "workName": "示例特别节目第一期",
+      "name": "示例节目一.mp4",
+      "locations": [
+        {
+          "type": "cloud_link",
+          "provider": "baidu",
+          "url": "https://pan.baidu.com/s/1ExampleShareA",
+          "hasExtractCode": true,
+          "originalFilename": null
+        }
+      ]
+    }
+  ]
+}

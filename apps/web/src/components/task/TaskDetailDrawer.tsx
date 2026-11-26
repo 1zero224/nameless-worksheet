@@ -227,6 +227,7 @@ export function TaskDetailDrawer({
 
   const stageCols = wsData?.columns.filter((c) => c.type === 'stage') ?? [];
   const customCols = wsData?.columns.filter((c) => c.type !== 'stage') ?? [];
+  const isFreeTable = wsData?.worksheet.kind === 'free';
 
   return (
     <Sheet
@@ -276,26 +277,28 @@ export function TaskDetailDrawer({
             </Button>
           </div>
 
-          {/* 标题 */}
-          <div>
-            <Label htmlFor="detail-title">标题</Label>
-            <Input
-              id="detail-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => {
-                if (title.trim() && title.trim() !== task.title) {
-                  patchTaskMutation.mutate({ title: title.trim() });
-                }
-              }}
-              maxLength={200}
-            />
-          </div>
+          {/* 标题（仅制作工作表展示；自由表由首列自动镜像） */}
+          {!isFreeTable && (
+            <div>
+              <Label htmlFor="detail-title">标题</Label>
+              <Input
+                id="detail-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={() => {
+                  if (title.trim() && title.trim() !== task.title) {
+                    patchTaskMutation.mutate({ title: title.trim() });
+                  }
+                }}
+                maxLength={200}
+              />
+            </div>
+          )}
 
           {/* 所属作品 + 优先级 */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className={cn('grid grid-cols-1 gap-3', !isFreeTable && 'sm:grid-cols-2')}>
             <div>
-              <Label htmlFor="detail-work">所属作品</Label>
+              <Label htmlFor="detail-work">{isFreeTable ? '所属分区 / 分组' : '所属作品'}</Label>
               <Input
                 id="detail-work"
                 list="detail-works-datalist"
@@ -310,7 +313,7 @@ export function TaskDetailDrawer({
                     patchTaskMutation.mutate({ workName: trimmed || null });
                   }
                 }}
-                placeholder="输入或选择作品名"
+                placeholder={isFreeTable ? '输入或选择分区名' : '输入或选择作品名'}
                 maxLength={80}
               />
               <datalist id="detail-works-datalist">
@@ -319,140 +322,176 @@ export function TaskDetailDrawer({
                 ))}
               </datalist>
             </div>
-            <div>
-              <Label htmlFor="detail-priority">优先级</Label>
-              <SelectField
-                id="detail-priority"
-                value={task.priority}
-                onValueChange={(val) => patchTaskMutation.mutate({ priority: val })}
-                options={PRIORITIES.map((p) => ({
-                  value: p,
-                  label: PRIORITY_LABELS[p],
-                  dotClass: PRIORITY_DOT_STYLES[p],
-                }))}
-              />
-            </div>
-          </div>
-
-          {/* 分工说明 */}
-          <div>
-            <Label htmlFor="detail-division">分工说明</Label>
-            <Input
-              id="detail-division"
-              value={divisionNote}
-              onChange={(e) => setDivisionNote(e.target.value)}
-              onBlur={() => {
-                if (divisionNote.trim() !== task.divisionNote) {
-                  patchTaskMutation.mutate({ divisionNote: divisionNote.trim() });
-                }
-              }}
-              placeholder="例如：P1 00:00–13:00"
-              maxLength={500}
-            />
-          </div>
-
-          {/* 发布信息 */}
-          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-2.5">
-            <div className="text-xs font-semibold text-slate-700">发布信息</div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {!isFreeTable && (
               <div>
-                <Label htmlFor="detail-publish-status" className="text-xs">
-                  发布状态
-                </Label>
+                <Label htmlFor="detail-priority">优先级</Label>
                 <SelectField
-                  id="detail-publish-status"
-                  value={task.publishStatus}
-                  onValueChange={(val) => patchTaskMutation.mutate({ publishStatus: val })}
-                  options={PUBLISH_STATUSES.map((s) => ({
-                    value: s,
-                    label: PUBLISH_STATUS_LABELS[s],
-                    dotClass: s === 'published' ? 'bg-emerald-500' : 'bg-slate-400',
+                  id="detail-priority"
+                  value={task.priority}
+                  onValueChange={(val) => patchTaskMutation.mutate({ priority: val })}
+                  options={PRIORITIES.map((p) => ({
+                    value: p,
+                    label: PRIORITY_LABELS[p],
+                    dotClass: PRIORITY_DOT_STYLES[p],
                   }))}
                 />
               </div>
-              <div>
-                <Label htmlFor="detail-published-at" className="text-xs">
-                  发布日期
-                </Label>
-                <Input
-                  id="detail-published-at"
-                  type="date"
-                  value={publishedAt}
-                  onChange={(e) => {
-                    setPublishedAt(e.target.value);
-                    patchTaskMutation.mutate({ publishedAt: e.target.value || null });
-                  }}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="detail-publish-url" className="text-xs">
-                发布链接
-              </Label>
-              <div className="flex items-center gap-1.5">
-                <Input
-                  id="detail-publish-url"
-                  type="url"
-                  value={publishUrl}
-                  onChange={(e) => setPublishUrl(e.target.value)}
-                  onBlur={() => {
-                    if ((publishUrl.trim() || null) !== task.publishUrl) {
-                      patchTaskMutation.mutate({ publishUrl: publishUrl.trim() || null });
-                    }
-                  }}
-                  placeholder="https://..."
-                />
-                {task.publishUrl && (
-                  <a
-                    href={task.publishUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="打开外链"
-                    className="rounded-md border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                )}
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* 自定义列 */}
+          {/* 分工说明 + 发布信息（仅制作工作表展示） */}
+          {!isFreeTable && (
+            <>
+              <div>
+                <Label htmlFor="detail-division">分工说明</Label>
+                <Input
+                  id="detail-division"
+                  value={divisionNote}
+                  onChange={(e) => setDivisionNote(e.target.value)}
+                  onBlur={() => {
+                    if (divisionNote.trim() !== task.divisionNote) {
+                      patchTaskMutation.mutate({ divisionNote: divisionNote.trim() });
+                    }
+                  }}
+                  placeholder="例如：P1 00:00–13:00"
+                  maxLength={500}
+                />
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-2.5">
+                <div className="text-xs font-semibold text-slate-700">发布信息</div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="detail-publish-status" className="text-xs">
+                      发布状态
+                    </Label>
+                    <SelectField
+                      id="detail-publish-status"
+                      value={task.publishStatus}
+                      onValueChange={(val) => patchTaskMutation.mutate({ publishStatus: val })}
+                      options={PUBLISH_STATUSES.map((s) => ({
+                        value: s,
+                        label: PUBLISH_STATUS_LABELS[s],
+                        dotClass:
+                          s === 'published'
+                            ? 'bg-emerald-500'
+                            : s === 'shelved'
+                              ? 'bg-zinc-400'
+                              : 'bg-amber-400',
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="detail-published-at" className="text-xs">
+                      发布日期
+                    </Label>
+                    <Input
+                      id="detail-published-at"
+                      type="date"
+                      value={publishedAt}
+                      onChange={(e) => {
+                        setPublishedAt(e.target.value);
+                        patchTaskMutation.mutate({ publishedAt: e.target.value || null });
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="detail-publish-url" className="text-xs">
+                    发布链接
+                  </Label>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      id="detail-publish-url"
+                      type="url"
+                      value={publishUrl}
+                      onChange={(e) => setPublishUrl(e.target.value)}
+                      onBlur={() => {
+                        if ((publishUrl.trim() || null) !== task.publishUrl) {
+                          patchTaskMutation.mutate({ publishUrl: publishUrl.trim() || null });
+                        }
+                      }}
+                      placeholder="https://..."
+                    />
+                    {task.publishUrl && (
+                      <a
+                        href={task.publishUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="打开外链"
+                        className="rounded-md border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* 自定义列 / 自由列 */}
           {customCols.length > 0 && (
             <div className="space-y-2.5">
-              <div className="text-xs font-semibold text-slate-700">自定义字段</div>
+              <div className="text-xs font-semibold text-slate-700">
+                {isFreeTable ? '字段内容' : '自定义字段'}
+              </div>
               {customCols.map((col) => {
                 const val = customDrafts[col.id] ?? '';
+                const useTextarea = col.type === 'text' && (isFreeTable || val.includes('\n'));
                 return (
                   <div key={col.id}>
                     <Label htmlFor={`detail-custom-${col.id}`} className="text-xs">
                       {col.name}
                     </Label>
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        id={`detail-custom-${col.id}`}
-                        type={col.type === 'date' ? 'date' : col.type === 'link' ? 'url' : 'text'}
-                        value={val}
-                        onChange={(e) => {
-                          const next = e.target.value;
-                          setCustomDrafts((prev) => ({ ...prev, [col.id]: next }));
-                          if (col.type === 'date') {
-                            patchTaskMutation.mutate({
-                              customValues: { [col.id]: next || null },
-                            });
-                          }
-                        }}
-                        onBlur={() => {
-                          if (col.type === 'date') return;
-                          const cur = task.customValues[col.id] ?? '';
-                          if (val.trim() !== cur) {
-                            patchTaskMutation.mutate({
-                              customValues: { [col.id]: val.trim() || null },
-                            });
-                          }
-                        }}
-                        placeholder={col.type === 'link' ? 'https://...' : '填写内容'}
-                      />
+                    <div className="flex items-start gap-1.5">
+                      {useTextarea ? (
+                        <textarea
+                          id={`detail-custom-${col.id}`}
+                          rows={val.includes('\n') ? Math.min(6, val.split('\n').length + 1) : 2}
+                          value={val}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            setCustomDrafts((prev) => ({ ...prev, [col.id]: next }));
+                          }}
+                          onBlur={() => {
+                            const cur = task.customValues[col.id] ?? '';
+                            if (val.trim() !== cur) {
+                              patchTaskMutation.mutate({
+                                customValues: { [col.id]: val.trim() || null },
+                              });
+                            }
+                          }}
+                          placeholder="填写内容（支持多行）"
+                          maxLength={2000}
+                          className="w-full rounded-md border border-black/[0.12] bg-white px-2.5 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none"
+                        />
+                      ) : (
+                        <Input
+                          id={`detail-custom-${col.id}`}
+                          type={col.type === 'date' ? 'date' : col.type === 'link' ? 'url' : 'text'}
+                          value={val}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            setCustomDrafts((prev) => ({ ...prev, [col.id]: next }));
+                            if (col.type === 'date') {
+                              patchTaskMutation.mutate({
+                                customValues: { [col.id]: next || null },
+                              });
+                            }
+                          }}
+                          onBlur={() => {
+                            if (col.type === 'date') return;
+                            const cur = task.customValues[col.id] ?? '';
+                            if (val.trim() !== cur) {
+                              patchTaskMutation.mutate({
+                                customValues: { [col.id]: val.trim() || null },
+                              });
+                            }
+                          }}
+                          placeholder={col.type === 'link' ? 'https://...' : '填写内容'}
+                        />
+                      )}
                       {col.type === 'link' && task.customValues[col.id] && (
                         <a
                           href={task.customValues[col.id] ?? '#'}
@@ -471,114 +510,116 @@ export function TaskDetailDrawer({
             </div>
           )}
 
-          {/* 统一「工序与交付」区（每道工序一站式编辑负责人/状态/备注 + 挂载与取用本工序资源） */}
-          <div
-            ref={filesSectionRef}
-            data-testid="task-files-section"
-            className="space-y-3 border-t border-black/[0.08] pt-4"
-          >
-            <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
-              <FolderOpen className="h-3.5 w-3.5 text-zinc-500" />
-              {stageCols.length > 0 ? '工序与交付' : '任务文件与交付'}
-            </div>
+          {/* 统一「工序与交付」区（自由表格不展示工序区） */}
+          {!isFreeTable && (
+            <div
+              ref={filesSectionRef}
+              data-testid="task-files-section"
+              className="space-y-3 border-t border-black/[0.08] pt-4"
+            >
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
+                <FolderOpen className="h-3.5 w-3.5 text-zinc-500" />
+                {stageCols.length > 0 ? '工序与交付' : '任务文件与交付'}
+              </div>
 
-            {stageCols.length > 0 && (
-              <div className="space-y-2.5">
-                {stageCols.map((col) => {
-                  const cell = getEffectiveStageCell(task, col.id);
-                  const stageList = taskArtifactsData?.stageArtifacts[col.id] ?? [];
-                  return (
-                    <DetailStageCard
-                      key={col.id}
-                      columnId={col.id}
-                      columnName={col.name}
-                      cell={cell}
-                      artifacts={stageList}
-                      users={users}
-                      userMap={userMap}
-                      onSave={(next) =>
-                        patchStageMutation.mutate({
-                          columnId: col.id,
-                          body: { ...next, baseRevision: cell.revision },
-                        })
-                      }
-                      onAddArtifact={() =>
-                        setCreateArtConfig({
-                          scope: { kind: 'stage', taskId: task.id, stageColumnId: col.id },
-                          scopeLabel: [
-                            wsData.worksheet.name,
-                            currentWork?.name,
-                            task.title,
-                            col.name,
-                          ]
-                            .filter(Boolean)
-                            .join(' - '),
-                          scopeTags: buildScopeTags({
-                            worksheetName: wsData.worksheet.name,
-                            workName: currentWork?.name,
-                            taskTitle: task.title,
-                            stageColumnName: col.name,
-                          }),
-                          defaultName: buildDefaultArtifactName({
-                            workName: currentWork?.name,
-                            taskTitle: task.title,
-                            stageColumnName: col.name,
-                          }),
-                        })
-                      }
-                    />
-                  );
-                })}
-              </div>
-            )}
+              {stageCols.length > 0 && (
+                <div className="space-y-2.5">
+                  {stageCols.map((col) => {
+                    const cell = getEffectiveStageCell(task, col.id);
+                    const stageList = taskArtifactsData?.stageArtifacts[col.id] ?? [];
+                    return (
+                      <DetailStageCard
+                        key={col.id}
+                        columnId={col.id}
+                        columnName={col.name}
+                        cell={cell}
+                        artifacts={stageList}
+                        users={users}
+                        userMap={userMap}
+                        onSave={(next) =>
+                          patchStageMutation.mutate({
+                            columnId: col.id,
+                            body: { ...next, baseRevision: cell.revision },
+                          })
+                        }
+                        onAddArtifact={() =>
+                          setCreateArtConfig({
+                            scope: { kind: 'stage', taskId: task.id, stageColumnId: col.id },
+                            scopeLabel: [
+                              wsData.worksheet.name,
+                              currentWork?.name,
+                              task.title,
+                              col.name,
+                            ]
+                              .filter(Boolean)
+                              .join(' - '),
+                            scopeTags: buildScopeTags({
+                              worksheetName: wsData.worksheet.name,
+                              workName: currentWork?.name,
+                              taskTitle: task.title,
+                              stageColumnName: col.name,
+                            }),
+                            defaultName: buildDefaultArtifactName({
+                              workName: currentWork?.name,
+                              taskTitle: task.title,
+                              stageColumnName: col.name,
+                            }),
+                          })
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              )}
 
-            {/* 任务其他资源 */}
-            <div data-testid="drawer-task-other-files" className="space-y-1.5 pt-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-zinc-700">
-                  任务其他资源
-                  {(taskArtifactsData?.taskArtifacts.length ?? 0) > 0 && (
-                    <span className="ml-1.5 text-[11px] text-zinc-400 tabular-nums">
-                      ({taskArtifactsData?.taskArtifacts.length})
-                    </span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  data-testid="drawer-add-task-artifact"
-                  onClick={() =>
-                    setCreateArtConfig({
-                      scope: { kind: 'task', taskId: task.id },
-                      scopeLabel: [wsData.worksheet.name, currentWork?.name, task.title]
-                        .filter(Boolean)
-                        .join(' - '),
-                      scopeTags: buildScopeTags({
-                        worksheetName: wsData.worksheet.name,
-                        workName: currentWork?.name,
-                        taskTitle: task.title,
-                      }),
-                      defaultName: buildDefaultArtifactName({
-                        workName: currentWork?.name,
-                        taskTitle: task.title,
-                      }),
-                    })
-                  }
-                  className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
-                >
-                  <Plus className="h-3 w-3" />
-                  添加
-                </button>
-              </div>
-              <div className="rounded-lg border border-black/[0.06] bg-[#fafafa] px-2.5 py-1.5">
-                <ArtifactCardList
-                  artifacts={taskArtifactsData?.taskArtifacts ?? []}
-                  compact
-                  variant="list"
-                  emptyText="暂无任务级其他资源"
-                />
+              {/* 任务其他资源 */}
+              <div data-testid="drawer-task-other-files" className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-zinc-700">
+                    任务其他资源
+                    {(taskArtifactsData?.taskArtifacts.length ?? 0) > 0 && (
+                      <span className="ml-1.5 text-[11px] text-zinc-400 tabular-nums">
+                        ({taskArtifactsData?.taskArtifacts.length})
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="drawer-add-task-artifact"
+                    onClick={() =>
+                      setCreateArtConfig({
+                        scope: { kind: 'task', taskId: task.id },
+                        scopeLabel: [wsData.worksheet.name, currentWork?.name, task.title]
+                          .filter(Boolean)
+                          .join(' - '),
+                        scopeTags: buildScopeTags({
+                          worksheetName: wsData.worksheet.name,
+                          workName: currentWork?.name,
+                          taskTitle: task.title,
+                        }),
+                        defaultName: buildDefaultArtifactName({
+                          workName: currentWork?.name,
+                          taskTitle: task.title,
+                        }),
+                      })
+                    }
+                    className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
+                  >
+                    <Plus className="h-3 w-3" />
+                    添加
+                  </button>
+                </div>
+                <div className="rounded-lg border border-black/[0.06] bg-[#fafafa] px-2.5 py-1.5">
+                  <ArtifactCardList
+                    artifacts={taskArtifactsData?.taskArtifacts ?? []}
+                    compact
+                    variant="list"
+                    emptyText="暂无任务级其他资源"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {createArtConfig && (
             <CreateArtifactModal

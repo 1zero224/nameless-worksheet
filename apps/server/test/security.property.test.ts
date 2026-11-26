@@ -19,7 +19,7 @@ const secretTokenArb = fc
   .map((arr) => arr.join(''));
 
 describe('安全脱敏属性测试（fast-check）', () => {
-  it('scrubTokenUrl 对任意邀请令牌与重置令牌路径均彻底脱敏且幂等', () => {
+  it('scrubTokenUrl 对任意邀请令牌、重置令牌与认领令牌路径均彻底脱敏且幂等', () => {
     fc.assert(
       fc.property(
         secretTokenArb,
@@ -29,6 +29,10 @@ describe('安全脱敏属性测试（fast-check）', () => {
           (t: string) => `/api/invites/by-token/${t}?foo=1`,
           (t: string) => `/api/password-resets/${t}`,
           (t: string) => `/api/password-resets/${t}?from=mail`,
+          (t: string) => `/api/account-claims/${t}`,
+          (t: string) => `/api/account-claims/${t}/complete`,
+          (t: string) => `/claim/${t}`,
+          (t: string) => `/claim/${t}?ref=qq`,
         ),
         (token, buildUrl) => {
           const rawUrl = buildUrl(token);

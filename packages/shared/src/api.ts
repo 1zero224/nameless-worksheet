@@ -8,12 +8,35 @@ export interface MeResponse {
   permissions: Permission[];
 }
 
+export type ClaimStatus = 'claimed' | 'none' | 'active' | 'expired';
+export const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
+  claimed: '已认领',
+  none: '未生成',
+  active: '有效',
+  expired: '已过期',
+};
+
 export interface UserListItem {
   id: string;
   displayName: string;
   role: Role;
-  loginName?: string;
+  loginName?: string | null;
   createdAt?: string;
+  claimedAt?: string | null;
+  claimStatus?: ClaimStatus;
+  claimExpiresAt?: string | null;
+}
+
+export interface ClaimPreview {
+  displayName: string;
+  projectName: string;
+  role: Role;
+  expiresAt: string;
+}
+
+export interface ClaimLinkResponse {
+  url: string;
+  expiresAt: string;
 }
 
 export type InviteStatus = 'active' | 'exhausted' | 'expired' | 'revoked';

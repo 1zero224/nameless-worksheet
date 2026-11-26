@@ -369,6 +369,7 @@ function CanvasInlineTextOverlay({
   initialValue,
   initialChar,
   inputType = 'text',
+  multiline = false,
   required = false,
   rect,
   remoteConflict,
@@ -382,6 +383,7 @@ function CanvasInlineTextOverlay({
   initialValue: string;
   initialChar?: string;
   inputType?: 'text' | 'date' | 'link';
+  multiline?: boolean;
   required?: boolean;
   rect: IRectangle;
   remoteConflict: ActiveCellConflict | null;
@@ -390,6 +392,7 @@ function CanvasInlineTextOverlay({
   onCommit: (nextValue: string, baseValue: string, force: boolean) => Promise<void>;
   onClose: (moveAfter?: 'down' | 'right' | 'left') => void;
 }) {
+  const useTextarea = multiline && inputType === 'text';
   const [draft, setDraft] = useState(
     initialChar !== undefined && inputType !== 'date' ? initialChar : initialValue,
   );
@@ -400,12 +403,13 @@ function CanvasInlineTextOverlay({
   const savingRef = useRef(false);
   const isComposingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const conflict = remoteConflict ?? localConflict;
 
   useEffect(() => {
     requestAnimationFrame(() => {
-      const el = inputRef.current;
+      const el = useTextarea ? textareaRef.current : inputRef.current;
       if (!el) return;
       el.focus();
       if (initialChar !== undefined && inputType !== 'date') {
@@ -415,7 +419,7 @@ function CanvasInlineTextOverlay({
         el.select();
       }
     });
-  }, [initialChar, inputType]);
+  }, [initialChar, inputType, useTextarea]);
 
   const commitValue = async (force: boolean, moveAfter?: 'down' | 'right' | 'left') => {
     if (savingRef.current) return;
@@ -457,11 +461,14 @@ function CanvasInlineTextOverlay({
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (isComposingRef.current || e.nativeEvent.isComposing) {
       return;
     }
     if (e.key === 'Enter') {
+      if (useTextarea && e.shiftKey) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       if (!conflict) {
@@ -487,32 +494,58 @@ function CanvasInlineTextOverlay({
       style={{
         left: rect.x,
         top: rect.y,
-        width: Math.max(rect.width, 160),
-        height: rect.height,
+        width: Math.max(rect.width, useTextarea ? 240 : 160),
+        ...(useTextarea ? { minHeight: Math.max(rect.height, 88) } : { height: rect.height }),
       }}
       className="pointer-events-auto absolute z-30"
     >
-      <input
-        ref={inputRef}
-        type={inputType === 'date' ? 'date' : 'text'}
-        value={draft}
-        disabled={saving}
-        onMouseDown={(e) => e.stopPropagation()}
-        onChange={(e) => setDraft(e.target.value)}
-        onCompositionStart={() => {
-          isComposingRef.current = true;
-        }}
-        onCompositionEnd={() => {
-          isComposingRef.current = false;
-        }}
-        onKeyDown={handleKeyDown}
-        onBlur={() => {
-          if (savingRef.current || isComposingRef.current || conflict || saveError) return;
-          void commitValue(false);
-        }}
-        aria-label={`编辑 ${columnKey}`}
-        className="h-full w-full rounded-[2px] bg-white px-2 text-[13px] text-zinc-950 shadow-sm ring-2 ring-blue-600 outline-none"
-      />
+      {useTextarea ? (
+        <textarea
+          ref={textareaRef}
+          rows={3}
+          maxLength={2000}
+          value={draft}
+          disabled={saving}
+          onMouseDown={(e) => e.stopPropagation()}
+          onChange={(e) => setDraft(e.target.value)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
+          onKeyDown={handleKeyDown}
+          onBlur={() => {
+            if (savingRef.current || isComposingRef.current || conflict || saveError) return;
+            void commitValue(false);
+          }}
+          aria-label={`编辑 ${columnKey}`}
+          title="Shift+Enter 换行，Enter 保存"
+          className="block min-h-[88px] w-full resize-y rounded-[2px] bg-white px-2 py-1.5 text-[13px] leading-snug text-zinc-950 shadow-md ring-2 ring-blue-600 outline-none"
+        />
+      ) : (
+        <input
+          ref={inputRef}
+          type={inputType === 'date' ? 'date' : 'text'}
+          value={draft}
+          disabled={saving}
+          onMouseDown={(e) => e.stopPropagation()}
+          onChange={(e) => setDraft(e.target.value)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
+          onKeyDown={handleKeyDown}
+          onBlur={() => {
+            if (savingRef.current || isComposingRef.current || conflict || saveError) return;
+            void commitValue(false);
+          }}
+          aria-label={`编辑 ${columnKey}`}
+          className="h-full w-full rounded-[2px] bg-white px-2 text-[13px] text-zinc-950 shadow-sm ring-2 ring-blue-600 outline-none"
+        />
+      )}
 
       {conflict && (
         <div
@@ -1217,9 +1250,10 @@ export interface WorksheetCanvasGridProps {
     },
   ) => Promise<void>;
   onCreateTask: (payload: {
-    title: string;
+    title?: string;
     afterTaskId?: string | null;
     workId?: string | null;
+    customValues?: Record<string, string | null>;
   }) => void;
   onCreateWork: (name: string) => Promise<void>;
   onDeleteTask: (task: TaskDetail) => void;
@@ -1387,11 +1421,15 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     };
   }, [rowContextMenu]);
 
+  const isFreeTable = worksheet.kind === 'free';
+
   // 列定义列表
   const columnDefs = useMemo<CanvasColumnDef[]>(() => {
     const sys = worksheet.systemColumns ?? {};
-    const defs: CanvasColumnDef[] = [
-      {
+    const defs: CanvasColumnDef[] = [];
+
+    if (!isFreeTable) {
+      defs.push({
         id: 'title',
         name: '标题 / 分段',
         width: previewWidths.title ?? sys.title?.width ?? 220,
@@ -1399,8 +1437,8 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         systemKey: 'title',
         kind: 'title',
         isTextCell: true,
-      },
-    ];
+      });
+    }
 
     for (const col of columns) {
       if (col.hidden) continue;
@@ -1415,7 +1453,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       });
     }
 
-    if (!isSystemColumnHidden(sys, 'priority')) {
+    if (!isFreeTable && !isSystemColumnHidden(sys, 'priority')) {
       defs.push({
         id: 'priority',
         name: '优先级',
@@ -1427,7 +1465,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       });
     }
 
-    if (!isSystemColumnHidden(sys, 'publish')) {
+    if (!isFreeTable && !isSystemColumnHidden(sys, 'publish')) {
       defs.push({
         id: 'publish',
         name: '发布信息',
@@ -1439,7 +1477,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       });
     }
 
-    if (!isSystemColumnHidden(sys, 'files')) {
+    if (!isFreeTable && !isSystemColumnHidden(sys, 'files')) {
       defs.push({
         id: 'files',
         name: '文件',
@@ -1451,7 +1489,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       });
     }
 
-    if (!isSystemColumnHidden(sys, 'divisionNote')) {
+    if (!isFreeTable && !isSystemColumnHidden(sys, 'divisionNote')) {
       defs.push({
         id: 'divisionNote',
         name: '分工说明',
@@ -1464,7 +1502,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     }
 
     return defs;
-  }, [worksheet.systemColumns, columns, previewWidths]);
+  }, [isFreeTable, worksheet.systemColumns, columns, previewWidths]);
 
   const gridColumns = useMemo<IGridColumn[]>(
     () =>
@@ -1472,10 +1510,10 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         id: c.id,
         name: c.name,
         width: c.width,
-        hasMenu: c.id !== 'title',
+        hasMenu: isFreeTable ? true : c.id !== 'title',
         readonly: true,
       })),
-    [columnDefs],
+    [columnDefs, isFreeTable],
   );
 
   // 原生 LinearRowType.Group 分组点（无作品任务直接平铺，作品块上下自动插 14px 纯白呼吸间距）
@@ -1651,7 +1689,9 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             [label]:
               task.publishStatus === 'published'
                 ? { id: label, name: label, color: '#065F46', backgroundColor: '#ECFDF5' }
-                : { id: label, name: label, color: '#52525B', backgroundColor: '#F4F4F5' },
+                : task.publishStatus === 'shelved'
+                  ? { id: label, name: label, color: '#52525B', backgroundColor: '#E4E4E7' }
+                  : { id: label, name: label, color: '#52525B', backgroundColor: '#F4F4F5' },
           },
           readonly: true,
         };
@@ -1846,10 +1886,10 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
   const handleColumnHeaderOpen = useCallback(
     (colIndex: number, bounds: IRectangle) => {
       const colDef = columnDefs[colIndex];
-      if (!colDef || colDef.id === 'title') return;
+      if (!colDef || (!isFreeTable && colDef.id === 'title')) return;
       setHeaderMenuTarget({ colDef, bounds });
     },
-    [columnDefs],
+    [columnDefs, isFreeTable],
   );
 
   const handleColumnAppend = useCallback(() => {
@@ -2089,6 +2129,21 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     );
   }, [layoutTick, stageQuickPopover]);
 
+  const buildCreateRowPayload = (
+    text: string,
+    extra?: { afterTaskId?: string | null; workId?: string | null },
+  ) => {
+    if (!isFreeTable) {
+      return { title: text, ...extra };
+    }
+    const firstColId = columnDefs[0]?.id ?? columns[0]?.id ?? null;
+    return {
+      title: text,
+      ...(firstColId ? { customValues: { [firstColId]: text } } : {}),
+      ...extra,
+    };
+  };
+
   const handleQuickAdd = async (e: FormEvent) => {
     e.preventDefault();
     const title = quickAddTitle.trim();
@@ -2103,7 +2158,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       }
       return;
     }
-    onCreateTask({ title });
+    onCreateTask(buildCreateRowPayload(title));
     setQuickAddTitle('');
     requestAnimationFrame(() => quickAddInputRef.current?.focus());
   };
@@ -2121,11 +2176,12 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     const trimmed = segmentTitle.trim();
     if (!trimmed) return;
     const lastTask = addingSegmentBlock.tasks[addingSegmentBlock.tasks.length - 1] ?? null;
-    onCreateTask({
-      title: trimmed,
-      workId: addingSegmentBlock.work.id,
-      afterTaskId: lastTask?.id ?? null,
-    });
+    onCreateTask(
+      buildCreateRowPayload(trimmed, {
+        workId: addingSegmentBlock.work.id,
+        afterTaskId: lastTask?.id ?? null,
+      }),
+    );
     setSegmentTitle('');
     requestAnimationFrame(() => segInputRef.current?.focus());
   };
@@ -2135,11 +2191,12 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     const trimmed = insertTitle.trim();
     if (!trimmed || !insertingAfterId) return;
     const anchor = visualActiveTasks.find((t) => t.id === insertingAfterId);
-    onCreateTask({
-      title: trimmed,
-      afterTaskId: insertingAfterId,
-      workId: anchor?.workId ?? null,
-    });
+    onCreateTask(
+      buildCreateRowPayload(trimmed, {
+        afterTaskId: insertingAfterId,
+        workId: anchor?.workId ?? null,
+      }),
+    );
     setInsertingAfterId(null);
     setInsertTitle('');
   };
@@ -2292,7 +2349,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                     ) : (
                       <ListPlus className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.75} />
                     )}
-                    <span>{createMode === 'work' ? '作品' : '任务'}</span>
+                    <span>{createMode === 'work' ? '作品' : isFreeTable ? '行' : '任务'}</span>
                     <ChevronDown className="h-3 w-3 opacity-60" />
                   </button>
                 </DropdownMenuTrigger>
@@ -2304,7 +2361,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                     }}
                   >
                     <ListPlus className="h-3.5 w-3.5 text-zinc-500" />
-                    <span>新增任务</span>
+                    <span>{isFreeTable ? '新增行' : '新增任务'}</span>
                     {createMode === 'task' && (
                       <Check className="ml-auto h-3.5 w-3.5 text-zinc-900" />
                     )}
@@ -2340,9 +2397,17 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                   placeholder={
                     createMode === 'work'
                       ? '新增作品大标题（输入作品名，回车创建并添加分段）'
-                      : '新增任务（输入标题，回车连续添加）'
+                      : isFreeTable
+                        ? '新增一行（输入首列内容，回车连续添加）'
+                        : '新增任务（输入标题，回车连续添加）'
                   }
-                  aria-label={createMode === 'work' ? '新作品名称' : '新建任务标题'}
+                  aria-label={
+                    createMode === 'work'
+                      ? '新作品名称'
+                      : isFreeTable
+                        ? '新建行首列内容'
+                        : '新建任务标题'
+                  }
                   maxLength={createMode === 'work' ? 80 : 200}
                   className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-zinc-950 placeholder:text-zinc-400 focus:outline-none"
                 />
@@ -2361,9 +2426,21 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             </div>
             <div className="px-4 py-10 text-center text-xs text-zinc-400">
               {isFilteredOrSorted
-                ? '没有符合筛选条件的任务'
-                : '暂无未发布任务，可直接在上方新增行录入任务或切换为「作品」创建作品大标题'}
+                ? isFreeTable
+                  ? '没有符合筛选条件的数据行'
+                  : '没有符合筛选条件的任务'
+                : isFreeTable
+                  ? '当前自由表格暂无数据行，可在上方输入首列内容回车添加，或点击工具栏「添加列」配置表头'
+                  : '暂无未发布任务，可直接在上方新增行录入任务或切换为「作品」创建作品大标题'}
             </div>
+          </div>
+        ) : columnDefs.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-16 text-center text-xs text-zinc-500">
+            <p>当前自由表格暂无可见列，请先添加列或在「字段」中取消隐藏。</p>
+            <Button type="button" size="sm" variant="secondary" onClick={handleColumnAppend}>
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              添加列
+            </Button>
           </div>
         ) : (
           <Grid
@@ -2373,7 +2450,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             rowHeight={36}
             columnHeaderHeight={34}
             scrollBufferY={76}
-            freezeColumnCount={isNarrow ? 0 : 1}
+            freezeColumnCount={isNarrow || columnDefs.length === 0 ? 0 : 1}
             isTouchDevice={isNarrow}
             isMultiSelectionEnable={false}
             rowIndexVisible
@@ -2497,6 +2574,13 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                 : activeTextCol.columnConfig?.type === 'link'
                   ? 'link'
                   : 'text'
+            }
+            multiline={
+              activeTextCol.kind === 'divisionNote'
+                ? activeTextTask.divisionNote.includes('\n')
+                : activeTextCol.columnConfig?.type === 'text' &&
+                  (isFreeTable ||
+                    (activeTextTask.customValues[activeTextCol.id] ?? '').includes('\n'))
             }
             required={activeTextCol.kind === 'title'}
             rect={activeTextBounds}
@@ -2750,6 +2834,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         {/* 锚定 `+` 新增列 Popover */}
         <AddColumnPopover
           worksheetId={worksheet.id}
+          worksheetKind={worksheet.kind}
           columns={columns}
           boardColumns={boardColumns}
           controlledOpen={addColOpen}
@@ -2888,7 +2973,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                   ) : (
                     <ListPlus className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.75} />
                   )}
-                  <span>{createMode === 'work' ? '作品' : '任务'}</span>
+                  <span>{createMode === 'work' ? '作品' : isFreeTable ? '行' : '任务'}</span>
                   <ChevronDown className="h-3 w-3 opacity-60" />
                 </button>
               </DropdownMenuTrigger>
@@ -2900,7 +2985,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                   }}
                 >
                   <ListPlus className="h-3.5 w-3.5 text-zinc-500" />
-                  <span>新增任务</span>
+                  <span>{isFreeTable ? '新增行' : '新增任务'}</span>
                   {createMode === 'task' && <Check className="ml-auto h-3.5 w-3.5 text-zinc-900" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -2935,9 +3020,17 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                 placeholder={
                   createMode === 'work'
                     ? '新增作品大标题（输入作品名，回车创建并添加分段）'
-                    : '新增任务（输入标题，回车连续添加）'
+                    : isFreeTable
+                      ? '新增一行（输入首列内容，回车连续添加）'
+                      : '新增任务（输入标题，回车连续添加）'
                 }
-                aria-label={createMode === 'work' ? '新作品名称' : '新建任务标题'}
+                aria-label={
+                  createMode === 'work'
+                    ? '新作品名称'
+                    : isFreeTable
+                      ? '新建行首列内容'
+                      : '新建任务标题'
+                }
                 maxLength={createMode === 'work' ? 80 : 200}
                 className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-zinc-950 placeholder:text-zinc-400 focus:outline-none"
               />
@@ -3035,7 +3128,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             <th>操作</th>
             {columnDefs.map((col, colIdx) => (
               <th key={col.id} data-testid={`col-header-${col.id}`}>
-                {col.id !== 'title' ? (
+                {isFreeTable || col.id !== 'title' ? (
                   <button
                     type="button"
                     onClick={() => {

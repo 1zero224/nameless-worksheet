@@ -23,7 +23,9 @@ const createdAt = () => ts('created_at').notNull().defaultNow();
 export const roleEnum = pgEnum('role', ['admin', 'user']);
 export const columnTypeEnum = pgEnum('column_type', ['stage', 'text', 'date', 'link']);
 export const priorityEnum = pgEnum('priority', ['normal', 'high', 'urgent']);
-export const publishStatusEnum = pgEnum('publish_status', ['unpublished', 'published']);
+export const publishStatusEnum = pgEnum('publish_status', ['unpublished', 'published', 'shelved']);
+export const worksheetKindEnum = pgEnum('worksheet_kind', ['task', 'free']);
+export const worksheetPlacementEnum = pgEnum('worksheet_placement', ['topbar', 'docs']);
 export const stageStatusEnum = pgEnum('stage_status', ['not_started', 'in_progress', 'done', 'na']);
 export const locationTypeEnum = pgEnum('location_type', ['cloud_link', 'r2']);
 export const uploadSessionModeEnum = pgEnum('upload_session_mode', [
@@ -58,14 +60,24 @@ export const projects = pgTable('projects', {
   createdAt: createdAt(),
 });
 
-export const users = pgTable('users', {
-  id: id(),
-  loginName: text('login_name').notNull().unique('users_login_name_key'),
-  displayName: text('display_name').notNull().unique('users_display_name_key'),
-  passwordHash: text('password_hash'),
-  createdAt: createdAt(),
-  updatedAt: ts('updated_at').notNull().defaultNow(),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: id(),
+    loginName: text('login_name').unique('users_login_name_key'),
+    displayName: text('display_name').notNull().unique('users_display_name_key'),
+    passwordHash: text('password_hash'),
+    claimedAt: ts('claimed_at'),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      'users_claim_consistency_check',
+      sql`((${t.claimedAt} IS NULL AND ${t.loginName} IS NULL AND ${t.passwordHash} IS NULL) OR (${t.loginName} IS NOT NULL))`,
+    ),
+  ],
+);
 
 export const memberships = pgTable(
   'memberships',
@@ -192,19 +204,26 @@ export const worksheets = pgTable(
       .references(() => projects.id),
     name: text('name').notNull(),
     color: text('color').notNull().default('sky'),
+    kind: worksheetKindEnum('kind').notNull().default('task'),
+    placement: worksheetPlacementEnum('placement').notNull().default('topbar'),
     sortOrder: text('sort_order').notNull(),
     systemColumns: jsonb('system_columns')
       .$type<SystemColumnsConfig>()
       .notNull()
       .default(sql`'{}'::jsonb`),
+    importSourceKey: text('import_source_key'),
     deletedAt: ts('deleted_at'),
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
   (t) => [
+    check('worksheets_docs_free_check', sql`${t.placement} != 'docs' OR ${t.kind} = 'free'`),
     uniqueIndex('worksheets_project_name_active_key')
       .on(t.projectId, t.name)
       .where(isNull(t.deletedAt)),
+    uniqueIndex('worksheets_project_import_source_active_key')
+      .on(t.projectId, t.importSourceKey)
+      .where(sql`${isNotNull(t.importSourceKey)} AND ${isNull(t.deletedAt)}`),
     index('worksheets_project_order_active_idx')
       .on(t.projectId, t.sortOrder)
       .where(isNull(t.deletedAt)),
@@ -264,6 +283,52 @@ export const works = pgTable(
   ],
 );
 
+// ---- 阶段 5 新增表（账号认领链接、迁移批次） ----
+
+export const accountClaims = pgTable(
+  'account_claims',
+  {
+    id: id(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    tokenHash: text('token_hash').notNull().unique('account_claims_token_hash_key'),
+    expiresAt: ts('expires_at').notNull(),
+    usedAt: ts('used_at'),
+    revokedAt: ts('revoked_at'),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('account_claims_project_user_created_idx').on(t.projectId, t.userId, t.createdAt.desc()),
+  ],
+);
+
+export const importBatches = pgTable(
+  'import_batches',
+  {
+    id: id(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
+    sourceFilename: text('source_filename').notNull(),
+    sourceSha256: text('source_sha256').notNull(),
+    backupR2Key: text('backup_r2_key').notNull(),
+    actorUserId: uuid('actor_user_id')
+      .notNull()
+      .references(() => users.id),
+    summary: jsonb('summary').$type<Record<string, unknown>>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('import_batches_project_created_idx').on(t.projectId, t.createdAt.desc()),
+    index('import_batches_project_sha256_idx').on(t.projectId, t.sourceSha256),
+  ],
+);
+
 export const tasks = pgTable(
   'tasks',
   {
@@ -287,6 +352,8 @@ export const tasks = pgTable(
       .default(sql`'{}'::jsonb`),
     sortOrder: text('sort_order').notNull(),
     revision: integer('revision').notNull().default(1),
+    importBatchId: uuid('import_batch_id').references(() => importBatches.id),
+    importSourceKey: text('import_source_key'),
     deletedAt: ts('deleted_at'),
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
@@ -299,6 +366,9 @@ export const tasks = pgTable(
       .on(t.projectId, t.publishStatus)
       .where(isNull(t.deletedAt)),
     index('tasks_project_work_active_idx').on(t.projectId, t.workId).where(isNull(t.deletedAt)),
+    uniqueIndex('tasks_project_import_source_active_key')
+      .on(t.projectId, t.importSourceKey)
+      .where(sql`${isNotNull(t.importSourceKey)} AND ${isNull(t.deletedAt)}`),
   ],
 );
 
@@ -386,6 +456,8 @@ export const artifacts = pgTable(
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
+    importBatchId: uuid('import_batch_id').references(() => importBatches.id),
+    importSourceKey: text('import_source_key'),
     deletedAt: ts('deleted_at'),
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
@@ -403,6 +475,9 @@ export const artifacts = pgTable(
         (${t.worksheetId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.taskId} IS NOT NULL AND ${t.stageColumnId} IS NOT NULL)
       )`,
     ),
+    uniqueIndex('artifacts_project_import_source_active_key')
+      .on(t.projectId, t.importSourceKey)
+      .where(sql`${isNotNull(t.importSourceKey)} AND ${isNull(t.deletedAt)}`),
     index('artifacts_project_docs_active_idx')
       .on(t.projectId, t.updatedAt.desc())
       .where(sql`${isNull(t.worksheetId)} AND ${isNull(t.deletedAt)}`),

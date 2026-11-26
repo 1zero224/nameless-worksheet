@@ -36,7 +36,7 @@ describe('T2 配置、日志脱敏、健康检查与迁移', () => {
     }
   });
 
-  it('日志 URL 脱敏替换邀请与重置令牌', () => {
+  it('日志 URL 脱敏替换邀请、重置与账号认领令牌', () => {
     expect(scrubTokenUrl('/api/invites/by-token/secretToken123/register')).toBe(
       '/api/invites/by-token/:token/register',
     );
@@ -44,6 +44,11 @@ describe('T2 配置、日志脱敏、健康检查与迁移', () => {
       '/api/invites/by-token/:token',
     );
     expect(scrubTokenUrl('/api/password-resets/resetToken456')).toBe('/api/password-resets/:token');
+    expect(scrubTokenUrl('/api/account-claims/claimToken789')).toBe('/api/account-claims/:token');
+    expect(scrubTokenUrl('/api/account-claims/claimToken789/complete')).toBe(
+      '/api/account-claims/:token/complete',
+    );
+    expect(scrubTokenUrl('/claim/claimToken789')).toBe('/claim/:token');
     expect(scrubTokenUrl('/api/users')).toBe('/api/users');
   });
 
@@ -165,6 +170,93 @@ describe('T3 CLI init 与 reset-link', () => {
       await isolated.drop();
     }
   });
+
+  it('阶段 5 T2: 在已有阶段 1–4 数据的库上运行 0004 迁移自动回填 claimed_at 并启用两项 CHECK 约束', async () => {
+    const isolated = await createIsolatedDatabase();
+    try {
+      const client = new pg.Client({ connectionString: isolated.databaseUrl });
+      await client.connect();
+      try {
+        await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+        await client.query('DROP SCHEMA IF EXISTS drizzle CASCADE;');
+        const preMigrations = [
+          '0000_init.sql',
+          '0001_phase2_worksheets.sql',
+          '0002_phase3_artifacts.sql',
+          '0003_phase4_r2_uploads.sql',
+        ];
+        for (const file of preMigrations) {
+          const sqlText = readFileSync(
+            path.resolve(process.cwd(), 'apps/server/drizzle', file),
+            'utf8',
+          );
+          for (const stmt of sqlText.split('--> statement-breakpoint')) {
+            if (stmt.trim()) await client.query(stmt);
+          }
+        }
+        // 插入阶段 1–4 老项目与老用户
+        const {
+          rows: [proj],
+        } = await client.query<{ id: string }>(
+          `INSERT INTO "projects" ("name") VALUES ('旧阶段项目') RETURNING id`,
+        );
+        const {
+          rows: [usr],
+        } = await client.query<{ id: string }>(
+          `INSERT INTO "users" ("login_name", "display_name") VALUES ('legacy_user', '老用户') RETURNING id`,
+        );
+        await client.query(
+          `INSERT INTO "worksheets" ("project_id", "name", "color", "sort_order") VALUES ($1, '老制作表', 'slate', 1)`,
+          [proj?.id],
+        );
+
+        // 执行 0004 迁移
+        const phase5Sql = readFileSync(
+          path.resolve(
+            process.cwd(),
+            'apps/server/drizzle/0004_phase5_free_tables_claims_import.sql',
+          ),
+          'utf8',
+        );
+        for (const stmt of phase5Sql.split('--> statement-breakpoint')) {
+          if (stmt.trim()) await client.query(stmt);
+        }
+
+        // 老用户 claimed_at 自动回填为非空
+        const { rows: userRows } = await client.query<{ claimed_at: Date | null }>(
+          `SELECT claimed_at FROM users WHERE id = $1`,
+          [usr?.id],
+        );
+        expect(userRows[0]?.claimed_at).not.toBeNull();
+
+        // 老工作表默认 kind='task', placement='topbar'
+        const { rows: wsRows } = await client.query<{ kind: string; placement: string }>(
+          `SELECT kind, placement FROM worksheets WHERE project_id = $1`,
+          [proj?.id],
+        );
+        expect(wsRows[0]).toEqual({ kind: 'task', placement: 'topbar' });
+
+        // users_claim_consistency_check 拒绝 login_name IS NULL 且 claimed_at IS NOT NULL
+        await expect(
+          client.query(
+            `INSERT INTO "users" ("login_name", "display_name", "claimed_at") VALUES (NULL, '非法半认领', now())`,
+          ),
+        ).rejects.toThrow();
+
+        // worksheets_docs_free_check 拒绝 placement='docs' 且 kind='task'
+        await expect(
+          client.query(
+            `INSERT INTO "worksheets" ("project_id", "name", "color", "sort_order", "kind", "placement") VALUES ($1, '非法文档表', 'slate', 2, 'task', 'docs')`,
+            [proj?.id],
+          ),
+        ).rejects.toThrow();
+      } finally {
+        await client.end();
+      }
+    } finally {
+      await isolated.drop();
+    }
+  });
 });
 
 describe('T5 路由访问声明、V2 未登录拦截与 V4 普通用户权限拦截', () => {
@@ -208,6 +300,8 @@ describe('T5 路由访问声明、V2 未登录拦截与 V4 普通用户权限拦
         'POST /api/invites/by-token/:token/register',
         'GET /api/password-resets/:token',
         'POST /api/password-resets/:token',
+        'GET /api/account-claims/:token',
+        'POST /api/account-claims/:token/complete',
       ].sort(),
     );
   });

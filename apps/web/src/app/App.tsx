@@ -8,6 +8,7 @@ import { ToastProvider } from '@/components/ui/overlays.js';
 import { UploadQueueDock } from '@/components/upload/UploadQueueDock.js';
 import { AdminRealtimePage } from '@/pages/AdminRealtimePage.js';
 import { AdminUsersPage } from '@/pages/AdminUsersPage.js';
+import { ClaimAccountPage } from '@/pages/ClaimAccountPage.js';
 import { DocsPage } from '@/pages/DocsPage.js';
 import { HomePage } from '@/pages/HomePage.js';
 import { InviteRegisterPage } from '@/pages/InviteRegisterPage.js';
@@ -55,6 +56,7 @@ function AppRoutes() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/invite/:token" element={<InviteRegisterPage />} />
           <Route path="/reset/:token" element={<ResetPasswordPage />} />
+          <Route path="/claim/:token" element={<ClaimAccountPage />} />
 
           <Route
             element={

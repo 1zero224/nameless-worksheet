@@ -12,12 +12,14 @@ import type {
   StageStatus,
   Work,
   WorksheetColor,
+  WorksheetKind,
 } from './worksheet.js';
 
 export interface BoardWorksheetInput {
   id: string;
   name: string;
   color: WorksheetColor;
+  kind?: WorksheetKind;
   sortOrder: string;
 }
 
@@ -45,6 +47,10 @@ export interface BoardComputeInput {
 
 export function isTaskPublished(task: { publishStatus: PublishStatus }): boolean {
   return task.publishStatus === 'published';
+}
+
+export function isTaskClosedFromBoard(task: { publishStatus: PublishStatus }): boolean {
+  return task.publishStatus === 'published' || task.publishStatus === 'shelved';
 }
 
 export function makeDefaultStageCell(taskId: string, columnId: string): StageCell {
@@ -142,7 +148,8 @@ export function computeBoardData(input: BoardComputeInput): {
   for (const task of sortedTasks) {
     const ws = wsMap.get(task.worksheetId);
     if (!ws) continue;
-    if (isTaskPublished(task)) continue;
+    if (ws.kind === 'free') continue;
+    if (isTaskClosedFromBoard(task)) continue;
 
     const wsStages = stagesByWs.get(ws.id) ?? [];
     const work = task.workId ? (workMap.get(task.workId) ?? null) : null;
@@ -293,6 +300,8 @@ export function computeMyTasks(input: Omit<BoardComputeInput, 'boardColumns'>): 
   for (const task of sortedTasks) {
     const ws = wsMap.get(task.worksheetId);
     if (!ws) continue;
+    if (ws.kind === 'free') continue;
+    if (task.publishStatus === 'shelved') continue;
     const wsStages = stagesByWs.get(ws.id) ?? [];
     const work = task.workId ? (workMap.get(task.workId) ?? null) : null;
     const published = isTaskPublished(task);
