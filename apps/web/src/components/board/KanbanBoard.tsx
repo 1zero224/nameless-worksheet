@@ -1,5 +1,5 @@
 import { type BoardCard, type BoardColumn, PRIORITY_LABELS, STAGE_STATUS_LABELS } from '@nw/shared';
-import { ChevronDown, Folder, Hand, Minimize2, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import { ChevronDown, Folder, Hand, Minimize2, PanelLeftOpen } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { TaskResourcesPopover } from '@/components/task/TaskResourcesPopover.js';
@@ -74,13 +74,6 @@ function getDisplayItemSortRank(item: ColumnDisplayItem): number {
   return best;
 }
 
-/**
- * 构建并排序单列展示条目：
- * - 无作品任务 → 独立任务卡
- * - 同列内同一作品只有 1 条任务 → 不套折叠壳，直接平铺为带作品眉标的独立卡片
- * - 同列内同一作品 >= 2 条任务 → 聚合为默认展开的作品父容器，内部子任务按「缺人 → 进行中 → 未开始」排序
- * - 整列按「缺人 → 进行中 → 未开始」稳定排序
- */
 function buildColumnDisplayItems(colCards: BoardCard[]): ColumnDisplayItem[] {
   const workCounts = new Map<string, number>();
   for (const card of colCards) {
@@ -221,7 +214,7 @@ export function KanbanBoard({
       return (
         <div
           className={cn(
-            'flex flex-wrap gap-1 border-t border-black/[0.06] pt-1',
+            'relative z-10 flex flex-wrap gap-1 border-t border-black/[0.06] pt-1',
             compact ? 'mt-1' : 'mt-1.5',
           )}
         >
@@ -251,7 +244,7 @@ export function KanbanBoard({
     return (
       <div
         className={cn(
-          'truncate text-xs text-zinc-400',
+          'pointer-events-none relative z-10 truncate text-xs text-zinc-400',
           compact ? 'mt-0.5' : 'mt-1 border-t border-black/[0.05] pt-1',
         )}
       >
@@ -331,7 +324,7 @@ export function KanbanBoard({
                   transition={{ duration: 0.16 }}
                   className="flex h-full min-h-0 w-[308px] flex-col"
                 >
-                  {/* Teable 双层列顶栏（紧凑 h-10 纯白底 + 细底边） */}
+                  {/* Teable 双层列顶栏 */}
                   <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-black/[0.07] bg-white px-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <h2
@@ -382,6 +375,11 @@ export function KanbanBoard({
                               workKey && hoveredWorkKey === workKey,
                             );
                             const mine = isAssignedToMe(card);
+                            const openCardDetail = () =>
+                              onOpenDetail({
+                                worksheetId: card.worksheetId,
+                                taskId: card.taskId,
+                              });
 
                             return (
                               <motion.div
@@ -391,6 +389,16 @@ export function KanbanBoard({
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.96 }}
                                 transition={CARD_TRANSITION}
+                                role="button"
+                                tabIndex={0}
+                                onClick={openCardDetail}
+                                onKeyDown={(e) => {
+                                  if (e.target !== e.currentTarget) return;
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    openCardDetail();
+                                  }
+                                }}
                                 data-testid={`board-card-${card.taskId}-${card.boardColumnId}`}
                                 data-card-state={cardState}
                                 data-work-name={card.workName ?? undefined}
@@ -406,7 +414,7 @@ export function KanbanBoard({
                                     : undefined
                                 }
                                 className={cn(
-                                  'rounded-lg border px-2.5 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-[border-color,background-color,box-shadow] duration-150 hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]',
+                                  'group cursor-pointer rounded-lg border px-2.5 py-2 transition-[border-color,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/70',
                                   stateStyle.card,
                                   isWorkHighlighted && 'ring-2 ring-zinc-400/75',
                                 )}
@@ -424,23 +432,16 @@ export function KanbanBoard({
                                 {/* 第 1 层：标题 + 优先级角标（左） | 所属工作表（右） */}
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex min-w-0 flex-1 items-start gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        onOpenDetail({
-                                          worksheetId: card.worksheetId,
-                                          taskId: card.taskId,
-                                        })
-                                      }
+                                    <span
                                       title={
                                         card.divisionNote
                                           ? `${card.taskTitle} — ${card.divisionNote}`
                                           : card.taskTitle
                                       }
-                                      className="min-w-0 text-left text-sm font-semibold leading-snug text-zinc-950 transition-colors hover:text-blue-600 cursor-pointer"
+                                      className="min-w-0 text-left text-sm font-semibold leading-snug text-zinc-950 transition-colors group-hover:text-blue-600"
                                     >
                                       {card.taskTitle}
-                                    </button>
+                                    </span>
 
                                     {card.priority !== 'normal' && (
                                       <span
@@ -470,7 +471,7 @@ export function KanbanBoard({
                                   )}
                                 </div>
 
-                                {/* 第 2 层：本列「工序 · 负责人 · 状态」+ 认领 / 可下载资源 / 任务详情 */}
+                                {/* 第 2 层：本列「工序 · 负责人 · 状态」+ 认领 / 快速查看可下载资源 */}
                                 <div className="mt-1.5 flex items-center justify-between gap-1.5">
                                   <div className="flex min-w-0 items-center gap-1.5 text-xs">
                                     <span
@@ -518,23 +519,6 @@ export function KanbanBoard({
                                       stageColumnName={card.stageColumnName}
                                       onOpenDetail={onOpenDetail}
                                     />
-
-                                    <button
-                                      type="button"
-                                      data-testid={`card-detail-btn-${card.taskId}`}
-                                      aria-label={`查看任务详情 ${card.taskTitle}`}
-                                      title="查看任务详情"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onOpenDetail({
-                                          worksheetId: card.worksheetId,
-                                          taskId: card.taskId,
-                                        });
-                                      }}
-                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
-                                    >
-                                      <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={1.85} />
-                                    </button>
                                   </div>
                                 </div>
 
@@ -543,7 +527,7 @@ export function KanbanBoard({
                             );
                           }
 
-                          // 作品父容器（紧凑头部 + 树形引导线）
+                          // 作品父容器（扁平无阴影 + 树形引导线）
                           const collapseKey = `${bc.id}:${item.key}`;
                           const isExpanded = !collapsedGroups.has(collapseKey);
                           const wsColor =
@@ -575,7 +559,7 @@ export function KanbanBoard({
                                 setHoveredWorkKey((prev) => (prev === item.workKey ? null : prev))
                               }
                               className={cn(
-                                'overflow-hidden rounded-lg border border-black/[0.08] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-[border-color,box-shadow] duration-150 hover:border-black/[0.16] hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]',
+                                'overflow-hidden rounded-lg border border-black/[0.08] bg-white transition-[border-color] duration-150 hover:border-black/[0.16]',
                                 isWorkHighlighted && 'ring-2 ring-zinc-400/75',
                               )}
                             >
@@ -658,7 +642,7 @@ export function KanbanBoard({
                                 )}
                               </AnimatePresence>
 
-                              {/* 展开态：简洁树形引导线 ├─ / └─ + 紧凑状态底色子任务卡 */}
+                              {/* 展开态：简洁树形引导线 ├─ / └─ + 点击整卡打开详情 */}
                               <AnimatePresence initial={false}>
                                 {isExpanded && (
                                   <motion.div
@@ -680,6 +664,11 @@ export function KanbanBoard({
                                         const currentClaimKey = `${card.taskId}:${card.stageColumnId}`;
                                         const claimingCurrent = claimingKeys.has(currentClaimKey);
                                         const mine = isAssignedToMe(card);
+                                        const openChildDetail = () =>
+                                          onOpenDetail({
+                                            worksheetId: card.worksheetId,
+                                            taskId: card.taskId,
+                                          });
 
                                         return (
                                           <motion.div
@@ -707,28 +696,26 @@ export function KanbanBoard({
                                               data-testid={`board-card-${card.taskId}-${card.boardColumnId}`}
                                               data-card-state={cardState}
                                               className={cn(
-                                                'rounded-md border px-2 py-1.5 transition-[border-color,background-color] duration-150',
+                                                'group relative rounded-md border px-2 py-1.5 transition-[border-color,background-color] duration-150 focus-within:ring-2 focus-within:ring-zinc-400/70',
                                                 stateStyle.subCard,
                                               )}
                                             >
-                                              <div className="flex items-start justify-between gap-1.5">
-                                                <button
-                                                  type="button"
-                                                  onClick={() =>
-                                                    onOpenDetail({
-                                                      worksheetId: card.worksheetId,
-                                                      taskId: card.taskId,
-                                                    })
-                                                  }
-                                                  title={
-                                                    card.divisionNote
-                                                      ? `${card.taskTitle} — ${card.divisionNote}`
-                                                      : card.taskTitle
-                                                  }
-                                                  className="min-w-0 flex-1 text-left text-[13.5px] font-semibold leading-snug text-zinc-900 transition-colors hover:text-blue-600 cursor-pointer"
-                                                >
+                                              <button
+                                                type="button"
+                                                aria-label={`打开任务 ${card.taskTitle} 详情`}
+                                                title={
+                                                  card.divisionNote
+                                                    ? `${card.taskTitle} — ${card.divisionNote}`
+                                                    : card.taskTitle
+                                                }
+                                                onClick={openChildDetail}
+                                                className="absolute inset-0 z-0 cursor-pointer rounded-md focus:outline-none"
+                                              />
+
+                                              <div className="pointer-events-none relative z-10 flex items-start justify-between gap-1.5">
+                                                <span className="min-w-0 flex-1 text-left text-[13.5px] font-semibold leading-snug text-zinc-900 transition-colors group-hover:text-blue-600">
                                                   {card.taskTitle}
-                                                </button>
+                                                </span>
 
                                                 {card.priority !== 'normal' && (
                                                   <span
@@ -742,7 +729,7 @@ export function KanbanBoard({
                                                 )}
                                               </div>
 
-                                              <div className="mt-1 flex items-center justify-between gap-1">
+                                              <div className="pointer-events-none relative z-10 mt-1 flex items-center justify-between gap-1">
                                                 <div className="flex min-w-0 items-center gap-1 text-xs">
                                                   <span
                                                     className={cn(
@@ -765,7 +752,7 @@ export function KanbanBoard({
                                                   )}
                                                 </div>
 
-                                                <div className="flex shrink-0 items-center gap-0.5">
+                                                <div className="pointer-events-auto flex shrink-0 items-center gap-0.5">
                                                   {currentStageMissing && (
                                                     <button
                                                       type="button"
@@ -795,26 +782,6 @@ export function KanbanBoard({
                                                     onOpenDetail={onOpenDetail}
                                                     className="h-5 w-5"
                                                   />
-
-                                                  <button
-                                                    type="button"
-                                                    data-testid={`card-detail-btn-${card.taskId}`}
-                                                    aria-label={`查看任务详情 ${card.taskTitle}`}
-                                                    title="查看任务详情"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      onOpenDetail({
-                                                        worksheetId: card.worksheetId,
-                                                        taskId: card.taskId,
-                                                      });
-                                                    }}
-                                                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
-                                                  >
-                                                    <PanelRightOpen
-                                                      className="h-3.5 w-3.5"
-                                                      strokeWidth={1.85}
-                                                    />
-                                                  </button>
                                                 </div>
                                               </div>
 

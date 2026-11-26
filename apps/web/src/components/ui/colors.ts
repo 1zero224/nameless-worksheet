@@ -93,7 +93,7 @@ export const STAGE_STATUS_STYLES: Record<
   in_progress: {
     cell: 'bg-[#FEFCE8] text-[#854D0E] border-amber-200/90',
     fill: 'bg-[#FEFCE8] hover:bg-[#FEF9C3]/80',
-    accent: 'bg-[#EAB308]',
+    accent: '',
     dot: 'bg-[#EAB308]',
     badge: 'bg-[#FEF9C3] text-[#854D0E]',
     text: 'text-[#854D0E] font-medium',
@@ -101,7 +101,7 @@ export const STAGE_STATUS_STYLES: Record<
   done: {
     cell: 'bg-[#ECFDF5] text-[#065F46] border-emerald-200/70',
     fill: 'bg-[#ECFDF5] hover:bg-[#D1FAE5]/70',
-    accent: 'bg-[#10B981]',
+    accent: '',
     dot: 'bg-[#10B981]',
     badge: 'bg-[#ECFDF5] text-[#047857]',
     text: 'text-[#065F46] font-medium',
@@ -119,7 +119,7 @@ export const STAGE_STATUS_STYLES: Record<
 export const STAGE_MISSING_STYLE = {
   cell: 'bg-[#FEF2F2] text-[#991B1B] border-red-200/85',
   fill: 'bg-[#FEF2F2] hover:bg-[#FEE2E2]/80',
-  accent: 'bg-[#EF4444]',
+  accent: '',
   dot: 'bg-[#EF4444]',
   badge: 'bg-[#FEE2E2] text-[#991B1B]',
   text: 'text-[#991B1B] font-medium',
@@ -132,16 +132,14 @@ export const BOARD_CARD_STATE_STYLES: Record<
   { card: string; subCard: string; statusText: string; dot: string }
 > = {
   in_progress: {
-    card: 'border-amber-200/90 border-l-[3px] border-l-amber-400 bg-[#FEFCE8] hover:border-amber-300 hover:bg-[#FEF9C3]/65',
-    subCard:
-      'border-amber-200/85 border-l-[3px] border-l-amber-400 bg-[#FEFCE8] hover:border-amber-300 hover:bg-[#FEF9C3]/70',
+    card: 'border-amber-200/90 bg-[#FEFCE8] hover:border-amber-300 hover:bg-[#FEF9C3]/65',
+    subCard: 'border-amber-200/85 bg-[#FEFCE8] hover:border-amber-300 hover:bg-[#FEF9C3]/70',
     statusText: 'text-amber-900 font-medium',
     dot: 'bg-amber-400',
   },
   missing: {
-    card: 'border-red-200/85 border-l-[3px] border-l-red-400 bg-[#FEF2F2] hover:border-red-300 hover:bg-[#FEE2E2]/60',
-    subCard:
-      'border-red-200/80 border-l-[3px] border-l-red-400 bg-[#FEF2F2] hover:border-red-300 hover:bg-[#FEE2E2]/65',
+    card: 'border-red-200/85 bg-[#FEF2F2] hover:border-red-300 hover:bg-[#FEE2E2]/60',
+    subCard: 'border-red-200/80 bg-[#FEF2F2] hover:border-red-300 hover:bg-[#FEE2E2]/65',
     statusText: 'text-red-800 font-medium',
     dot: 'bg-red-400',
   },
@@ -175,7 +173,7 @@ export const STAGE_STATUS_CANVAS_COLORS: Record<
   in_progress: {
     bg: '#FEFCE8',
     bgHover: '#FEF9C3',
-    accent: '#EAB308',
+    accent: null,
     dot: '#EAB308',
     text: '#854D0E',
     mutedText: '#CA8A04',
@@ -183,7 +181,7 @@ export const STAGE_STATUS_CANVAS_COLORS: Record<
   done: {
     bg: '#ECFDF5',
     bgHover: '#DCFCE7',
-    accent: '#10B981',
+    accent: null,
     dot: '#10B981',
     text: '#065F46',
     mutedText: '#059669',

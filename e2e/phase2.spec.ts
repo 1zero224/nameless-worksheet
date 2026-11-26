@@ -600,13 +600,14 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await pageA.getByRole('button', { name: '清除作品筛选' }).click();
     await expect(claimCardA).toBeVisible();
 
-    // 验证看板卡片上的「快速查看可下载资源」与「查看任务详情」按钮可用
+    // 验证看板卡片上的「快速查看可下载资源」按钮可用，且点击卡片本身直接打开详情侧栏（无独立详情按钮）
+    await expect(claimCardA.getByTestId(`card-detail-btn-${tClaim.id}`)).toHaveCount(0);
     await claimCardA.getByTestId(`card-resources-btn-${tClaim.id}`).click();
     await expect(pageA.getByTestId(`task-resources-popover-${tClaim.id}`)).toContainText(
       '可下载资源',
     );
     await pageA.keyboard.press('Escape');
-    await claimCardA.getByTestId(`card-detail-btn-${tClaim.id}`).click();
+    await claimCardA.click();
     await expect(pageA.getByTestId('task-detail-drawer')).toBeVisible();
     await pageA.getByRole('button', { name: '关闭侧栏' }).click();
 
@@ -629,14 +630,14 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await expect(myRail.getByTestId('my-tasks-in-progress-list')).toContainText('并行直播剪辑');
     await expect(myRail.getByTestId('my-tasks-pending-list')).toContainText('待认领短片');
 
-    // 验证「我的任务」卡片上的「快速查看可下载资源」与「查看任务详情」按钮可用
+    // 验证「我的任务」卡片上的「快速查看可下载资源」按钮可用，且点击卡片本身直接打开详情侧栏
     const myInProgItem = myRail.getByTestId(`my-in-progress-item-${tParallel.id}-${colTiming.id}`);
     await myInProgItem.getByTestId(`card-resources-btn-${tParallel.id}`).click();
     await expect(pageA.getByTestId(`task-resources-popover-${tParallel.id}`)).toContainText(
       '作品共用：周年庆特辑',
     );
     await pageA.keyboard.press('Escape');
-    await myInProgItem.getByTestId(`my-task-detail-btn-${tParallel.id}-${colTiming.id}`).click();
+    await myInProgItem.click();
     await expect(pageA.getByTestId('task-detail-drawer')).toBeVisible();
     await pageA.getByRole('button', { name: '关闭侧栏' }).click();
 

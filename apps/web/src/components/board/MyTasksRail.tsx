@@ -1,13 +1,5 @@
 import { type MyTaskItem, PRIORITY_LABELS } from '@nw/shared';
-import {
-  Check,
-  Folder,
-  ListTodo,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightOpen,
-  Play,
-} from 'lucide-react';
+import { Check, Folder, ListTodo, PanelLeftClose, PanelLeftOpen, Play } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { TaskResourcesPopover } from '@/components/task/TaskResourcesPopover.js';
 import { PRIORITY_STYLES, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
@@ -49,7 +41,7 @@ export function MyTasksListContent({
 
   return (
     <div className="space-y-3">
-      {/* 进行中（浅黄） */}
+      {/* 进行中（浅黄，点击整卡打开详情） */}
       <div>
         <div className="mb-1.5 flex items-center justify-between px-0.5">
           <div className="flex items-center gap-1.5">
@@ -73,6 +65,9 @@ export function MyTasksListContent({
                 const busy = updatingKey === itemKey;
                 const wsColor =
                   WORKSHEET_COLOR_STYLES[item.worksheetColor] ?? WORKSHEET_COLOR_STYLES.sky;
+                const openItemDetail = () =>
+                  onOpenDetail({ worksheetId: item.worksheetId, taskId: item.taskId });
+
                 return (
                   <motion.div
                     key={itemKey}
@@ -81,9 +76,19 @@ export function MyTasksListContent({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={CARD_SPRING}
+                    role="button"
+                    tabIndex={0}
+                    onClick={openItemDetail}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openItemDetail();
+                      }
+                    }}
                     data-testid={`my-in-progress-item-${item.taskId}-${item.stageColumnId}`}
                     data-card-state="in_progress"
-                    className="rounded-lg border border-amber-200/90 border-l-[3px] border-l-amber-400 bg-[#FEFCE8] px-2.5 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-[border-color,background-color,box-shadow] duration-150 hover:border-amber-300 hover:bg-[#FEF9C3]/75 hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]"
+                    className="group cursor-pointer rounded-lg border border-amber-200/90 bg-[#FEFCE8] px-2.5 py-2 transition-[border-color,background-color] duration-150 hover:border-amber-300 hover:bg-[#FEF9C3]/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/70"
                   >
                     {item.workName && (
                       <div className="mb-0.5 flex items-center gap-1 text-xs text-zinc-500">
@@ -94,20 +99,16 @@ export function MyTasksListContent({
 
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex min-w-0 flex-1 items-start gap-1">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onOpenDetail({ worksheetId: item.worksheetId, taskId: item.taskId })
-                          }
+                        <span
                           title={
                             item.divisionNote
                               ? `${item.taskTitle} — ${item.divisionNote}`
                               : item.taskTitle
                           }
-                          className="min-w-0 text-left text-sm font-semibold leading-snug text-zinc-950 transition-colors hover:text-blue-600 cursor-pointer"
+                          className="min-w-0 text-left text-sm font-semibold leading-snug text-zinc-950 transition-colors group-hover:text-blue-600"
                         >
                           {item.taskTitle}
-                        </button>
+                        </span>
                         {item.priority !== 'normal' && (
                           <span
                             className={cn(
@@ -138,7 +139,10 @@ export function MyTasksListContent({
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => onComplete(item)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onComplete(item);
+                          }}
                           className="mr-0.5 inline-flex h-6 shrink-0 items-center gap-0.5 rounded border border-emerald-300/90 bg-white/95 px-1.5 text-xs font-medium text-emerald-800 transition-all duration-150 hover:border-emerald-400 hover:bg-emerald-50 active:scale-95 disabled:opacity-50 cursor-pointer"
                         >
                           <Check className="h-3 w-3" strokeWidth={2.25} />
@@ -153,19 +157,6 @@ export function MyTasksListContent({
                           stageColumnName={item.stageColumnName}
                           onOpenDetail={onOpenDetail}
                         />
-
-                        <button
-                          type="button"
-                          data-testid={`my-task-detail-btn-${item.taskId}-${item.stageColumnId}`}
-                          aria-label={`查看任务详情 ${item.taskTitle}`}
-                          title="查看任务详情"
-                          onClick={() =>
-                            onOpenDetail({ worksheetId: item.worksheetId, taskId: item.taskId })
-                          }
-                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
-                        >
-                          <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={1.85} />
-                        </button>
                       </div>
                     </div>
                   </motion.div>
@@ -176,7 +167,7 @@ export function MyTasksListContent({
         )}
       </div>
 
-      {/* 已认领待开始（纯白） */}
+      {/* 已认领待开始（纯白，点击整卡打开详情） */}
       <div>
         <div className="mb-1.5 flex items-center justify-between px-0.5">
           <div className="flex items-center gap-1.5">
@@ -200,6 +191,9 @@ export function MyTasksListContent({
                 const busy = updatingKey === itemKey;
                 const wsColor =
                   WORKSHEET_COLOR_STYLES[item.worksheetColor] ?? WORKSHEET_COLOR_STYLES.sky;
+                const openItemDetail = () =>
+                  onOpenDetail({ worksheetId: item.worksheetId, taskId: item.taskId });
+
                 return (
                   <motion.div
                     key={itemKey}
@@ -208,9 +202,19 @@ export function MyTasksListContent({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={CARD_SPRING}
+                    role="button"
+                    tabIndex={0}
+                    onClick={openItemDetail}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openItemDetail();
+                      }
+                    }}
                     data-testid={`my-pending-item-${item.taskId}-${item.stageColumnId}`}
                     data-card-state="waiting"
-                    className="rounded-lg border border-black/[0.08] bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-[border-color,box-shadow] duration-150 hover:border-black/[0.16] hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]"
+                    className="group cursor-pointer rounded-lg border border-black/[0.08] bg-white px-2.5 py-2 transition-[border-color,background-color] duration-150 hover:border-black/[0.16] hover:bg-[#fcfcfd] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/70"
                   >
                     {item.workName && (
                       <div className="mb-0.5 flex items-center gap-1 text-xs text-zinc-500">
@@ -221,20 +225,16 @@ export function MyTasksListContent({
 
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex min-w-0 flex-1 items-start gap-1">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onOpenDetail({ worksheetId: item.worksheetId, taskId: item.taskId })
-                          }
+                        <span
                           title={
                             item.divisionNote
                               ? `${item.taskTitle} — ${item.divisionNote}`
                               : item.taskTitle
                           }
-                          className="min-w-0 text-left text-sm font-semibold leading-snug text-zinc-950 transition-colors hover:text-blue-600 cursor-pointer"
+                          className="min-w-0 text-left text-sm font-semibold leading-snug text-zinc-950 transition-colors group-hover:text-blue-600"
                         >
                           {item.taskTitle}
-                        </button>
+                        </span>
                         {item.priority !== 'normal' && (
                           <span
                             className={cn(
@@ -265,7 +265,10 @@ export function MyTasksListContent({
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => onStart(item)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onStart(item);
+                          }}
                           className="mr-0.5 inline-flex h-6 shrink-0 items-center gap-0.5 rounded border border-amber-300/90 bg-amber-50/85 px-1.5 text-xs font-medium text-amber-900 transition-all duration-150 hover:border-amber-400 hover:bg-amber-100 active:scale-95 disabled:opacity-50 cursor-pointer"
                         >
                           <Play className="h-2.5 w-2.5 fill-current" />
@@ -280,19 +283,6 @@ export function MyTasksListContent({
                           stageColumnName={item.stageColumnName}
                           onOpenDetail={onOpenDetail}
                         />
-
-                        <button
-                          type="button"
-                          data-testid={`my-task-detail-btn-${item.taskId}-${item.stageColumnId}`}
-                          aria-label={`查看任务详情 ${item.taskTitle}`}
-                          title="查看任务详情"
-                          onClick={() =>
-                            onOpenDetail({ worksheetId: item.worksheetId, taskId: item.taskId })
-                          }
-                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
-                        >
-                          <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={1.85} />
-                        </button>
                       </div>
                     </div>
                   </motion.div>
@@ -366,7 +356,7 @@ export function MyTasksRail({
             onClick={onToggleCollapsed}
             className="mt-2.5 flex flex-1 items-start justify-center cursor-pointer"
           >
-            <span className="rounded-md bg-white px-1.5 py-2 text-xs font-medium tracking-wider text-zinc-700 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06] [writing-mode:vertical-rl]">
+            <span className="rounded-md border border-black/[0.06] bg-white px-1.5 py-2 text-xs font-medium tracking-wider text-zinc-700 [writing-mode:vertical-rl]">
               我的任务
             </span>
           </button>
@@ -379,7 +369,6 @@ export function MyTasksRail({
           transition={{ duration: 0.16 }}
           className="flex h-full min-h-0 w-[292px] flex-col"
         >
-          {/* 对齐 Teable 看板白底顶栏（紧凑 h-10 border-b bg-white） */}
           <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-black/[0.07] bg-white px-3">
             <div className="flex min-w-0 items-center gap-2">
               <ListTodo className="h-4 w-4 shrink-0 text-zinc-600" strokeWidth={1.75} />

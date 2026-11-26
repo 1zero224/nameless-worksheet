@@ -37,7 +37,7 @@ const STAGE_PALETTE: Record<
   in_progress: {
     bg: '#FEFCE8',
     bgHover: '#FEF9C3',
-    accent: '#EAB308',
+    accent: null,
     dot: '#EAB308',
     text: '#854D0E',
     mutedText: '#CA8A04',
@@ -45,7 +45,7 @@ const STAGE_PALETTE: Record<
   done: {
     bg: '#ECFDF5',
     bgHover: '#DCFCE7',
-    accent: '#10B981',
+    accent: null,
     dot: '#10B981',
     text: '#065F46',
     mutedText: '#059669',
@@ -63,7 +63,7 @@ const STAGE_PALETTE: Record<
 const STAGE_MISSING_PALETTE = {
   bg: '#FEF2F2',
   bgHover: '#FEE2E2',
-  accent: '#F87171',
+  accent: null,
   dot: '#EF4444',
   text: '#991B1B',
   mutedText: '#DC2626',
