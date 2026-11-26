@@ -402,6 +402,17 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await expect(quickPop.getByRole('button', { name: '复制提取码' })).toBeVisible();
     await page.keyboard.press('Escape');
 
+    // 右键「时轴」单元格 -> 点击「查看单元格修改记录」-> 仅展示该单元格的修改记录并支持切至整条任务
+    const stagePtForMenu = await waitForCanvasPoint(page, 'getCellPoint', task.id, timingCol.id);
+    await page.mouse.click(stagePtForMenu.x, stagePtForMenu.y, { button: 'right' });
+    await expect(page.getByTestId('context-menu-cell-history')).toBeVisible();
+    await page.getByTestId('context-menu-cell-history').click();
+    await expect(page.getByTestId('cell-history-scope-bar')).toContainText('Disc 1 正片');
+    await expect(page.getByTestId('cell-history-scope-bar')).toContainText('时轴');
+    await expect(page.getByTestId('change-log-list')).toContainText('时轴');
+    await page.getByRole('button', { name: '关闭侧栏' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
     // 点击固定「文件」列 -> 打开 TaskDetailDrawer，作品共用资源位于最下方，上方按工序与任务分组
     const filesPt = await waitForCanvasPoint(page, 'getCellPoint', task.id, 'files');
     await page.mouse.click(filesPt.x, filesPt.y);

@@ -44,7 +44,10 @@ import { Button, cn } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
 import { AddColumnPopover } from '@/components/worksheet/AddColumnPopover.js';
 import type { ActiveCellConflict, StageCellConflict } from '@/components/worksheet/CellEditors.js';
-import { ChangeLogDrawer } from '@/components/worksheet/ChangeLogDrawer.js';
+import {
+  type CellChangeLogScope,
+  ChangeLogDrawer,
+} from '@/components/worksheet/ChangeLogDrawer.js';
 import { ColumnManagerModal } from '@/components/worksheet/ColumnManagerModal.js';
 import { FieldVisibilityPopover } from '@/components/worksheet/FieldVisibilityPopover.js';
 import {
@@ -89,6 +92,7 @@ export function WorksheetDetailPage() {
 
   const [colModalOpen, setColModalOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [cellHistoryScope, setCellHistoryScope] = useState<CellChangeLogScope | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [detailFocusFiles, setDetailFocusFiles] = useState(false);
   const [publishedExpanded, setPublishedExpanded] = useState(false);
@@ -1101,7 +1105,10 @@ export function WorksheetDetailPage() {
 
         <button
           type="button"
-          onClick={() => setLogsOpen(true)}
+          onClick={() => {
+            setCellHistoryScope(null);
+            setLogsOpen(true);
+          }}
           className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
         >
           <History className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
@@ -1382,6 +1389,10 @@ export function WorksheetDetailPage() {
           setDetailFocusFiles(Boolean(opts?.focusFiles));
           setDetailTaskId(tid);
         }}
+        onOpenCellHistory={(scope) => {
+          setCellHistoryScope(scope);
+          setLogsOpen(true);
+        }}
         onClearTextConflict={clearTextConflict}
         onClearStageConflict={clearStageConflict}
         onAcceptRemoteField={acceptRemoteField}
@@ -1468,7 +1479,12 @@ export function WorksheetDetailPage() {
         boardColumns={data.boardColumns}
       />
 
-      <ChangeLogDrawer worksheetId={data.worksheet.id} open={logsOpen} onOpenChange={setLogsOpen} />
+      <ChangeLogDrawer
+        worksheetId={data.worksheet.id}
+        cellScope={cellHistoryScope}
+        open={logsOpen}
+        onOpenChange={setLogsOpen}
+      />
 
       <TaskDetailDrawer
         worksheetId={data.worksheet.id}

@@ -1,12 +1,90 @@
 import type { ChangeLogDiff, ChangeLogItem, ChangeLogsResponse } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RotateCcw } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronRight, RotateCcw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { invalidateArtifactQueries } from '@/components/artifact/utils.js';
 import { Sheet, useToast } from '@/components/ui/overlays.js';
-import { Badge, Button } from '@/components/ui/primitives.js';
+import { Badge, Button, cn } from '@/components/ui/primitives.js';
+
+export type CellChangeLogColumnKind =
+  | 'title'
+  | 'stage'
+  | 'work'
+  | 'priority'
+  | 'publish'
+  | 'files'
+  | 'divisionNote'
+  | 'custom';
+
+export interface CellChangeLogScope {
+  taskId: string;
+  taskTitle: string;
+  columnKey: string | null;
+  columnKind: CellChangeLogColumnKind | null;
+  columnName: string | null;
+}
+
+function matchCellChangeLog(
+  item: ChangeLogItem,
+  scope: CellChangeLogScope,
+): { matched: boolean; diffs: ChangeLogDiff[] } {
+  const rawDiffs = Array.isArray(item.changes?.diffs)
+    ? (item.changes.diffs as ChangeLogDiff[])
+    : [];
+
+  if (!scope.columnKey || !scope.columnKind) {
+    return { matched: true, diffs: rawDiffs };
+  }
+
+  if (scope.columnKind === 'stage') {
+    if (item.action === 'stage.updated' && item.changes?.columnId === scope.columnKey) {
+      return { matched: true, diffs: rawDiffs };
+    }
+    if (
+      (item.action.startsWith('artifact.') ||
+        item.action.startsWith('artifact_version.') ||
+        item.action.startsWith('location.')) &&
+      (item.changes?.stageColumnId === scope.columnKey ||
+        item.changes?.columnId === scope.columnKey)
+    ) {
+      return { matched: true, diffs: rawDiffs };
+    }
+    return { matched: false, diffs: [] };
+  }
+
+  if (scope.columnKind === 'files') {
+    const isResourceAction =
+      item.action.startsWith('artifact.') ||
+      item.action.startsWith('artifact_version.') ||
+      item.action.startsWith('location.');
+    return { matched: isResourceAction, diffs: isResourceAction ? rawDiffs : [] };
+  }
+
+  if (scope.columnKind === 'title' && item.action === 'task.created') {
+    return { matched: true, diffs: [] };
+  }
+
+  if (item.action !== 'task.updated') {
+    return { matched: false, diffs: [] };
+  }
+
+  const fieldMatches = (field: string): boolean => {
+    if (scope.columnKind === 'title') return field === 'title';
+    if (scope.columnKind === 'work') return field === 'workId';
+    if (scope.columnKind === 'divisionNote') return field === 'divisionNote';
+    if (scope.columnKind === 'priority') return field === 'priority';
+    if (scope.columnKind === 'publish') {
+      return field === 'publishStatus' || field === 'publishedAt' || field === 'publishUrl';
+    }
+    if (scope.columnKind === 'custom') return field === `custom:${scope.columnKey}`;
+    return false;
+  };
+
+  const matchedDiffs = rawDiffs.filter((d) => fieldMatches(d.field));
+  return { matched: matchedDiffs.length > 0, diffs: matchedDiffs };
+}
 
 function formatVal(v: unknown): string {
   if (v === null || v === undefined || v === '') return '（空）';
@@ -40,11 +118,13 @@ function getRestoreTarget(item: ChangeLogItem): RestoreTarget | null {
 export function ChangeLogDrawer({
   worksheetId,
   mode = 'worksheet',
+  cellScope = null,
   open,
   onOpenChange,
 }: {
   worksheetId?: string;
   mode?: 'worksheet' | 'docs';
+  cellScope?: CellChangeLogScope | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -53,20 +133,28 @@ export function ChangeLogDrawer({
   const [extraItems, setExtraItems] = useState<ChangeLogItem[]>([]);
   const [extraCursor, setExtraCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [scopeFilterMode, setScopeFilterMode] = useState<'cell' | 'task'>('cell');
+
+  useEffect(() => {
+    setScopeFilterMode(cellScope?.columnKey ? 'cell' : 'task');
+  }, [cellScope]);
 
   const isDocsMode = mode === 'docs';
+  const scopedTaskId = !isDocsMode && cellScope ? cellScope.taskId : null;
   const baseUrl = isDocsMode
     ? '/api/docs/change-logs'
     : `/api/worksheets/${worksheetId ?? ''}/change-logs`;
+  const listLimit = scopedTaskId ? 100 : 50;
+  const taskQuerySuffix = scopedTaskId ? `&taskId=${scopedTaskId}` : '';
 
   const { data, isLoading, refetch } = useQuery<ChangeLogsResponse>({
     queryKey: isDocsMode
       ? queryKeys.docsChangeLogs
-      : queryKeys.changeLogs(worksheetId ?? 'none', null),
+      : queryKeys.changeLogs(worksheetId ?? 'none', scopedTaskId),
     queryFn: async () => {
       setExtraItems([]);
       setExtraCursor(null);
-      return apiFetch<ChangeLogsResponse>(`${baseUrl}?limit=50`);
+      return apiFetch<ChangeLogsResponse>(`${baseUrl}?limit=${listLimit}${taskQuerySuffix}`);
     },
     enabled: Boolean(open && (isDocsMode || worksheetId)),
   });
@@ -111,7 +199,9 @@ export function ChangeLogDrawer({
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await apiFetch<ChangeLogsResponse>(`${baseUrl}?limit=50&cursor=${nextCursor}`);
+      const res = await apiFetch<ChangeLogsResponse>(
+        `${baseUrl}?limit=${listLimit}${taskQuerySuffix}&cursor=${nextCursor}`,
+      );
       setExtraItems((prev) => [...prev, ...res.items]);
       setExtraCursor(res.nextCursor);
     } finally {
@@ -119,22 +209,97 @@ export function ChangeLogDrawer({
     }
   };
 
+  const isCellFiltered = Boolean(cellScope?.columnKey && scopeFilterMode === 'cell');
+  const displayEntries = allItems.flatMap((item) => {
+    if (isCellFiltered && cellScope) {
+      const res = matchCellChangeLog(item, cellScope);
+      if (!res.matched) return [];
+      return [{ item, diffs: res.diffs }];
+    }
+    const rawDiffs = Array.isArray(item.changes?.diffs)
+      ? (item.changes.diffs as ChangeLogDiff[])
+      : [];
+    return [{ item, diffs: rawDiffs }];
+  });
+
+  const drawerTitle = isDocsMode
+    ? '通用文档修改记录'
+    : cellScope
+      ? isCellFiltered && cellScope.columnName
+        ? '单元格修改记录'
+        : '任务修改记录'
+      : '修改记录';
+
   return (
-    <Sheet
-      open={open}
-      onOpenChange={onOpenChange}
-      title={isDocsMode ? '通用文档修改记录' : '修改记录'}
-    >
+    <Sheet open={open} onOpenChange={onOpenChange} title={drawerTitle}>
+      {cellScope && !isDocsMode && (
+        <div
+          data-testid="cell-history-scope-bar"
+          className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-black/[0.06] bg-[#fafafa] px-2.5 py-2"
+        >
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
+            <span className="inline-flex max-w-[180px] truncate rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200/90">
+              {cellScope.taskTitle}
+            </span>
+            {cellScope.columnName && (
+              <>
+                <ChevronRight className="h-3 w-3 shrink-0 text-zinc-300" />
+                <span className="inline-flex max-w-[140px] truncate rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200/90">
+                  {cellScope.columnName}
+                </span>
+              </>
+            )}
+          </div>
+          {cellScope.columnKey && (
+            <div className="inline-flex shrink-0 items-center rounded-md border border-black/[0.08] bg-white p-0.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setScopeFilterMode('cell')}
+                className={cn(
+                  'rounded px-2 py-0.5 font-medium transition-colors cursor-pointer',
+                  scopeFilterMode === 'cell'
+                    ? 'bg-zinc-900 text-white'
+                    : 'text-zinc-500 hover:text-zinc-900',
+                )}
+              >
+                当前单元格
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeFilterMode('task')}
+                className={cn(
+                  'rounded px-2 py-0.5 font-medium transition-colors cursor-pointer',
+                  scopeFilterMode === 'task'
+                    ? 'bg-zinc-900 text-white'
+                    : 'text-zinc-500 hover:text-zinc-900',
+                )}
+              >
+                整条任务
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="py-10 text-center text-sm text-slate-500">正在加载修改记录…</div>
-      ) : allItems.length === 0 ? (
-        <div className="py-10 text-center text-sm text-slate-500">暂无修改记录</div>
+      ) : displayEntries.length === 0 ? (
+        <div className="space-y-2.5 py-10 text-center text-sm text-slate-500">
+          <div>{isCellFiltered ? '该单元格暂无修改记录' : '暂无修改记录'}</div>
+          {isCellFiltered && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => setScopeFilterMode('task')}
+            >
+              查看整条任务的修改记录
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="space-y-3" data-testid="change-log-list">
-          {allItems.map((item) => {
-            const diffs = Array.isArray(item.changes?.diffs)
-              ? (item.changes.diffs as ChangeLogDiff[])
-              : [];
+          {displayEntries.map(({ item, diffs }) => {
             const snapshot =
               item.action === 'task.deleted' && item.changes?.snapshot
                 ? (item.changes.snapshot as {

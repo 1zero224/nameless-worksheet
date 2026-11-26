@@ -894,6 +894,7 @@ export function registerArtifactRoutes(
             name: artifact.name,
             scopeKind: resolved.scopeKind,
             versionNumber: 1,
+            ...(resolved.stageColumnId ? { stageColumnId: resolved.stageColumnId } : {}),
           },
         });
 

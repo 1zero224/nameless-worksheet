@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ChevronRight,
   FolderPlus,
+  History,
   ListPlus,
   MoreHorizontal,
   PanelRightOpen,
@@ -75,6 +76,7 @@ import type {
   StageAttachmentSummary,
   StageCellConflict,
 } from '@/components/worksheet/CellEditors.js';
+import type { CellChangeLogScope } from '@/components/worksheet/ChangeLogDrawer.js';
 import { ColumnHeaderMenu } from '@/components/worksheet/ColumnHeaderMenu.js';
 import { isSystemColumnHidden } from '@/components/worksheet/FieldVisibilityPopover.js';
 import { WorkAttachmentSlots } from '@/components/worksheet/WorkBannerRow.js';
@@ -1227,6 +1229,7 @@ export interface WorksheetCanvasGridProps {
   onCloseAddSegment: () => void;
   onUngroupWork: (block: Extract<GridDisplayBlock, { kind: 'work' }>) => void;
   onOpenDetail: (taskId: string, opts?: { focusFiles?: boolean }) => void;
+  onOpenCellHistory: (scope: CellChangeLogScope) => void;
   onClearTextConflict: (key: string) => void;
   onClearStageConflict: (key: string) => void;
   onAcceptRemoteField: (taskId: string, field: string, remoteVal: string) => void;
@@ -1271,6 +1274,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     onCloseAddSegment,
     onUngroupWork,
     onOpenDetail,
+    onOpenCellHistory,
     onClearTextConflict,
     onClearStageConflict,
     onAcceptRemoteField,
@@ -1330,6 +1334,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
   const [addColAnchor, setAddColAnchor] = useState<IRectangle | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<{
     task: TaskDetail;
+    col: CanvasColumnDef | null;
     x: number;
     y: number;
   } | null>(null);
@@ -1876,29 +1881,34 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
 
   const handleContextMenu = useCallback(
     (selection: CombinedSelection, position: { x: number; y: number }) => {
+      let colIdx: number | undefined;
       let rowIdx: number | undefined;
-      if (selection.type === SelectionRegionType.Cells && selection.ranges[0]) {
+      const hit = gridRef.current?.getCellIndicesAtPosition(position.x, position.y);
+      if (hit) {
+        colIdx = hit[0];
+        rowIdx = hit[1];
+      } else if (selection.type === SelectionRegionType.Cells && selection.ranges[0]) {
+        colIdx = selection.ranges[0][0];
         rowIdx = selection.ranges[0][1];
       } else if (selection.type === SelectionRegionType.Rows && selection.ranges[0]) {
         rowIdx = selection.ranges[0][0];
-      } else {
-        const hit = gridRef.current?.getCellIndicesAtPosition(position.x, position.y);
-        rowIdx = hit?.[1];
       }
       if (rowIdx == null) return;
       const task = visualActiveTasks[rowIdx];
+      const col = colIdx != null ? (columnDefs[colIdx] ?? null) : null;
       if (task) {
         const rect = gridRef.current?.getContainer()?.getBoundingClientRect();
         const absX = (rect?.left ?? 0) + position.x;
         const absY = (rect?.top ?? 0) + position.y;
         setRowContextMenu({
           task,
-          x: Math.min(absX, window.innerWidth - 170),
-          y: Math.min(absY, window.innerHeight - 130),
+          col,
+          x: Math.min(absX, window.innerWidth - 180),
+          y: Math.min(absY, window.innerHeight - 170),
         });
       }
     },
-    [visualActiveTasks],
+    [visualActiveTasks, columnDefs],
   );
 
   // 键盘 Enter / F2 / 直接键入字符进入单元格编辑
@@ -2919,12 +2929,12 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         )}
       </div>
 
-      {/* 右键整行上下文菜单 */}
+      {/* 右键单元格 / 整行上下文菜单 */}
       {rowContextMenu && (
         <div
           role="menu"
           style={{ top: rowContextMenu.y, left: rowContextMenu.x }}
-          className="fixed z-[80] min-w-[156px] rounded-xl border border-black/[0.08] bg-white p-1 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.16)]"
+          className="fixed z-[80] min-w-[168px] rounded-xl border border-black/[0.08] bg-white p-1 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.16)]"
         >
           <button
             type="button"
@@ -2938,6 +2948,26 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           >
             <PanelRightOpen className="h-3.5 w-3.5 text-zinc-400" />
             展开任务详情
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            data-testid="context-menu-cell-history"
+            onClick={() => {
+              const { task: t, col } = rowContextMenu;
+              setRowContextMenu(null);
+              onOpenCellHistory({
+                taskId: t.id,
+                taskTitle: t.title,
+                columnKey: col?.id ?? null,
+                columnKind: col?.kind ?? null,
+                columnName: col?.name ?? null,
+              });
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+          >
+            <History className="h-3.5 w-3.5 text-zinc-400" />
+            {rowContextMenu.col ? '查看单元格修改记录' : '查看本行修改记录'}
           </button>
           <button
             type="button"
