@@ -67,8 +67,7 @@ export const BOARD_CARD_STATE_STYLES: Record<
     title: 'text-zinc-900 group-hover:text-amber-950',
     statusText: 'text-amber-900/90 font-medium',
     dot: 'bg-amber-500/85',
-    actionBtn:
-      'border-amber-900/[0.12] bg-amber-950/[0.045] text-amber-950/85 hover:border-emerald-600/30 hover:bg-emerald-500/[0.12] hover:text-emerald-900',
+    actionBtn: 'text-amber-900/85 hover:bg-amber-950/[0.10] hover:text-amber-950',
     meTag: 'bg-amber-950/[0.07] text-amber-950/80',
   },
   missing: {
@@ -77,8 +76,7 @@ export const BOARD_CARD_STATE_STYLES: Record<
     title: 'text-zinc-900 group-hover:text-red-950',
     statusText: 'text-red-900/85 font-medium',
     dot: 'bg-red-500/80',
-    actionBtn:
-      'border-red-900/[0.11] bg-red-500/[0.08] text-red-900/90 hover:border-red-900/[0.22] hover:bg-red-500/[0.15] hover:text-red-950',
+    actionBtn: 'text-red-800/90 hover:bg-red-950/[0.10] hover:text-red-950',
     meTag: 'bg-red-950/[0.07] text-red-950/80',
   },
   waiting: {
@@ -87,8 +85,7 @@ export const BOARD_CARD_STATE_STYLES: Record<
     title: 'text-zinc-900 group-hover:text-zinc-950',
     statusText: 'text-zinc-600',
     dot: 'bg-zinc-300',
-    actionBtn:
-      'border-black/[0.09] bg-zinc-900/[0.04] text-zinc-700 hover:border-amber-500/30 hover:bg-amber-500/[0.12] hover:text-amber-950',
+    actionBtn: 'text-zinc-600 hover:bg-black/[0.07] hover:text-zinc-950',
     meTag: 'bg-black/[0.06] text-zinc-700',
   },
 };

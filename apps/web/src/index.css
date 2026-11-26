@@ -58,6 +58,30 @@
   height: 0;
 }
 
+/* 看板横向滚动条：常驻轻量胶囊样式，提示可左右滑动 */
+.board-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(24, 24, 27, 0.2) transparent;
+}
+.board-scrollbar::-webkit-scrollbar {
+  height: 10px;
+}
+.board-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.board-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(24, 24, 27, 0.18);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.board-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(24, 24, 27, 0.3);
+}
+.board-scrollbar::-webkit-scrollbar-thumb:active {
+  background-color: rgba(24, 24, 27, 0.45);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

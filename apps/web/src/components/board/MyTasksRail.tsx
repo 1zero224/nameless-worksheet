@@ -12,7 +12,7 @@ const CARD_SPRING = {
 } as const;
 
 const INLINE_ACTION_BTN_BASE =
-  'inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors duration-150 active:scale-[0.98] disabled:opacity-50 cursor-pointer';
+  'inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-50 cursor-pointer';
 
 export interface MyTasksListContentProps {
   myInProgress: MyTaskItem[];
@@ -147,7 +147,7 @@ export function MyTasksListContent({
                         </span>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-1">
+                      <div className="flex shrink-0 items-center gap-0.5">
                         <button
                           type="button"
                           disabled={busy}
@@ -157,7 +157,7 @@ export function MyTasksListContent({
                           }}
                           className={cn(INLINE_ACTION_BTN_BASE, stateStyle.actionBtn)}
                         >
-                          <Check className="h-3 w-3 opacity-80" strokeWidth={2.1} />
+                          <Check className="h-3 w-3" strokeWidth={2} />
                           完成
                         </button>
 
@@ -280,7 +280,7 @@ export function MyTasksListContent({
                         </span>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-1">
+                      <div className="flex shrink-0 items-center gap-0.5">
                         <button
                           type="button"
                           disabled={busy}
@@ -290,7 +290,7 @@ export function MyTasksListContent({
                           }}
                           className={cn(INLINE_ACTION_BTN_BASE, stateStyle.actionBtn)}
                         >
-                          <Play className="h-2.5 w-2.5 fill-current opacity-75" />
+                          <Play className="h-2.5 w-2.5 fill-current opacity-80" />
                           开始
                         </button>
 
@@ -335,13 +335,16 @@ export function MyTasksRail({
   return (
     <motion.section
       layout
-      initial={false}
-      animate={{ width: collapsed ? 52 : 292 }}
       transition={PANEL_SPRING}
       aria-label="我的任务"
       data-testid="my-in-progress-bar"
       data-collapsed={collapsed ? 'true' : 'false'}
-      className="hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-black/[0.08] bg-white md:flex"
+      className={cn(
+        'hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-black/[0.08] bg-white md:flex',
+        collapsed
+          ? 'w-[52px] min-w-[52px] max-w-[52px]'
+          : 'w-[clamp(244px,19vw,288px)] min-w-[244px] max-w-[288px]',
+      )}
     >
       {collapsed ? (
         <motion.div
@@ -379,7 +382,7 @@ export function MyTasksRail({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.16 }}
-          className="flex h-full min-h-0 w-[292px] flex-col"
+          className="flex h-full min-h-0 w-full flex-col"
         >
           <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-black/[0.06] bg-white px-3">
             <div className="flex min-w-0 items-center gap-2">
