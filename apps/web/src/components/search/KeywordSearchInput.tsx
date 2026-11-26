@@ -1,6 +1,6 @@
 import { PUBLISH_STATUS_LABELS, type SearchResponse, STAGE_STATUS_LABELS } from '@nw/shared';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Search, X } from 'lucide-react';
+import { ArrowRight, FileText, Paperclip, Search, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { apiFetch } from '@/api/client.js';
@@ -111,8 +111,8 @@ export function KeywordSearchInput({
         >
           <div className="flex items-center justify-between gap-2 border-b border-black/[0.06] bg-[#fafafa] px-3 py-2">
             <span className="text-[11px] font-medium text-zinc-500">
-              跨表资源检索
-              {data ? ` · 共 ${data.total} 条` : ''}
+              跨表与资源检索
+              {data ? ` · ${data.total} 条任务 / ${data.docs.length} 篇通用文档` : ''}
             </span>
             <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-600 cursor-pointer select-none">
               <input
@@ -127,73 +127,119 @@ export function KeywordSearchInput({
 
           <div
             data-testid="search-results"
-            className="no-scrollbar max-h-[340px] divide-y divide-black/[0.05] overflow-y-auto"
+            className="no-scrollbar max-h-[360px] divide-y divide-black/[0.05] overflow-y-auto"
           >
             {isFetching && !data ? (
               <div className="py-6 text-center text-xs text-zinc-400">正在跨表检索…</div>
-            ) : !data || data.items.length === 0 ? (
+            ) : !data || (data.items.length === 0 && data.docs.length === 0) ? (
               <div className="py-6 text-center text-xs text-zinc-400">
-                没有在任何工作表中找到匹配任务
+                没有找到匹配的任务、资源或通用文档
               </div>
             ) : (
-              data.items.map((item) => (
-                <button
-                  key={item.taskId}
-                  type="button"
-                  data-testid={`search-result-${item.taskId}`}
-                  onClick={() => {
-                    setFocused(false);
-                    navigate(`/worksheets/${item.worksheetId}?taskId=${item.taskId}`);
-                  }}
-                  className="flex w-full items-start justify-between gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] cursor-pointer"
-                >
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-medium text-zinc-500">
-                        {item.worksheetName}
-                      </span>
-                      {item.workName && (
-                        <span className="rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-700">
-                          {item.workName}
-                        </span>
-                      )}
-                      {item.publishStatus === 'published' && (
-                        <span className="rounded-full bg-emerald-50 px-1.5 py-0 text-[10px] font-medium text-emerald-700">
-                          {PUBLISH_STATUS_LABELS.published}
-                        </span>
-                      )}
+              <>
+                {data.docs.length > 0 && (
+                  <div data-testid="search-docs-section" className="divide-y divide-black/[0.04]">
+                    <div className="bg-zinc-50/90 px-3 py-1.5 text-[11px] font-semibold text-zinc-500">
+                      通用文档（{data.docs.length}）
                     </div>
-
-                    <div className="truncate text-xs font-semibold text-zinc-950">
-                      {item.taskTitle}
-                    </div>
-
-                    {item.divisionNote && (
-                      <div className="truncate text-[11px] text-zinc-500">{item.divisionNote}</div>
-                    )}
-
-                    {item.stages.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-0.5">
-                        {item.stages.slice(0, 4).map((st) => (
-                          <span
-                            key={st.columnId}
-                            className={cn(
-                              'rounded px-1.5 py-0.25 text-[10px]',
-                              STAGE_STATUS_STYLES[st.status].badge,
-                            )}
-                          >
-                            {st.name}
-                            {st.assigneeNames.length > 0
-                              ? `·${st.assigneeNames.join('、')}`
-                              : `·${STAGE_STATUS_LABELS[st.status]}`}
+                    {data.docs.map((doc) => (
+                      <button
+                        key={doc.artifactId}
+                        type="button"
+                        data-testid={`search-doc-result-${doc.artifactId}`}
+                        onClick={() => {
+                          setFocused(false);
+                          navigate(`/docs?artifactId=${doc.artifactId}`);
+                        }}
+                        className="flex w-full items-center justify-between gap-2.5 px-3 py-2 text-left transition-colors hover:bg-black/[0.03] cursor-pointer"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                          <span className="truncate text-xs font-medium text-zinc-900">
+                            {doc.name}
                           </span>
-                        ))}
-                      </div>
-                    )}
+                          {doc.latestVersionNumber !== null && (
+                            <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0 text-[10px] font-medium text-zinc-600 tabular-nums">
+                              v{doc.latestVersionNumber}
+                            </span>
+                          )}
+                        </div>
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                      </button>
+                    ))}
                   </div>
-                  <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-zinc-400" />
-                </button>
-              ))
+                )}
+
+                {data.items.map((item) => (
+                  <button
+                    key={item.taskId}
+                    type="button"
+                    data-testid={`search-result-${item.taskId}`}
+                    onClick={() => {
+                      setFocused(false);
+                      navigate(`/worksheets/${item.worksheetId}?taskId=${item.taskId}`);
+                    }}
+                    className="flex w-full items-start justify-between gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] cursor-pointer"
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-medium text-zinc-500">
+                          {item.worksheetName}
+                        </span>
+                        {item.workName && (
+                          <span className="rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-700">
+                            {item.workName}
+                          </span>
+                        )}
+                        {item.publishStatus === 'published' && (
+                          <span className="rounded-full bg-emerald-50 px-1.5 py-0 text-[10px] font-medium text-emerald-700">
+                            {PUBLISH_STATUS_LABELS.published}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="truncate text-xs font-semibold text-zinc-950">
+                        {item.taskTitle}
+                      </div>
+
+                      {item.matchedArtifactNames && item.matchedArtifactNames.length > 0 && (
+                        <div className="inline-flex max-w-full items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 text-[10.5px] text-zinc-600">
+                          <Paperclip className="h-2.5 w-2.5 shrink-0 text-zinc-400" />
+                          <span className="truncate">
+                            匹配资源：{item.matchedArtifactNames.join('、')}
+                          </span>
+                        </div>
+                      )}
+
+                      {item.divisionNote && (
+                        <div className="truncate text-[11px] text-zinc-500">
+                          {item.divisionNote}
+                        </div>
+                      )}
+
+                      {item.stages.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {item.stages.slice(0, 4).map((st) => (
+                            <span
+                              key={st.columnId}
+                              className={cn(
+                                'rounded px-1.5 py-0.25 text-[10px]',
+                                STAGE_STATUS_STYLES[st.status].badge,
+                              )}
+                            >
+                              {st.name}
+                              {st.assigneeNames.length > 0
+                                ? `·${st.assigneeNames.join('、')}`
+                                : `·${STAGE_STATUS_LABELS[st.status]}`}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                  </button>
+                ))}
+              </>
             )}
           </div>
         </div>

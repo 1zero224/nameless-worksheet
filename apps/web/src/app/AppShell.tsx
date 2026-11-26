@@ -17,6 +17,7 @@ import { type Permission, ROLE_LABELS, type WorksheetSummary } from '@nw/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
+  FileText,
   FolderKanban,
   HardDrive,
   Kanban,
@@ -253,6 +254,9 @@ export function AppShell() {
       } else if (ev.type === 'user.updated') {
         void queryClient.invalidateQueries({ queryKey: queryKeys.users });
         void queryClient.invalidateQueries({ queryKey: queryKeys.me });
+      } else if (ev.type === 'artifact.changed') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.docsAll });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.docsChangeLogs });
       }
     },
     onResync: () => {
@@ -269,6 +273,7 @@ export function AppShell() {
   );
 
   const isBoardActive = location.pathname === '/';
+  const isDocsActive = location.pathname === '/docs';
   const isCanvasPage = isBoardActive || /^\/worksheets\/[^/]+/.test(location.pathname);
 
   const handleTabsDragEnd = (event: DragEndEvent) => {
@@ -336,6 +341,34 @@ export function AppShell() {
                   strokeWidth={1.75}
                 />
                 <span className="relative z-10">任务看板</span>
+              </NavLink>
+
+              <NavLink
+                to="/docs"
+                data-testid="topbar-docs-tab"
+                className={cn(
+                  'relative flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors duration-150 select-none',
+                  isDocsActive
+                    ? 'font-medium text-zinc-950'
+                    : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
+                )}
+              >
+                {isDocsActive && (
+                  <motion.span
+                    layoutId="topbar-active-tab-pill"
+                    transition={TAB_SPRING}
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 rounded-md bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.06]"
+                  />
+                )}
+                <FileText
+                  className={cn(
+                    'relative z-10 h-3.5 w-3.5 shrink-0 transition-colors duration-150',
+                    isDocsActive ? 'text-zinc-900' : 'text-zinc-500',
+                  )}
+                  strokeWidth={1.75}
+                />
+                <span className="relative z-10">通用文档</span>
               </NavLink>
 
               <span className="mx-0.5 h-4 w-px shrink-0 bg-black/[0.08]" />

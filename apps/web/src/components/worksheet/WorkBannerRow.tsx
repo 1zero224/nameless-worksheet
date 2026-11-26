@@ -1,9 +1,10 @@
 import { useDroppable } from '@dnd-kit/core';
-import type { Work } from '@nw/shared';
+import type { Work, WorkCapsuleSummary } from '@nw/shared';
 import {
   ChevronDown,
   ChevronRight,
-  Download,
+  Folder,
+  KeyRound,
   Link2,
   MoreHorizontal,
   Paperclip,
@@ -12,6 +13,8 @@ import {
   Unlink,
 } from 'lucide-react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { ArtifactQuickPopoverContent } from '@/components/artifact/ArtifactQuickPopover.js';
+import { isSafeExternalUrl } from '@/components/artifact/utils.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,78 +27,130 @@ import {
 } from '@/components/ui/overlays.js';
 import { Button, cn } from '@/components/ui/primitives.js';
 
-/** 阶段 3 作品级共用附件数据结构（当前阶段 2 为空，不伪造持久化假数据） */
-export interface WorkAttachmentSummary {
-  id: string;
-  kind: 'r2' | 'link';
-  label: string;
-  url?: string;
-  onClick?: () => void;
-}
-
-/** 阶段 3 作品大标题横幅右侧共用附件快捷槽位 */
+/** 阶段 3 作品大标题横幅右侧共用资源快捷槽位 */
 export function WorkAttachmentSlots({
+  worksheetId,
+  workId,
   workName,
-  attachments = [],
+  capsules = [],
 }: {
+  worksheetId: string;
   workId: string;
   workName: string;
-  attachments?: WorkAttachmentSummary[];
+  capsules?: WorkCapsuleSummary[];
 }) {
-  return (
-    <div className="flex shrink-0 items-center gap-1" data-testid="work-attachment-slots">
-      {attachments.map((att) =>
-        att.url && /^https?:\/\//i.test(att.url) ? (
-          <a
-            key={att.id}
-            href={att.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            title={att.label}
-            className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200/90 transition-colors hover:text-sky-700 hover:ring-sky-300"
-          >
-            {att.kind === 'r2' ? <Download className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
-            <span className="max-w-[96px] truncate">{att.label}</span>
-          </a>
-        ) : (
-          <button
-            key={att.id}
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              att.onClick?.();
-            }}
-            title={att.label}
-            className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200/90 transition-colors hover:text-sky-700 hover:ring-sky-300 cursor-pointer"
-          >
-            {att.kind === 'r2' ? <Download className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
-            <span className="max-w-[96px] truncate">{att.label}</span>
-          </button>
-        ),
-      )}
+  const [manageOpen, setManageOpen] = useState(false);
+  const [openCapsuleId, setOpenCapsuleId] = useState<string | null>(null);
 
-      <Popover>
+  const visibleCapsules = capsules.slice(0, 3);
+  const overflowCount = Math.max(0, capsules.length - visibleCapsules.length);
+
+  return (
+    <div
+      className="flex shrink-0 items-center gap-1"
+      data-testid="work-attachment-slots"
+      data-work-attachment-slots={workId}
+    >
+      {visibleCapsules.map((cap) => {
+        const directUrl = isSafeExternalUrl(cap.directUrl) ? cap.directUrl : null;
+        if (directUrl) {
+          return (
+            <a
+              key={cap.artifactId}
+              href={directUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid={`work-capsule-direct-${cap.artifactId}`}
+              onClick={(e) => e.stopPropagation()}
+              title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击直接打开链接`}
+              className="inline-flex h-6 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-zinc-700 ring-1 ring-black/[0.08] transition-colors hover:text-indigo-700 hover:ring-indigo-300"
+            >
+              {cap.directIsFolder ? (
+                <Folder className="h-3 w-3 shrink-0 text-amber-600" />
+              ) : (
+                <Link2 className="h-3 w-3 shrink-0 text-indigo-500" />
+              )}
+              <span className="max-w-[92px] truncate">{cap.name}</span>
+            </a>
+          );
+        }
+
+        return (
+          <Popover
+            key={cap.artifactId}
+            open={openCapsuleId === cap.artifactId}
+            onOpenChange={(next) => setOpenCapsuleId(next ? cap.artifactId : null)}
+          >
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                data-testid={`work-capsule-popover-${cap.artifactId}`}
+                onClick={(e) => e.stopPropagation()}
+                title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击查看入口与提取码`}
+                className="inline-flex h-6 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-zinc-700 ring-1 ring-black/[0.08] transition-colors hover:text-indigo-700 hover:ring-indigo-300 cursor-pointer"
+              >
+                {cap.hasExtractCode ? (
+                  <KeyRound className="h-3 w-3 shrink-0 text-amber-600" />
+                ) : (
+                  <Link2 className="h-3 w-3 shrink-0 text-indigo-500" />
+                )}
+                <span className="max-w-[92px] truncate">{cap.name}</span>
+                {cap.locationCount > 1 && (
+                  <span className="text-[10px] text-zinc-400 tabular-nums">
+                    {cap.locationCount}
+                  </span>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              sideOffset={6}
+              onClick={(e) => e.stopPropagation()}
+              className="w-[min(360px,calc(100vw-1.5rem))] p-3"
+            >
+              <ArtifactQuickPopoverContent
+                target={{
+                  kind: 'work',
+                  worksheetId,
+                  workId,
+                  workName,
+                  focusArtifactId: cap.artifactId,
+                }}
+                onClose={() => setOpenCapsuleId(null)}
+              />
+            </PopoverContent>
+          </Popover>
+        );
+      })}
+
+      <Popover open={manageOpen} onOpenChange={setManageOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
-            aria-label={`作品 ${workName} 共用附件`}
-            title="作品共用附件（阶段 3 接入）"
-            className="inline-flex h-6 items-center gap-1 rounded-md border border-dashed border-slate-300/90 bg-white/80 px-1.5 text-[11px] font-medium text-slate-500 transition-colors hover:border-indigo-300 hover:bg-white hover:text-indigo-700 cursor-pointer"
+            data-testid={`work-add-attachment-${workId}`}
+            aria-label={`作品 ${workName} 共用资源`}
+            title="管理或添加作品共用资源"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex h-6 items-center gap-1 rounded-md border border-dashed border-indigo-300/90 bg-white/85 px-1.5 text-[11px] font-medium text-indigo-700/80 transition-colors hover:border-indigo-400 hover:bg-white hover:text-indigo-900 cursor-pointer"
           >
             <Paperclip className="h-3 w-3" />
-            <span className="hidden sm:inline">附件</span>
+            {overflowCount > 0 ? (
+              <span className="tabular-nums">+{overflowCount}</span>
+            ) : (
+              <span className="hidden sm:inline">附件</span>
+            )}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-64 space-y-1.5 p-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-            <Paperclip className="h-3.5 w-3.5 text-indigo-500" />
-            作品共用附件（阶段 3 接入）
-          </div>
-          <p className="text-xs leading-relaxed text-slate-500">
-            后续可在此直接挂载「{workName}
-            」的整片原片、纯音源、通用字体包或网盘链接，并在旗下每条分段任务的详情侧栏中自动透出。
-          </p>
+        <PopoverContent
+          align="end"
+          sideOffset={6}
+          onClick={(e) => e.stopPropagation()}
+          className="w-[min(360px,calc(100vw-1.5rem))] p-3"
+        >
+          <ArtifactQuickPopoverContent
+            target={{ kind: 'work', worksheetId, workId, workName }}
+            onClose={() => setManageOpen(false)}
+          />
         </PopoverContent>
       </Popover>
     </div>
@@ -286,7 +341,11 @@ export function WorkBannerRow({
 
           {/* 右侧：作品共用附件槽位 + 添加分段 + 菜单 */}
           <div className="flex shrink-0 items-center gap-1.5">
-            <WorkAttachmentSlots workId={work.id} workName={work.name} />
+            <WorkAttachmentSlots
+              worksheetId={work.worksheetId}
+              workId={work.id}
+              workName={work.name}
+            />
 
             <button
               type="button"

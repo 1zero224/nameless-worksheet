@@ -14,6 +14,7 @@ import {
   type TaskRestoredPayload,
   type TasksReorderedPayload,
   type TaskUpdatedPayload,
+  type UngroupWorkResponse,
   type UserListItem,
   type Work,
   type WorksheetFullResponse,
@@ -38,7 +39,7 @@ import { useMe } from '@/app/AuthContext.js';
 import { KeywordSearchInput } from '@/components/search/KeywordSearchInput.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import { peerColorForUser } from '@/components/ui/colors.js';
-import { ConfirmDialog, useToast } from '@/components/ui/overlays.js';
+import { ConfirmDialog, ModalDialog, useToast } from '@/components/ui/overlays.js';
 import { Button, cn } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
 import { AddColumnPopover } from '@/components/worksheet/AddColumnPopover.js';
@@ -89,6 +90,7 @@ export function WorksheetDetailPage() {
   const [colModalOpen, setColModalOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [detailFocusFiles, setDetailFocusFiles] = useState(false);
   const [publishedExpanded, setPublishedExpanded] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
 
@@ -99,7 +101,9 @@ export function WorksheetDetailPage() {
   const [ungroupingWork, setUngroupingWork] = useState<{
     work: Work;
     tasks: TaskDetail[];
+    sharedArtifactCount: number;
   } | null>(null);
+  const [ungroupDeleteShared, setUngroupDeleteShared] = useState(false);
   const [ungroupPending, setUngroupPending] = useState(false);
 
   const [statusChip, setStatusChip] = useState<StatusChip>('all');
@@ -199,6 +203,19 @@ export function WorksheetDetailPage() {
           old ? { ...old, works: old.works.map((w) => (w.id === work.id ? work : w)) } : old,
         );
         setPendingWorks((prev) => prev.map((w) => (w.id === work.id ? work : w)));
+        return;
+      }
+
+      if (ev.type === 'work.ungrouped') {
+        refetchWorksheet();
+        return;
+      }
+
+      if (ev.type === 'artifact.changed') {
+        refetchWorksheet();
+        void queryClient.invalidateQueries({ queryKey: queryKeys.workArtifactsAll });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.taskArtifactsAll });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.changeLogs(worksheetId, null) });
         return;
       }
 
@@ -612,6 +629,22 @@ export function WorksheetDetailPage() {
     }
 
     const kw = keyword.trim().toLowerCase();
+    // 服务端返回的“0 未发布任务但有共用资源”的作品同样渲染为持久作品横幅
+    for (const w of data?.works ?? []) {
+      if (emittedWorkIds.has(w.id)) continue;
+      if ((data?.artifactSummary?.workArtifactCounts[w.id] ?? 0) <= 0) continue;
+      if (workFilter && workFilter !== w.id) continue;
+      if (kw && !w.name.toLowerCase().includes(kw)) continue;
+      emittedWorkIds.add(w.id);
+      blocks.push({
+        kind: 'work',
+        key: `work-${w.id}`,
+        work: w,
+        tasks: [],
+        isEmptyPending: false,
+      });
+    }
+
     for (const pw of pendingWorks) {
       if (emittedWorkIds.has(pw.id)) continue;
       if (workFilter && workFilter !== pw.id) continue;
@@ -626,7 +659,16 @@ export function WorksheetDetailPage() {
     }
 
     return blocks;
-  }, [activeTasks, workMap, worksheetId, pendingWorks, workFilter, keyword]);
+  }, [
+    activeTasks,
+    workMap,
+    worksheetId,
+    data?.works,
+    data?.artifactSummary,
+    pendingWorks,
+    workFilter,
+    keyword,
+  ]);
 
   const visualActiveTasks = useMemo(() => {
     const list: TaskDetail[] = [];
@@ -899,20 +941,27 @@ export function WorksheetDetailPage() {
     if (!ungroupingWork || !worksheetId) return;
     setUngroupPending(true);
     try {
-      const { work, tasks } = ungroupingWork;
-      for (const task of tasks) {
-        await apiFetch(`/api/tasks/${task.id}`, {
-          method: 'PATCH',
-          body: { changes: { workId: null }, force: true },
-        });
-      }
+      const { work } = ungroupingWork;
+      const res = await apiFetch<UngroupWorkResponse>(
+        `/api/worksheets/${worksheetId}/works/${work.id}/ungroup`,
+        {
+          method: 'POST',
+          body: { deleteSharedArtifacts: ungroupDeleteShared },
+        },
+      );
       setUngroupingWork(null);
+      setUngroupDeleteShared(false);
       if (addingSegmentWorkId === work.id) setAddingSegmentWorkId(null);
       setPendingWorks((prev) => prev.filter((w) => w.id !== work.id));
       refetchWorksheet();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workArtifacts(work.id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.board });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.changeLogs(worksheetId, null) });
       pushToast({
-        message: `已将「${work.name}」下 ${tasks.length} 条任务移出为独立任务`,
+        message:
+          res.deletedArtifactCount > 0
+            ? `已解散「${work.name}」（移出 ${res.ungroupedTaskCount} 条任务，软删 ${res.deletedArtifactCount} 个共用资源）`
+            : `已将「${work.name}」下 ${res.ungroupedTaskCount} 条任务移出为独立任务`,
         variant: 'info',
       });
     } catch (err) {
@@ -923,7 +972,15 @@ export function WorksheetDetailPage() {
     } finally {
       setUngroupPending(false);
     }
-  }, [ungroupingWork, worksheetId, addingSegmentWorkId, refetchWorksheet, queryClient, pushToast]);
+  }, [
+    ungroupingWork,
+    ungroupDeleteShared,
+    worksheetId,
+    addingSegmentWorkId,
+    refetchWorksheet,
+    queryClient,
+    pushToast,
+  ]);
 
   const toggleWorkCollapsed = useCallback((workId: string) => {
     setCollapsedWorkIds((prev) => {
@@ -1272,6 +1329,7 @@ export function WorksheetDetailPage() {
         boardColumns={data.boardColumns}
         works={allWorks}
         workMap={workMap}
+        artifactSummary={data.artifactSummary}
         displayBlocks={displayBlocks}
         visualActiveTasks={visualActiveTasks}
         stageCols={stageCols}
@@ -1306,33 +1364,101 @@ export function WorksheetDetailPage() {
         onOpenAddSegment={openAddSegmentForWork}
         onCloseAddSegment={() => setAddingSegmentWorkId(null)}
         onUngroupWork={(block) => {
-          if (block.isEmptyPending || block.tasks.length === 0) {
+          const sharedCount = data.artifactSummary.workArtifactCounts[block.work.id] ?? 0;
+          if ((block.isEmptyPending || block.tasks.length === 0) && sharedCount === 0) {
             setPendingWorks((prev) => prev.filter((w) => w.id !== block.work.id));
             if (addingSegmentWorkId === block.work.id) setAddingSegmentWorkId(null);
             pushToast({ message: '已关闭空作品横幅', variant: 'info' });
           } else {
-            setUngroupingWork({ work: block.work, tasks: block.tasks });
+            setUngroupDeleteShared(false);
+            setUngroupingWork({
+              work: block.work,
+              tasks: block.tasks,
+              sharedArtifactCount: sharedCount,
+            });
           }
         }}
-        onOpenDetail={setDetailTaskId}
+        onOpenDetail={(tid, opts) => {
+          setDetailFocusFiles(Boolean(opts?.focusFiles));
+          setDetailTaskId(tid);
+        }}
         onClearTextConflict={clearTextConflict}
         onClearStageConflict={clearStageConflict}
         onAcceptRemoteField={acceptRemoteField}
       />
 
-      {/* 解散作品分组二次确认 */}
-      <ConfirmDialog
-        open={Boolean(ungroupingWork)}
-        onOpenChange={(open) => {
-          if (!open) setUngroupingWork(null);
-        }}
-        title="确认解散作品分组"
-        message={`确定要解散作品「${ungroupingWork?.work.name ?? ''}」的分组吗？旗下 ${ungroupingWork?.tasks.length ?? 0} 条任务将转为无作品独立任务，不会删除任何任务或分工数据。`}
-        confirmLabel="确认解散"
-        danger={false}
-        pending={ungroupPending}
-        onConfirm={() => void handleConfirmUngroupWork()}
-      />
+      {/* 解散作品分组二次确认（含共用资源保护选项） */}
+      {ungroupingWork && ungroupingWork.sharedArtifactCount > 0 ? (
+        <ModalDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setUngroupingWork(null);
+              setUngroupDeleteShared(false);
+            }
+          }}
+          title="确认解散作品分组"
+          maxWidthClass="max-w-md"
+        >
+          <div className="space-y-3" data-testid="ungroup-shared-dialog">
+            <p className="text-sm text-zinc-700">
+              作品「{ungroupingWork.work.name}」下还有{' '}
+              <span className="font-semibold text-zinc-950">
+                {ungroupingWork.sharedArtifactCount} 个共用资源
+              </span>
+              。默认操作仅将 {ungroupingWork.tasks.length}{' '}
+              条任务移出为独立任务，并保留作品横幅与共用资源。
+            </p>
+            <label className="flex items-start gap-2 rounded-lg border border-black/[0.08] bg-[#fafafa] p-2.5 text-xs text-zinc-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                data-testid="ungroup-delete-shared-checkbox"
+                checked={ungroupDeleteShared}
+                onChange={(e) => setUngroupDeleteShared(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 rounded border-zinc-300"
+              />
+              <span>
+                同时删除这 {ungroupingWork.sharedArtifactCount} 个共用资源（可在修改记录中恢复）
+              </span>
+            </label>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={ungroupPending}
+                onClick={() => {
+                  setUngroupingWork(null);
+                  setUngroupDeleteShared(false);
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                variant={ungroupDeleteShared ? 'danger' : 'primary'}
+                data-testid="ungroup-confirm-btn"
+                disabled={ungroupPending}
+                onClick={() => void handleConfirmUngroupWork()}
+              >
+                {ungroupPending ? '处理中…' : '确认解散'}
+              </Button>
+            </div>
+          </div>
+        </ModalDialog>
+      ) : (
+        <ConfirmDialog
+          open={Boolean(ungroupingWork)}
+          onOpenChange={(open) => {
+            if (!open) setUngroupingWork(null);
+          }}
+          title="确认解散作品分组"
+          message={`确定要解散作品「${ungroupingWork?.work.name ?? ''}」的分组吗？旗下 ${ungroupingWork?.tasks.length ?? 0} 条任务将转为无作品独立任务，不会删除任何任务或分工数据。`}
+          confirmLabel="确认解散"
+          danger={false}
+          pending={ungroupPending}
+          onConfirm={() => void handleConfirmUngroupWork()}
+        />
+      )}
 
       <ColumnManagerModal
         open={colModalOpen}
@@ -1348,7 +1474,11 @@ export function WorksheetDetailPage() {
         worksheetId={data.worksheet.id}
         taskId={detailTaskId}
         open={Boolean(detailTaskId)}
-        onClose={() => setDetailTaskId(null)}
+        focusFiles={detailFocusFiles}
+        onClose={() => {
+          setDetailTaskId(null);
+          setDetailFocusFiles(false);
+        }}
         showLocateButton={false}
       />
     </div>

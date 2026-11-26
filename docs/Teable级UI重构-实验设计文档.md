@@ -1,6 +1,6 @@
 # Teable 级 UI 重构：实验设计文档
 
-状态：**已获批准，可执行**（基于 `exp/multitable-ui` 继续迭代；决策依据见 [ADR-0005](adr/0005-teable-grid-and-unified-attachment-slots.md)） · 日期：2026-11-25  
+状态：**已完成并合入 `main`**（`c6999a9`，随后经 `3ac1b55..530b09d` 进一步精修为单行 44px 顶栏、首页左侧可折叠「我的任务」竖栏、移除表内视图切换/工作表标签颜色/作品列及统一「空缺」举手认领；最新 UI 现状以 [feature-map.md](feature-map.md) 与《[产品设计文档](字幕组在线工作台-产品设计文档.md)》v1.12 为准；决策依据见 [ADR-0005](adr/0005-teable-grid-and-unified-attachment-slots.md)） · 日期：2026-11-26  
 术语依据：[GLOSSARY.md](../GLOSSARY.md) · 功能契约：[feature-map.md](feature-map.md) · 前序文档：[多维表格化改版-实验设计文档.md](多维表格化改版-实验设计文档.md)
 
 ---

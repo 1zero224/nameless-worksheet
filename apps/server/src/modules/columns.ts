@@ -12,6 +12,7 @@ import { type Db, schema } from '../db/index.js';
 import { withTx } from '../db/tx.js';
 import { AppError, notFound, uniqueViolation } from '../errors.js';
 import type { EventBus } from '../realtime/bus.js';
+import { emitArtifactChanged } from './artifacts.js';
 import { findActiveWorksheet, recordChangeLog } from './change-logs.js';
 import { ascC, parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
 import { toColumnConfigDto } from './worksheets.js';
@@ -332,14 +333,40 @@ export function registerColumnRoutes(app: FastifyInstance, deps: { db: Db; bus: 
             .returning();
           if (!deleted) throw notFound();
 
+          let demotedArtifactIds: string[] = [];
+          if (deleted.type === 'stage') {
+            const demotedRows = await tx
+              .update(schema.artifacts)
+              .set({ stageColumnId: null, updatedAt: now })
+              .where(
+                and(
+                  eq(schema.artifacts.projectId, auth.projectId),
+                  eq(schema.artifacts.worksheetId, worksheetId),
+                  eq(schema.artifacts.stageColumnId, columnId),
+                  isNull(schema.artifacts.deletedAt),
+                ),
+              )
+              .returning({ id: schema.artifacts.id });
+            demotedArtifactIds = demotedRows.map((r) => r.id);
+          }
+
+          const demotedCount = demotedArtifactIds.length;
           await recordChangeLog(tx, {
             projectId: auth.projectId,
             worksheetId,
             taskId: null,
             actorUserId: auth.userId,
             action: 'column.deleted',
-            summary: `删除了列「${deleted.name}」`,
-            changes: { columnId: deleted.id, name: deleted.name, type: deleted.type },
+            summary:
+              demotedCount > 0
+                ? `删除了列「${deleted.name}」（已将 ${demotedCount} 个工序资源转为任务级资源）`
+                : `删除了列「${deleted.name}」`,
+            changes: {
+              columnId: deleted.id,
+              name: deleted.name,
+              type: deleted.type,
+              ...(demotedCount > 0 ? { demotedArtifactCount: demotedCount } : {}),
+            },
           });
 
           emit({
@@ -347,6 +374,17 @@ export function registerColumnRoutes(app: FastifyInstance, deps: { db: Db; bus: 
             type: 'column.changed',
             payload: { action: 'deleted', columnId: deleted.id },
           });
+          if (demotedCount > 0) {
+            emitArtifactChanged(emit, auth.projectId, {
+              scopeKind: 'task',
+              action: 'artifact.moved',
+              artifactId: demotedArtifactIds[0]!,
+              worksheetId,
+              workId: null,
+              taskId: null,
+              stageColumnId: null,
+            });
+          }
           emit({
             scope: { type: 'project', id: auth.projectId },
             type: 'board.task_changed',

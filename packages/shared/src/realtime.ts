@@ -147,3 +147,32 @@ export interface WorksheetDeletedPayload {
 export interface WorkUpdatedPayload {
   work: Work;
 }
+
+export interface WorkUngroupedPayload {
+  workId: string;
+  deleteSharedArtifacts: boolean;
+}
+
+// ---- 阶段 3 资源实时事件（仅 ID 与动作，零提取码/零 URL） ----
+
+export interface ArtifactChangedPayload {
+  scopeKind: 'doc' | 'work' | 'task' | 'stage';
+  action:
+    | 'artifact.created'
+    | 'artifact.updated'
+    | 'artifact.moved'
+    | 'artifact.deleted'
+    | 'artifact.restored'
+    | 'version.created'
+    | 'version.deleted'
+    | 'version.restored'
+    | 'location.created'
+    | 'location.updated'
+    | 'location.deleted'
+    | 'location.restored';
+  artifactId: string;
+  worksheetId: string | null;
+  workId: string | null;
+  taskId: string | null;
+  stageColumnId: string | null;
+}

@@ -31,6 +31,7 @@ export interface BoardTaskInput {
   publishStatus: PublishStatus;
   sortOrder: string;
   stageCells: Record<string, StageCell>;
+  resourceCount?: number;
 }
 
 export interface BoardComputeInput {
@@ -173,6 +174,7 @@ export function computeBoardData(input: BoardComputeInput): {
             stageAssignees: cell.assignees,
             stageNote: cell.note,
             stageRevision: cell.revision,
+            resourceCount: task.resourceCount ?? 0,
           };
           if (cell.status === 'in_progress') {
             myInProgress.push(item);
@@ -233,6 +235,7 @@ export function computeBoardData(input: BoardComputeInput): {
         workName: work?.name ?? null,
         missingStages,
         stageProgress,
+        resourceCount: task.resourceCount ?? 0,
       });
     }
   }
@@ -316,6 +319,7 @@ export function computeMyTasks(input: Omit<BoardComputeInput, 'boardColumns'>): 
         stageAssignees: cell.assignees,
         stageNote: cell.note,
         stageRevision: cell.revision,
+        resourceCount: task.resourceCount ?? 0,
       };
 
       if (published || cell.status === 'done') {

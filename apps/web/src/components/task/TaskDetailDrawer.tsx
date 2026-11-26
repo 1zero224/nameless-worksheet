@@ -1,4 +1,5 @@
 import {
+  type ArtifactScope,
   type Assignee,
   type ChangeLogsResponse,
   getEffectiveStageCell,
@@ -10,6 +11,7 @@ import {
   STAGE_STATUSES,
   type StageCell,
   type StageStatus,
+  type TaskArtifactsResponse,
   type TaskDetail,
   type UserListItem,
   type WorksheetFullResponse,
@@ -27,10 +29,12 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
+import { ArtifactCardList } from '@/components/artifact/ArtifactCardList.js';
+import { CreateArtifactModal } from '@/components/artifact/ArtifactFormModal.js';
 import { PRIORITY_DOT_STYLES, STAGE_STATUS_STYLES } from '@/components/ui/colors.js';
 import { Sheet, useToast } from '@/components/ui/overlays.js';
 import { Button, cn, Input, Label } from '@/components/ui/primitives.js';
@@ -40,12 +44,14 @@ export function TaskDetailDrawer({
   worksheetId,
   taskId,
   open,
+  focusFiles = false,
   onClose,
   showLocateButton = true,
 }: {
   worksheetId: string | null;
   taskId: string | null;
   open: boolean;
+  focusFiles?: boolean;
   onClose: () => void;
   showLocateButton?: boolean;
 }) {
@@ -53,6 +59,12 @@ export function TaskDetailDrawer({
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const [logsExpanded, setLogsExpanded] = useState(false);
+  const [createArtConfig, setCreateArtConfig] = useState<{
+    scope: ArtifactScope;
+    scopeLabel: string;
+    defaultName?: string;
+  } | null>(null);
+  const filesSectionRef = useRef<HTMLDivElement | null>(null);
 
   const { data: wsData, isLoading } = useQuery<WorksheetFullResponse>({
     queryKey: worksheetId ? queryKeys.worksheet(worksheetId) : ['worksheets', 'none'],
@@ -75,6 +87,21 @@ export function TaskDetailDrawer({
       ),
     enabled: Boolean(open && worksheetId && taskId && logsExpanded),
   });
+
+  const { data: taskArtifactsData } = useQuery<TaskArtifactsResponse>({
+    queryKey: taskId ? queryKeys.taskArtifacts(taskId) : ['task-artifacts', 'none'],
+    queryFn: () => apiFetch<TaskArtifactsResponse>(`/api/tasks/${taskId}/artifacts`),
+    enabled: Boolean(open && taskId),
+  });
+
+  useEffect(() => {
+    if (open && focusFiles && filesSectionRef.current) {
+      const raf = requestAnimationFrame(() => {
+        filesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [open, focusFiles]);
 
   const task = wsData?.tasks.find((t) => t.id === taskId) ?? null;
   const currentWork =
@@ -234,24 +261,37 @@ export function TaskDetailDrawer({
             </Button>
           </div>
 
-          {/* 所属作品共用附件联动槽位（阶段 3 接入，位于侧栏顶部与文件区上方） */}
+          {/* 所属作品共用资源（位于侧栏顶部，打开分段任务自动透出） */}
           {currentWork && (
             <div
               data-testid="work-shared-attachments-slot"
-              className="rounded-lg border border-dashed border-black/[0.14] bg-[#fafafa] px-3 py-2.5"
+              className="rounded-lg border border-indigo-200/80 bg-indigo-50/35 p-3 space-y-2.5"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-zinc-900">
-                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                  <span className="truncate">所属作品「{currentWork.name}」共用附件</span>
+                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-indigo-950">
+                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                  <span className="truncate">所属作品「{currentWork.name}」共用资源</span>
                 </span>
-                <span className="shrink-0 rounded-full border border-black/[0.08] bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-500">
-                  阶段 3 接入
-                </span>
+                <button
+                  type="button"
+                  data-testid="drawer-add-work-artifact"
+                  onClick={() =>
+                    setCreateArtConfig({
+                      scope: { kind: 'work', workId: currentWork.id },
+                      scopeLabel: `作品「${currentWork.name}」共用`,
+                    })
+                  }
+                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-indigo-200 bg-white px-2 text-[11px] font-medium text-indigo-800 hover:bg-indigo-50 cursor-pointer"
+                >
+                  <Plus className="h-3 w-3" />
+                  添加共用资源
+                </button>
               </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                后续将在此自动透出整片原片、纯音源与通用字体包，打开任意分段即可直接获取。
-              </p>
+              <ArtifactCardList
+                artifacts={taskArtifactsData?.workArtifacts ?? []}
+                compact
+                emptyText="暂无作品共用资源，可点击右上角添加整片原片或通用字体包"
+              />
             </div>
           )}
 
@@ -475,12 +515,111 @@ export function TaskDetailDrawer({
             </div>
           )}
 
-          {/* 文件区占位（阶段 3 启用） */}
-          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/50 p-4 text-center">
-            <FolderOpen className="mx-auto h-5 w-5 text-slate-400" />
-            <div className="mt-1.5 text-sm font-medium text-slate-700">任务文件</div>
-            <p className="mt-0.5 text-xs text-slate-500">任务文件与网盘入口将在阶段 3 启用</p>
+          {/* 任务文件与交付区（按工序交付 + 任务其他资源自然分组） */}
+          <div
+            ref={filesSectionRef}
+            data-testid="task-files-section"
+            className="space-y-3 border-t border-black/[0.08] pt-4"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
+                <FolderOpen className="h-3.5 w-3.5 text-zinc-500" />
+                任务文件与交付
+              </div>
+            </div>
+
+            {/* 各工序交付 */}
+            {stageCols.length > 0 && (
+              <div className="space-y-2.5">
+                {stageCols.map((col) => {
+                  const stageList = taskArtifactsData?.stageArtifacts[col.id] ?? [];
+                  return (
+                    <div
+                      key={col.id}
+                      data-testid={`drawer-stage-files-${col.id}`}
+                      className="rounded-lg border border-black/[0.07] bg-[#fafafa]/70 p-2.5 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-zinc-800">
+                          {col.name}
+                          {stageList.length > 0 && (
+                            <span className="ml-1.5 text-[11px] text-zinc-400 tabular-nums">
+                              ({stageList.length})
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          data-testid={`drawer-add-stage-artifact-${col.id}`}
+                          onClick={() =>
+                            setCreateArtConfig({
+                              scope: { kind: 'stage', taskId: task.id, stageColumnId: col.id },
+                              scopeLabel: `任务「${task.title}」· ${col.name}`,
+                              defaultName: col.name,
+                            })
+                          }
+                          className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+                        >
+                          <Plus className="h-3 w-3" />
+                          添加
+                        </button>
+                      </div>
+                      {stageList.length > 0 && <ArtifactCardList artifacts={stageList} compact />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 任务其他资源 */}
+            <div
+              data-testid="drawer-task-other-files"
+              className="rounded-lg border border-black/[0.07] bg-[#fafafa]/70 p-2.5 space-y-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-zinc-800">
+                  任务其他资源
+                  {(taskArtifactsData?.taskArtifacts.length ?? 0) > 0 && (
+                    <span className="ml-1.5 text-[11px] text-zinc-400 tabular-nums">
+                      ({taskArtifactsData?.taskArtifacts.length})
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  data-testid="drawer-add-task-artifact"
+                  onClick={() =>
+                    setCreateArtConfig({
+                      scope: { kind: 'task', taskId: task.id },
+                      scopeLabel: `任务「${task.title}」`,
+                    })
+                  }
+                  className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+                >
+                  <Plus className="h-3 w-3" />
+                  添加
+                </button>
+              </div>
+              <ArtifactCardList
+                artifacts={taskArtifactsData?.taskArtifacts ?? []}
+                compact
+                emptyText="暂无任务级其他资源"
+              />
+            </div>
           </div>
+
+          {createArtConfig && (
+            <CreateArtifactModal
+              open
+              onOpenChange={(o) => {
+                if (!o) setCreateArtConfig(null);
+              }}
+              scope={createArtConfig.scope}
+              scopeLabel={createArtConfig.scopeLabel}
+              defaultName={createArtConfig.defaultName}
+              worksheetId={worksheetId}
+            />
+          )}
 
           {/* 本任务修改记录 */}
           <div className="border-t border-slate-200 pt-3">

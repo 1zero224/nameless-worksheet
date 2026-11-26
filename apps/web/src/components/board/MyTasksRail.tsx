@@ -166,7 +166,9 @@ export function MyTasksListContent({
                           taskTitle={item.taskTitle}
                           worksheetId={item.worksheetId}
                           workName={item.workName}
+                          stageColumnId={item.stageColumnId}
                           stageColumnName={item.stageColumnName}
+                          resourceCount={item.resourceCount}
                           onOpenDetail={onOpenDetail}
                         />
                       </div>
@@ -299,7 +301,9 @@ export function MyTasksListContent({
                           taskTitle={item.taskTitle}
                           worksheetId={item.worksheetId}
                           workName={item.workName}
+                          stageColumnId={item.stageColumnId}
                           stageColumnName={item.stageColumnName}
+                          resourceCount={item.resourceCount}
                           onOpenDetail={onOpenDetail}
                         />
                       </div>

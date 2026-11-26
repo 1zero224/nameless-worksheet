@@ -647,7 +647,9 @@ export function KanbanBoard({
                                         taskTitle={card.taskTitle}
                                         worksheetId={card.worksheetId}
                                         workName={card.workName}
+                                        stageColumnId={card.stageColumnId}
                                         stageColumnName={card.stageColumnName}
+                                        resourceCount={card.resourceCount}
                                         onOpenDetail={onOpenDetail}
                                       />
                                     </div>
@@ -860,7 +862,9 @@ export function KanbanBoard({
                                                       taskTitle={card.taskTitle}
                                                       worksheetId={card.worksheetId}
                                                       workName={card.workName}
+                                                      stageColumnId={card.stageColumnId}
                                                       stageColumnName={card.stageColumnName}
+                                                      resourceCount={card.resourceCount}
                                                       onOpenDetail={onOpenDetail}
                                                     />
                                                   </div>

@@ -52,6 +52,8 @@ export function HomePage() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.board });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.taskArtifactsAll });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workArtifactsAll });
     }, 150);
   }, [queryClient]);
 
@@ -67,7 +69,8 @@ export function HomePage() {
         ev.type === 'board.task_changed' ||
         ev.type === 'board_columns.changed' ||
         ev.type === 'worksheet.changed' ||
-        ev.type === 'user.updated'
+        ev.type === 'user.updated' ||
+        ev.type === 'artifact.changed'
       ) {
         scheduleRefresh();
       }

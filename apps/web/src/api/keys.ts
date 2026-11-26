@@ -12,4 +12,11 @@ export const queryKeys = {
   board: ['board'] as const,
   myTasks: ['my-tasks'] as const,
   search: (params: Record<string, string>) => ['search', params] as const,
+  docsAll: ['docs'] as const,
+  docs: (q?: string) => ['docs', q ?? ''] as const,
+  docsChangeLogs: ['docs-change-logs'] as const,
+  workArtifactsAll: ['work-artifacts'] as const,
+  workArtifacts: (workId: string) => ['work-artifacts', workId] as const,
+  taskArtifactsAll: ['task-artifacts'] as const,
+  taskArtifacts: (taskId: string) => ['task-artifacts', taskId] as const,
 };

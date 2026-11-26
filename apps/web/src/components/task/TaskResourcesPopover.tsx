@@ -1,5 +1,10 @@
+import type { ArtifactDetail, TaskArtifactsResponse } from '@nw/shared';
+import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, Folder, FolderDown, Paperclip } from 'lucide-react';
 import { useState } from 'react';
+import { apiFetch } from '@/api/client.js';
+import { queryKeys } from '@/api/keys.js';
+import { LocationActionRow } from '@/components/artifact/ArtifactCardList.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays.js';
 import { cn } from '@/components/ui/primitives.js';
 
@@ -8,25 +13,103 @@ export interface TaskResourcesPopoverProps {
   taskTitle: string;
   worksheetId: string;
   workName?: string | null;
+  stageColumnId?: string;
   stageColumnName?: string;
+  resourceCount?: number;
   onOpenDetail: (target: { worksheetId: string; taskId: string }) => void;
   className?: string;
 }
 
+function CompactArtifactBlock({
+  title,
+  icon,
+  artifacts,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  artifacts: ArtifactDetail[];
+}) {
+  if (artifacts.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1 text-[11px] font-semibold text-zinc-600">
+        {icon}
+        <span className="truncate">{title}</span>
+      </div>
+      <div className="space-y-1.5">
+        {artifacts.map((art) => {
+          const latest = art.latestVersion;
+          return (
+            <div
+              key={art.id}
+              data-testid={`popover-art-${art.id}`}
+              className="rounded-lg border border-black/[0.07] bg-white p-2 space-y-1"
+            >
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="truncate text-xs font-medium text-zinc-900">{art.name}</span>
+                {latest && (
+                  <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0 text-[10px] font-medium text-zinc-600 tabular-nums">
+                    v{latest.versionNumber}
+                  </span>
+                )}
+              </div>
+              {latest && latest.locations.length > 0 ? (
+                <div className="space-y-1">
+                  {latest.locations.map((loc) => (
+                    <LocationActionRow
+                      key={loc.id}
+                      artifact={art}
+                      versionNumber={latest.versionNumber}
+                      location={loc}
+                      compact
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[11px] text-zinc-400">待补充入口</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /**
- * 任务可下载资源快速查看弹层（用于看板卡片与我的任务卡片）。
- * 阶段 3 接入 R2 文件与网盘入口后，直接在此展示可一键下载的最新版文件与网盘链接。
+ * 任务资源快速取用弹层（用于首页看板卡片与左侧「我的任务」卡片）。
+ * 一次拉取作品共用 / 本列工序 / 任务其他资源，支持一键打开链接、复制提取码与复制完整分享信息。
  */
 export function TaskResourcesPopover({
   taskId,
   taskTitle,
   worksheetId,
   workName,
+  stageColumnId,
   stageColumnName,
+  resourceCount = 0,
   onOpenDetail,
   className,
 }: TaskResourcesPopoverProps) {
   const [open, setOpen] = useState(false);
+
+  const { data, isLoading } = useQuery<TaskArtifactsResponse>({
+    queryKey: queryKeys.taskArtifacts(taskId),
+    queryFn: () => apiFetch<TaskArtifactsResponse>(`/api/tasks/${taskId}/artifacts`),
+    enabled: open,
+  });
+
+  const workArtifacts = data?.workArtifacts ?? [];
+  const currentStageArtifacts =
+    stageColumnId && data ? (data.stageArtifacts[stageColumnId] ?? []) : [];
+  const otherStageArtifacts = data
+    ? Object.entries(data.stageArtifacts)
+        .filter(([cid]) => cid !== stageColumnId)
+        .flatMap(([, list]) => list)
+    : [];
+  const otherTaskArtifacts = [...(data?.taskArtifacts ?? []), ...otherStageArtifacts];
+  const hasAny =
+    workArtifacts.length > 0 || currentStageArtifacts.length > 0 || otherTaskArtifacts.length > 0;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -34,16 +117,25 @@ export function TaskResourcesPopover({
         <button
           type="button"
           data-testid={`card-resources-btn-${taskId}`}
-          aria-label={`查看可下载资源 ${taskTitle}`}
-          title="快速查看可下载资源"
+          aria-label={`查看资源 ${taskTitle}`}
+          title={resourceCount > 0 ? `快速取用资源（${resourceCount}）` : '快速查看资源'}
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer',
+            'inline-flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer',
+            resourceCount > 0 && 'text-zinc-800',
             open && 'bg-black/[0.08] text-zinc-950',
             className,
           )}
         >
           <FolderDown className="h-3.5 w-3.5" strokeWidth={1.85} />
+          {resourceCount > 0 && (
+            <span
+              data-testid={`card-resources-count-${taskId}`}
+              className="text-[10.5px] font-semibold tabular-nums leading-none"
+            >
+              {resourceCount}
+            </span>
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -51,7 +143,7 @@ export function TaskResourcesPopover({
         sideOffset={6}
         data-testid={`task-resources-popover-${taskId}`}
         onClick={(e) => e.stopPropagation()}
-        className="w-72 p-3"
+        className="w-[min(352px,calc(100vw-1.5rem))] p-3"
       >
         <div className="flex items-start justify-between gap-2 border-b border-black/[0.07] pb-2">
           <div className="min-w-0">
@@ -67,28 +159,48 @@ export function TaskResourcesPopover({
           )}
         </div>
 
-        <div className="mt-2.5 space-y-2.5">
-          {workName && (
-            <div className="rounded-lg border border-black/[0.07] bg-[#fafafa] px-2.5 py-2">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-800">
-                <Folder className="h-3.5 w-3.5 shrink-0 text-zinc-400" strokeWidth={1.75} />
-                <span className="truncate">作品共用：{workName}</span>
+        <div className="no-scrollbar mt-2.5 max-h-[300px] space-y-2.5 overflow-y-auto">
+          {isLoading ? (
+            <div className="py-5 text-center text-xs text-zinc-400">正在加载资源…</div>
+          ) : !hasAny ? (
+            <div className="space-y-2">
+              {workName && (
+                <div className="rounded-lg border border-black/[0.07] bg-[#fafafa] px-2.5 py-2">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-800">
+                    <Folder className="h-3.5 w-3.5 shrink-0 text-zinc-400" strokeWidth={1.75} />
+                    <span className="truncate">作品共用：{workName}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-400">暂无共用资源</p>
+                </div>
+              )}
+              <div className="rounded-lg border border-dashed border-black/[0.12] bg-[#fafafa]/70 px-2.5 py-4 text-center">
+                <Paperclip
+                  className="mx-auto h-4 w-4 text-zinc-400"
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
+                <div className="mt-1 text-xs font-medium text-zinc-600">暂无资源或网盘入口</div>
+                <div className="mt-0.5 text-[11px] text-zinc-400">
+                  可打开任务详情或工作表添加资源
+                </div>
               </div>
-              <p className="mt-1 text-xs text-zinc-400">暂无整片原片或共用附件</p>
             </div>
+          ) : (
+            <>
+              <CompactArtifactBlock
+                title={workName ? `作品共用：${workName}` : '所属作品共用'}
+                icon={<Folder className="h-3 w-3 shrink-0 text-indigo-500" />}
+                artifacts={workArtifacts}
+              />
+              {stageColumnName && (
+                <CompactArtifactBlock
+                  title={`本列工序 · ${stageColumnName}`}
+                  artifacts={currentStageArtifacts}
+                />
+              )}
+              <CompactArtifactBlock title="任务其他资源" artifacts={otherTaskArtifacts} />
+            </>
           )}
-
-          <div className="rounded-lg border border-dashed border-black/[0.12] bg-[#fafafa]/70 px-2.5 py-3 text-center">
-            <Paperclip
-              className="mx-auto h-4 w-4 text-zinc-400"
-              strokeWidth={1.75}
-              aria-hidden="true"
-            />
-            <div className="mt-1 text-xs font-medium text-zinc-600">暂无可下载文件或网盘链接</div>
-            <div className="mt-0.5 text-[11px] text-zinc-400">
-              阶段 3 接入文件上传与网盘入口后可在此一键下载
-            </div>
-          </div>
         </div>
 
         <div className="mt-2.5 flex justify-end border-t border-black/[0.06] pt-2">

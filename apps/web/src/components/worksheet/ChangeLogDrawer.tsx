@@ -4,6 +4,7 @@ import { RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
+import { invalidateArtifactQueries } from '@/components/artifact/utils.js';
 import { Sheet, useToast } from '@/components/ui/overlays.js';
 import { Badge, Button } from '@/components/ui/primitives.js';
 
@@ -14,12 +15,36 @@ function formatVal(v: unknown): string {
   return JSON.stringify(v);
 }
 
+type RestoreTarget =
+  | { kind: 'task'; id: string }
+  | { kind: 'artifact'; id: string }
+  | { kind: 'version'; id: string };
+
+function getRestoreTarget(item: ChangeLogItem): RestoreTarget | null {
+  if (item.action === 'task.deleted' && item.taskId) {
+    return { kind: 'task', id: item.taskId };
+  }
+  if (item.action === 'artifact.deleted') {
+    const id =
+      item.artifactId ??
+      (typeof item.changes?.artifactId === 'string' ? item.changes.artifactId : null);
+    if (id) return { kind: 'artifact', id };
+  }
+  if (item.action === 'artifact_version.deleted') {
+    const id = typeof item.changes?.versionId === 'string' ? item.changes.versionId : null;
+    if (id) return { kind: 'version', id };
+  }
+  return null;
+}
+
 export function ChangeLogDrawer({
   worksheetId,
+  mode = 'worksheet',
   open,
   onOpenChange,
 }: {
-  worksheetId: string;
+  worksheetId?: string;
+  mode?: 'worksheet' | 'docs';
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -29,23 +54,46 @@ export function ChangeLogDrawer({
   const [extraCursor, setExtraCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  const isDocsMode = mode === 'docs';
+  const baseUrl = isDocsMode
+    ? '/api/docs/change-logs'
+    : `/api/worksheets/${worksheetId ?? ''}/change-logs`;
+
   const { data, isLoading, refetch } = useQuery<ChangeLogsResponse>({
-    queryKey: queryKeys.changeLogs(worksheetId, null),
+    queryKey: isDocsMode
+      ? queryKeys.docsChangeLogs
+      : queryKeys.changeLogs(worksheetId ?? 'none', null),
     queryFn: async () => {
       setExtraItems([]);
       setExtraCursor(null);
-      return apiFetch<ChangeLogsResponse>(`/api/worksheets/${worksheetId}/change-logs?limit=50`);
+      return apiFetch<ChangeLogsResponse>(`${baseUrl}?limit=50`);
     },
-    enabled: open,
+    enabled: Boolean(open && (isDocsMode || worksheetId)),
   });
 
   const restoreMutation = useMutation({
-    mutationFn: (taskId: string) => apiFetch(`/api/tasks/${taskId}/restore`, { method: 'POST' }),
-    onSuccess: () => {
-      pushToast({ message: '任务已从修改记录恢复', variant: 'success' });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.worksheet(worksheetId) });
+    mutationFn: (target: RestoreTarget) => {
+      if (target.kind === 'task') {
+        return apiFetch(`/api/tasks/${target.id}/restore`, { method: 'POST' });
+      }
+      if (target.kind === 'artifact') {
+        return apiFetch(`/api/artifacts/${target.id}/restore`, { method: 'POST' });
+      }
+      return apiFetch(`/api/artifact-versions/${target.id}/restore`, { method: 'POST' });
+    },
+    onSuccess: (_res, target) => {
+      const label =
+        target.kind === 'task'
+          ? '任务已从修改记录恢复'
+          : target.kind === 'artifact'
+            ? '资源已从修改记录恢复'
+            : '版本已从修改记录恢复';
+      pushToast({ message: label, variant: 'success' });
+      if (worksheetId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.worksheet(worksheetId) });
+      }
       void queryClient.invalidateQueries({ queryKey: queryKeys.worksheets });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.board });
+      invalidateArtifactQueries(queryClient, { worksheetId: worksheetId ?? null });
       void refetch();
     },
     onError: (err) => {
@@ -63,9 +111,7 @@ export function ChangeLogDrawer({
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await apiFetch<ChangeLogsResponse>(
-        `/api/worksheets/${worksheetId}/change-logs?limit=50&cursor=${nextCursor}`,
-      );
+      const res = await apiFetch<ChangeLogsResponse>(`${baseUrl}?limit=50&cursor=${nextCursor}`);
       setExtraItems((prev) => [...prev, ...res.items]);
       setExtraCursor(res.nextCursor);
     } finally {
@@ -74,7 +120,11 @@ export function ChangeLogDrawer({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} title="修改记录">
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isDocsMode ? '通用文档修改记录' : '修改记录'}
+    >
       {isLoading ? (
         <div className="py-10 text-center text-sm text-slate-500">正在加载修改记录…</div>
       ) : allItems.length === 0 ? (
@@ -92,6 +142,7 @@ export function ChangeLogDrawer({
                     task?: { divisionNote?: string };
                   })
                 : null;
+            const restoreTarget = getRestoreTarget(item);
 
             return (
               <div
@@ -106,15 +157,16 @@ export function ChangeLogDrawer({
                       {new Date(item.createdAt).toLocaleString('zh-CN')}
                     </span>
                   </div>
-                  {item.action === 'task.deleted' && item.taskId && (
+                  {restoreTarget && (
                     <div>
                       {item.canRestore ? (
                         <Button
                           type="button"
                           size="sm"
                           variant="secondary"
+                          data-testid={`change-log-restore-${item.id}`}
                           disabled={restoreMutation.isPending}
-                          onClick={() => restoreMutation.mutate(item.taskId!)}
+                          onClick={() => restoreMutation.mutate(restoreTarget)}
                         >
                           <RotateCcw className="mr-1 h-3 w-3" />
                           恢复

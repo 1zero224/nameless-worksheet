@@ -50,7 +50,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
 
     const activeWsIds = worksheets.map((w) => w.id);
 
-    const [stageColRows, taskRows, workRows, cellRows] = await Promise.all([
+    const [stageColRows, taskRows, workRows, cellRows, artifactRows] = await Promise.all([
       db
         .select()
         .from(schema.columnConfigs)
@@ -94,7 +94,32 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
             inArray(schema.stageCells.worksheetId, activeWsIds),
           ),
         ),
+      db
+        .select({
+          workId: schema.artifacts.workId,
+          taskId: schema.artifacts.taskId,
+        })
+        .from(schema.artifacts)
+        .where(
+          and(
+            eq(schema.artifacts.projectId, auth.projectId),
+            inArray(schema.artifacts.worksheetId, activeWsIds),
+            isNull(schema.artifacts.deletedAt),
+          ),
+        ),
     ]);
+
+    const workArtCount = new Map<string, number>();
+    const taskArtCount = new Map<string, number>();
+    for (const a of artifactRows) {
+      if (a.workId !== null && a.taskId === null) {
+        workArtCount.set(a.workId, (workArtCount.get(a.workId) ?? 0) + 1);
+      } else if (a.taskId !== null) {
+        taskArtCount.set(a.taskId, (taskArtCount.get(a.taskId) ?? 0) + 1);
+      }
+    }
+    const countForTask = (taskId: string, workId: string | null) =>
+      (taskArtCount.get(taskId) ?? 0) + (workId ? (workArtCount.get(workId) ?? 0) : 0);
 
     const activeStageColIds = new Set(stageColRows.map((c) => c.id));
     const cellsByTask = new Map<string, Record<string, StageCell>>();
@@ -123,6 +148,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
       publishStatus: t.publishStatus,
       sortOrder: t.sortOrder,
       stageCells: cellsByTask.get(t.id) ?? {},
+      resourceCount: countForTask(t.id, t.workId),
     }));
 
     const computed = computeBoardData({
@@ -157,7 +183,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
     }
 
     const activeWsIds = worksheets.map((w) => w.id);
-    const [stageColRows, taskRows, workRows, cellRows] = await Promise.all([
+    const [stageColRows, taskRows, workRows, cellRows, artifactRows] = await Promise.all([
       db
         .select()
         .from(schema.columnConfigs)
@@ -199,7 +225,32 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
             inArray(schema.stageCells.worksheetId, activeWsIds),
           ),
         ),
+      db
+        .select({
+          workId: schema.artifacts.workId,
+          taskId: schema.artifacts.taskId,
+        })
+        .from(schema.artifacts)
+        .where(
+          and(
+            eq(schema.artifacts.projectId, auth.projectId),
+            inArray(schema.artifacts.worksheetId, activeWsIds),
+            isNull(schema.artifacts.deletedAt),
+          ),
+        ),
     ]);
+
+    const workArtCount = new Map<string, number>();
+    const taskArtCount = new Map<string, number>();
+    for (const a of artifactRows) {
+      if (a.workId !== null && a.taskId === null) {
+        workArtCount.set(a.workId, (workArtCount.get(a.workId) ?? 0) + 1);
+      } else if (a.taskId !== null) {
+        taskArtCount.set(a.taskId, (taskArtCount.get(a.taskId) ?? 0) + 1);
+      }
+    }
+    const countForTask = (taskId: string, workId: string | null) =>
+      (taskArtCount.get(taskId) ?? 0) + (workId ? (workArtCount.get(workId) ?? 0) : 0);
 
     const activeStageColIds = new Set(stageColRows.map((c) => c.id));
     const cellsByTask = new Map<string, Record<string, StageCell>>();
@@ -223,6 +274,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
       publishStatus: t.publishStatus,
       sortOrder: t.sortOrder,
       stageCells: cellsByTask.get(t.id) ?? {},
+      resourceCount: countForTask(t.id, t.workId),
     }));
 
     return computeMyTasks({

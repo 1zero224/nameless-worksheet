@@ -1,12 +1,13 @@
 import {
   normalizeText,
+  type SearchDocItem,
   type SearchResponse,
   type SearchTaskItem,
   type StageCell,
   stageStatusSchema,
   type WorksheetColor,
 } from '@nw/shared';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { type Db, schema } from '../db/index.js';
@@ -29,6 +30,7 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
   const { db } = deps;
 
   // GET /api/search
+  // 严格只匹配任务/工序字段与资源名称，严禁检索或返回 extractCode 与 url
   app.get<{ Querystring: Record<string, unknown> }>(
     '/api/search',
     { config: { access: 'authenticated' } },
@@ -46,6 +48,8 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
             offset: 0,
           };
 
+      const needle = q ? normalizeText(q).toLowerCase() : '';
+
       const wsConditions = [
         eq(schema.worksheets.projectId, auth.projectId),
         isNull(schema.worksheets.deletedAt),
@@ -54,14 +58,89 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
         wsConditions.push(eq(schema.worksheets.id, worksheetId));
       }
 
-      const wsRows = await db
-        .select()
-        .from(schema.worksheets)
-        .where(and(...wsConditions))
-        .orderBy(ascC(schema.worksheets.sortOrder), asc(schema.worksheets.id));
+      const [wsRows, docRows] = await Promise.all([
+        db
+          .select()
+          .from(schema.worksheets)
+          .where(and(...wsConditions))
+          .orderBy(ascC(schema.worksheets.sortOrder), asc(schema.worksheets.id)),
+        !worksheetId && !status
+          ? db
+              .select({
+                id: schema.artifacts.id,
+                name: schema.artifacts.name,
+                latestVersionId: schema.artifacts.latestVersionId,
+                updatedAt: schema.artifacts.updatedAt,
+              })
+              .from(schema.artifacts)
+              .where(
+                and(
+                  eq(schema.artifacts.projectId, auth.projectId),
+                  isNull(schema.artifacts.worksheetId),
+                  isNull(schema.artifacts.deletedAt),
+                ),
+              )
+              .orderBy(desc(schema.artifacts.updatedAt), desc(schema.artifacts.id))
+          : Promise.resolve([]),
+      ]);
+
+      // 通用文档按名称匹配（严禁匹配提取码/URL）
+      const matchedDocRows = needle
+        ? docRows.filter((d) => d.name.toLowerCase().includes(needle))
+        : docRows;
+      const topDocRows = matchedDocRows.slice(0, 20);
+
+      let docs: SearchDocItem[] = [];
+      if (topDocRows.length > 0) {
+        const latestVerIds = topDocRows
+          .map((d) => d.latestVersionId)
+          .filter((id): id is string => id !== null);
+        const [verRows, locCounts] =
+          latestVerIds.length > 0
+            ? await Promise.all([
+                db
+                  .select({
+                    id: schema.artifactVersions.id,
+                    versionNumber: schema.artifactVersions.versionNumber,
+                  })
+                  .from(schema.artifactVersions)
+                  .where(
+                    and(
+                      eq(schema.artifactVersions.projectId, auth.projectId),
+                      inArray(schema.artifactVersions.id, latestVerIds),
+                      isNull(schema.artifactVersions.deletedAt),
+                    ),
+                  ),
+                db
+                  .select({
+                    versionId: schema.resourceLocations.versionId,
+                    cnt: sql<number>`count(*)::int`,
+                  })
+                  .from(schema.resourceLocations)
+                  .where(
+                    and(
+                      eq(schema.resourceLocations.projectId, auth.projectId),
+                      inArray(schema.resourceLocations.versionId, latestVerIds),
+                      isNull(schema.resourceLocations.deletedAt),
+                    ),
+                  )
+                  .groupBy(schema.resourceLocations.versionId),
+              ])
+            : [[], []];
+
+        const verMap = new Map(verRows.map((v) => [v.id, v.versionNumber]));
+        const cntMap = new Map(locCounts.map((c) => [c.versionId, c.cnt]));
+        docs = topDocRows.map((d) => ({
+          artifactId: d.id,
+          name: d.name,
+          latestVersionNumber: d.latestVersionId ? (verMap.get(d.latestVersionId) ?? null) : null,
+          locationCount: d.latestVersionId ? (cntMap.get(d.latestVersionId) ?? 0) : 0,
+          updatedAt: d.updatedAt.toISOString(),
+        }));
+      }
 
       if (wsRows.length === 0) {
-        const empty: SearchResponse = { items: [], total: 0 };
+        const empty: SearchResponse = { items: [], total: 0, docs };
         return empty;
       }
 
@@ -78,50 +157,86 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
         taskConditions.push(eq(schema.tasks.publishStatus, 'unpublished'));
       }
 
-      const [colRows, taskRows, workRows, cellRows, memberRows] = await Promise.all([
-        db
-          .select()
-          .from(schema.columnConfigs)
-          .where(
-            and(
-              eq(schema.columnConfigs.projectId, auth.projectId),
-              inArray(schema.columnConfigs.worksheetId, activeWsIds),
-              isNull(schema.columnConfigs.deletedAt),
+      const [colRows, taskRows, workRows, cellRows, memberRows, wsArtifactRows] = await Promise.all(
+        [
+          db
+            .select()
+            .from(schema.columnConfigs)
+            .where(
+              and(
+                eq(schema.columnConfigs.projectId, auth.projectId),
+                inArray(schema.columnConfigs.worksheetId, activeWsIds),
+                isNull(schema.columnConfigs.deletedAt),
+              ),
+            )
+            .orderBy(ascC(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
+          db
+            .select()
+            .from(schema.tasks)
+            .where(and(...taskConditions))
+            .orderBy(ascC(schema.tasks.sortOrder), asc(schema.tasks.id)),
+          db
+            .select()
+            .from(schema.works)
+            .where(
+              and(
+                eq(schema.works.projectId, auth.projectId),
+                inArray(schema.works.worksheetId, activeWsIds),
+              ),
             ),
-          )
-          .orderBy(ascC(schema.columnConfigs.sortOrder), asc(schema.columnConfigs.id)),
-        db
-          .select()
-          .from(schema.tasks)
-          .where(and(...taskConditions))
-          .orderBy(ascC(schema.tasks.sortOrder), asc(schema.tasks.id)),
-        db
-          .select()
-          .from(schema.works)
-          .where(
-            and(
-              eq(schema.works.projectId, auth.projectId),
-              inArray(schema.works.worksheetId, activeWsIds),
+          db
+            .select()
+            .from(schema.stageCells)
+            .where(
+              and(
+                eq(schema.stageCells.projectId, auth.projectId),
+                inArray(schema.stageCells.worksheetId, activeWsIds),
+              ),
             ),
-          ),
-        db
-          .select()
-          .from(schema.stageCells)
-          .where(
-            and(
-              eq(schema.stageCells.projectId, auth.projectId),
-              inArray(schema.stageCells.worksheetId, activeWsIds),
+          db
+            .select({ id: schema.users.id, displayName: schema.users.displayName })
+            .from(schema.memberships)
+            .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
+            .where(eq(schema.memberships.projectId, auth.projectId)),
+          db
+            .select({
+              workId: schema.artifacts.workId,
+              taskId: schema.artifacts.taskId,
+              name: schema.artifacts.name,
+            })
+            .from(schema.artifacts)
+            .where(
+              and(
+                eq(schema.artifacts.projectId, auth.projectId),
+                inArray(schema.artifacts.worksheetId, activeWsIds),
+                isNull(schema.artifacts.deletedAt),
+              ),
             ),
-          ),
-        db
-          .select({ id: schema.users.id, displayName: schema.users.displayName })
-          .from(schema.memberships)
-          .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
-          .where(eq(schema.memberships.projectId, auth.projectId)),
-      ]);
+        ],
+      );
 
       const userNameMap = new Map(memberRows.map((m) => [m.id, m.displayName]));
       const workNameMap = new Map(workRows.map((w) => [w.id, w.name]));
+
+      const artifactNamesByWork = new Map<string, string[]>();
+      const artifactNamesByTask = new Map<string, string[]>();
+      for (const a of wsArtifactRows) {
+        if (a.workId !== null && a.taskId === null) {
+          let arr = artifactNamesByWork.get(a.workId);
+          if (!arr) {
+            arr = [];
+            artifactNamesByWork.set(a.workId, arr);
+          }
+          arr.push(a.name);
+        } else if (a.taskId !== null) {
+          let arr = artifactNamesByTask.get(a.taskId);
+          if (!arr) {
+            arr = [];
+            artifactNamesByTask.set(a.taskId, arr);
+          }
+          arr.push(a.name);
+        }
+      }
 
       const stageColsByWs = new Map<string, Array<{ id: string; name: string }>>();
       const textColIdsByWs = new Map<string, string[]>();
@@ -152,8 +267,6 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
         }
         m.set(cell.columnId, toStageCellDto(cell));
       }
-
-      const needle = q ? normalizeText(q).toLowerCase() : '';
 
       // 按工作表顺序 + 任务顺序排列
       taskRows.sort((a, b) => {
@@ -194,6 +307,7 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
           continue;
         }
 
+        let matchedArtifactNames: string[] | undefined;
         if (needle) {
           const textColIds = textColIdsByWs.get(task.worksheetId) ?? [];
           const customTexts = textColIds
@@ -208,8 +322,19 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
             ...stages.flatMap((s) => [s.note, ...s.assigneeNames]),
           ];
 
-          const hit = haystacks.some((h) => h.toLowerCase().includes(needle));
-          if (!hit) continue;
+          const candidateArtifacts = [
+            ...(artifactNamesByTask.get(task.id) ?? []),
+            ...(task.workId ? (artifactNamesByWork.get(task.workId) ?? []) : []),
+          ];
+          const artHits = [
+            ...new Set(candidateArtifacts.filter((n) => n.toLowerCase().includes(needle))),
+          ];
+          if (artHits.length > 0) {
+            matchedArtifactNames = artHits;
+          }
+
+          const fieldHit = haystacks.some((h) => h.toLowerCase().includes(needle));
+          if (!fieldHit && artHits.length === 0) continue;
         }
 
         matched.push({
@@ -224,12 +349,14 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
           workId: task.workId,
           workName,
           stages,
+          ...(matchedArtifactNames ? { matchedArtifactNames } : {}),
         });
       }
 
       const res: SearchResponse = {
         items: matched.slice(offset, offset + limit),
         total: matched.length,
+        docs,
       };
       return res;
     },

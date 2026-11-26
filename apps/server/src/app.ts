@@ -13,6 +13,7 @@ import { createDb, createPool, type Db } from './db/index.js';
 import { AppError } from './errors.js';
 import { startJobs } from './jobs/index.js';
 import { registerAccountRoutes } from './modules/accounts.js';
+import { registerArtifactRoutes } from './modules/artifacts.js';
 import { registerBoardRoutes } from './modules/board.js';
 import { registerBoardColumnRoutes } from './modules/board-columns.js';
 import { registerChangeLogRoutes } from './modules/change-logs.js';
@@ -163,6 +164,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   registerColumnRoutes(app, { db, bus });
   registerTaskRoutes(app, { db, bus });
   registerStageRoutes(app, { db, bus });
+  registerArtifactRoutes(app, { db, bus });
   registerChangeLogRoutes(app, { db });
   registerBoardRoutes(app, { db });
   registerSearchRoutes(app, { db });

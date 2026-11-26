@@ -344,7 +344,7 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await pageA.getByRole('menuitem', { name: '展开任务详情' }).click();
     const segDrawer = pageA.getByTestId('task-detail-drawer');
     await expect(segDrawer.getByTestId('work-shared-attachments-slot')).toContainText(
-      '所属作品「5th 专场演唱会」共用附件',
+      '所属作品「5th 专场演唱会」共用资源',
     );
     await pageA.getByRole('button', { name: '关闭侧栏' }).click();
 

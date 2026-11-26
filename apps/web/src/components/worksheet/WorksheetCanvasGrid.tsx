@@ -18,7 +18,9 @@ import {
   type TaskDetail,
   type UserListItem,
   type Work,
+  type WorkCapsuleSummary,
   type Worksheet,
+  type WorksheetArtifactSummary,
 } from '@nw/shared';
 import {
   Check,
@@ -45,6 +47,7 @@ import {
   useState,
 } from 'react';
 import { ApiError } from '@/api/client.js';
+import { AnchoredArtifactQuickPopover } from '@/components/artifact/ArtifactQuickPopover.js';
 import { peerColorForUser } from '@/components/ui/colors.js';
 import {
   DropdownMenu,
@@ -128,7 +131,9 @@ function isTaskAllStagesDone(task: TaskDetail, stageCols: ColumnConfig[]): boole
 // ---- Canvas Work Group Banner Overlay Item ----
 
 function CanvasWorkBannerOverlay({
+  worksheetId,
   work,
+  capsules,
   top,
   height,
   taskCount,
@@ -141,7 +146,9 @@ function CanvasWorkBannerOverlay({
   onAddSegment,
   onUngroup,
 }: {
+  worksheetId: string;
   work: Work;
+  capsules: WorkCapsuleSummary[];
   top: number;
   height: number;
   taskCount: number;
@@ -286,7 +293,12 @@ function CanvasWorkBannerOverlay({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        <WorkAttachmentSlots workId={work.id} workName={work.name} />
+        <WorkAttachmentSlots
+          worksheetId={worksheetId}
+          workId={work.id}
+          workName={work.name}
+          capsules={capsules}
+        />
 
         <button
           type="button"
@@ -574,20 +586,24 @@ function AnchoredStagePopover({
   anchorRect,
   columnName,
   cell,
+  stageArtifactCount,
   users,
   userMap,
   remoteConflict,
   onClearConflict,
+  onOpenStageArtifacts,
   onCommit,
   onClose,
 }: {
   anchorRect: IRectangle;
   columnName: string;
   cell: StageCell;
+  stageArtifactCount: number;
   users: UserListItem[];
   userMap: Map<string, string>;
   remoteConflict: StageCellConflict | null;
   onClearConflict: () => void;
+  onOpenStageArtifacts: () => void;
   onCommit: (payload: {
     assignees: Assignee[];
     status: StageStatus;
@@ -839,13 +855,20 @@ function AnchoredStagePopover({
           />
         </div>
 
-        {/* 阶段 3 本工序附件上传与版本历史预留区 */}
-        <div className="flex items-center justify-between rounded-md border border-dashed border-black/[0.1] bg-[#fafafa] px-2.5 py-1.5 text-[11px] text-zinc-400">
-          <span className="inline-flex items-center gap-1.5">
-            <Paperclip className="h-3 w-3" />
-            本工序附件（阶段 3 接入）
+        {/* 阶段 3 本工序资源快捷入口 */}
+        <div className="flex items-center justify-between rounded-md border border-black/[0.08] bg-[#fafafa] px-2.5 py-1.5 text-xs">
+          <span className="inline-flex items-center gap-1.5 text-zinc-700">
+            <Paperclip className="h-3.5 w-3.5 text-zinc-500" />
+            {stageArtifactCount > 0 ? `本工序已有 ${stageArtifactCount} 个资源` : '本工序暂无资源'}
           </span>
-          <span>直挂新版 / 网盘</span>
+          <button
+            type="button"
+            data-testid="stage-popover-manage-artifacts"
+            onClick={onOpenStageArtifacts}
+            className="rounded-md border border-black/[0.1] bg-white px-2 py-0.5 text-[11px] font-medium text-zinc-800 hover:bg-black/[0.04] cursor-pointer"
+          >
+            {stageArtifactCount > 0 ? '查看 / 添加' : '+ 添加资源'}
+          </button>
         </div>
 
         <div className="flex justify-end gap-1.5">
@@ -1141,6 +1164,7 @@ export interface WorksheetCanvasGridProps {
   boardColumns: BoardColumn[];
   works: Work[];
   workMap: Map<string, Work>;
+  artifactSummary: WorksheetArtifactSummary;
   displayBlocks: GridDisplayBlock[];
   visualActiveTasks: TaskDetail[];
   stageCols: ColumnConfig[];
@@ -1190,7 +1214,7 @@ export interface WorksheetCanvasGridProps {
   onOpenAddSegment: (workId: string) => void;
   onCloseAddSegment: () => void;
   onUngroupWork: (block: Extract<GridDisplayBlock, { kind: 'work' }>) => void;
-  onOpenDetail: (taskId: string) => void;
+  onOpenDetail: (taskId: string, opts?: { focusFiles?: boolean }) => void;
   onClearTextConflict: (key: string) => void;
   onClearStageConflict: (key: string) => void;
   onAcceptRemoteField: (taskId: string, field: string, remoteVal: string) => void;
@@ -1203,6 +1227,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     boardColumns,
     works,
     workMap,
+    artifactSummary,
     displayBlocks,
     visualActiveTasks,
     stageCols,
@@ -1272,6 +1297,15 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     rowIndex: number;
     columnKey: string;
   } | null>(null);
+  const [stageQuickPopover, setStageQuickPopover] = useState<{
+    taskId: string;
+    taskTitle: string;
+    stageColumnId: string;
+    stageColumnName: string;
+    colIndex: number;
+    rowIndex: number;
+  } | null>(null);
+  const lastAttachmentClickTsRef = useRef(0);
   const [headerMenuTarget, setHeaderMenuTarget] = useState<{
     colDef: CanvasColumnDef;
     bounds: IRectangle;
@@ -1533,13 +1567,15 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       }
 
       if (col.kind === 'files') {
+        const count = artifactSummary.taskCounts[task.id] ?? 0;
+        const text = count > 0 ? `${count} 个资源` : '+';
         return {
           id: cellId,
           type: CellType.Text,
-          data: '阶段 3',
-          displayData: '阶段 3',
+          data: text,
+          displayData: text,
           readonly: true,
-          customTheme: { cellTextColor: '#A1A1AA' },
+          customTheme: { cellTextColor: count > 0 ? '#18181B' : '#A1A1AA' },
         };
       }
 
@@ -1597,13 +1633,33 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       }
 
       if (col.kind === 'stage' && col.columnConfig) {
-        const stageCell = getEffectiveStageCell(task, col.columnConfig.id);
+        const stageColCfg = col.columnConfig;
+        const stageCell = getEffectiveStageCell(task, stageColCfg.id);
         const names = stageCell.assignees.map((a) =>
           a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name,
         );
         const assigneesText =
           names.length <= 2 ? names.join('、') : `${names[0]}、${names[1]} +${names.length - 2}`;
-        const stageAttachment: StageAttachmentSummary | null = null;
+        const badge = artifactSummary.stageBadges[`${task.id}:${stageColCfg.id}`] ?? null;
+        const stageAttachment: StageAttachmentSummary | null = badge
+          ? {
+              kind: 'link',
+              label: badge.label,
+              onClick: () => {
+                lastAttachmentClickTsRef.current = performance.now();
+                setActivePopover(null);
+                setActiveTextEdit(null);
+                setStageQuickPopover({
+                  taskId: task.id,
+                  taskTitle: task.title,
+                  stageColumnId: stageColCfg.id,
+                  stageColumnName: stageColCfg.name,
+                  colIndex,
+                  rowIndex,
+                });
+              },
+            }
+          : null;
         return {
           id: cellId,
           type: CellType.Stage,
@@ -1615,11 +1671,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           },
           readonly: true,
           onAttachmentClick: (att) => {
-            if (att.url && /^https?:\/\//i.test(att.url)) {
-              window.open(att.url, '_blank', 'noopener,noreferrer');
-            } else {
-              att.onClick?.();
-            }
+            att.onClick?.();
           },
         };
       }
@@ -1649,7 +1701,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         readonly: true,
       };
     },
-    [columnDefs, visualActiveTasks, workMap, userMap],
+    [columnDefs, visualActiveTasks, workMap, userMap, artifactSummary],
   );
 
   // 打开指定单元格编辑器（支持文本内联编辑或结构化 Popover）
@@ -1663,7 +1715,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       onSelectCell(task.id, col.id);
 
       if (col.kind === 'files') {
-        onOpenDetail(task.id);
+        onOpenDetail(task.id, { focusFiles: true });
         return;
       }
 
@@ -1680,12 +1732,17 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         return;
       }
 
+      if (col.kind === 'stage' && performance.now() - lastAttachmentClickTsRef.current < 150) {
+        return;
+      }
+
       if (
         col.kind === 'stage' ||
         col.kind === 'priority' ||
         col.kind === 'publish' ||
         col.kind === 'work'
       ) {
+        setStageQuickPopover(null);
         setActiveTextEdit(null);
         setActivePopover({
           kind: col.kind,
@@ -1710,7 +1767,11 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       onSelectCell(task.id, col.id);
 
       if (col.kind === 'files') {
-        onOpenDetail(task.id);
+        onOpenDetail(task.id, { focusFiles: true });
+        return;
+      }
+
+      if (col.kind === 'stage' && performance.now() - lastAttachmentClickTsRef.current < 150) {
         return;
       }
 
@@ -1720,6 +1781,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         col.kind === 'publish' ||
         col.kind === 'work'
       ) {
+        setStageQuickPopover(null);
         setActiveTextEdit(null);
         setActivePopover({
           kind: col.kind,
@@ -2002,6 +2064,15 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     return gridRef.current?.getCellBounds([activePopover.colIndex, activePopover.rowIndex]) ?? null;
   }, [layoutTick, activePopover]);
 
+  const stageQuickPopoverBounds = useMemo(() => {
+    void layoutTick;
+    if (!stageQuickPopover) return null;
+    return (
+      gridRef.current?.getCellBounds([stageQuickPopover.colIndex, stageQuickPopover.rowIndex]) ??
+      null
+    );
+  }, [layoutTick, stageQuickPopover]);
+
   const handleQuickAdd = async (e: FormEvent) => {
     e.preventDefault();
     const title = quickAddTitle.trim();
@@ -2080,6 +2151,10 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       | (HTMLDivElement & {
           __nwGridGeometry?: {
             getCellPoint: (taskId: string, columnKey: string) => { x: number; y: number } | null;
+            getStageBadgePoint: (
+              taskId: string,
+              columnKey: string,
+            ) => { x: number; y: number } | null;
             getHeaderPoint: (columnKey: string) => { x: number; y: number } | null;
             getRowExpandPoint: (taskId: string) => { x: number; y: number } | null;
           };
@@ -2107,6 +2182,21 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           cy < 36 ||
           cy > hostRect.height - 4
         ) {
+          gridRef.current?.scrollToItem([colIdx, rowIdx]);
+          return null;
+        }
+        return { x: hostRect.left + cx, y: hostRect.top + cy };
+      },
+      getStageBadgePoint: (taskId: string, columnKey: string) => {
+        const colIdx = columnDefs.findIndex((c) => c.id === columnKey);
+        const rowIdx = visualActiveTasks.findIndex((t) => t.id === taskId);
+        if (colIdx === -1 || rowIdx === -1) return null;
+        const b = gridRef.current?.getCellBounds([colIdx, rowIdx]);
+        const hostRect = host.getBoundingClientRect();
+        if (!b || hostRect.width === 0 || hostRect.height === 0) return null;
+        const cx = b.x + b.width - 22;
+        const cy = b.y + b.height / 2;
+        if (cx < 4 || cx > hostRect.width - 4 || cy < 36 || cy > hostRect.height - 4) {
           gridRef.current?.scrollToItem([colIdx, rowIdx]);
           return null;
         }
@@ -2334,7 +2424,9 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             return (
               <CanvasWorkBannerOverlay
                 key={block.work.id}
+                worksheetId={worksheet.id}
                 work={block.work}
+                capsules={artifactSummary.workCapsules[block.work.id] ?? []}
                 top={relativeTop}
                 height={hdr.height}
                 taskCount={block.tasks.length}
@@ -2450,12 +2542,15 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           activePopoverBounds &&
           (() => {
             const stageColCfg = activePopoverCol.columnConfig;
+            const stageBadge =
+              artifactSummary.stageBadges[`${activePopover.taskId}:${stageColCfg.id}`];
             return (
               <AnchoredStagePopover
                 key={`${activePopover.taskId}:${activePopover.columnKey}`}
                 anchorRect={activePopoverBounds}
                 columnName={stageColCfg.name}
                 cell={getEffectiveStageCell(activePopoverTask, stageColCfg.id)}
+                stageArtifactCount={stageBadge?.artifactCount ?? 0}
                 users={users}
                 userMap={userMap}
                 remoteConflict={
@@ -2464,6 +2559,20 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                 onClearConflict={() =>
                   onClearStageConflict(`${activePopover.taskId}:${activePopover.columnKey}`)
                 }
+                onOpenStageArtifacts={() => {
+                  const snap = activePopover;
+                  const taskSnap = activePopoverTask;
+                  onSetEditingFocus(snap.taskId, snap.columnKey, false);
+                  setActivePopover(null);
+                  setStageQuickPopover({
+                    taskId: taskSnap.id,
+                    taskTitle: taskSnap.title,
+                    stageColumnId: stageColCfg.id,
+                    stageColumnName: stageColCfg.name,
+                    colIndex: snap.colIndex,
+                    rowIndex: snap.rowIndex,
+                  });
+                }}
                 onCommit={(payload) => onPatchStage(activePopover.taskId, stageColCfg.id, payload)}
                 onClose={() => {
                   onSetEditingFocus(activePopover.taskId, activePopover.columnKey, false);
@@ -2472,6 +2581,23 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
               />
             );
           })()}
+
+        {/* 锚定工序格资源快速取用浮层（点击工序格右侧角标或从工序格编辑浮层切入） */}
+        {stageQuickPopover && stageQuickPopoverBounds && (
+          <AnchoredArtifactQuickPopover
+            anchorRect={stageQuickPopoverBounds}
+            target={{
+              kind: 'stage',
+              worksheetId: worksheet.id,
+              taskId: stageQuickPopover.taskId,
+              taskTitle: stageQuickPopover.taskTitle,
+              stageColumnId: stageQuickPopover.stageColumnId,
+              stageColumnName: stageQuickPopover.stageColumnName,
+            }}
+            onClose={() => setStageQuickPopover(null)}
+            onOpenTaskDetail={(tid) => onOpenDetail(tid, { focusFiles: true })}
+          />
+        )}
 
         {/* 锚定发布信息 Popover */}
         {activePopover?.kind === 'publish' && activePopoverTask && activePopoverBounds && (

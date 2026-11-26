@@ -3,6 +3,7 @@ import { isNotNull, isNull, sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -24,6 +25,18 @@ export const columnTypeEnum = pgEnum('column_type', ['stage', 'text', 'date', 'l
 export const priorityEnum = pgEnum('priority', ['normal', 'high', 'urgent']);
 export const publishStatusEnum = pgEnum('publish_status', ['unpublished', 'published']);
 export const stageStatusEnum = pgEnum('stage_status', ['not_started', 'in_progress', 'done', 'na']);
+export const locationTypeEnum = pgEnum('location_type', ['cloud_link', 'r2']);
+export const cloudProviderEnum = pgEnum('cloud_provider', [
+  'baidu',
+  'aliyun',
+  'quark',
+  'tianyi',
+  '115',
+  'gdrive',
+  'mega',
+  'onedrive',
+  'other',
+]);
 
 export const projects = pgTable('projects', {
   id: id(),
@@ -316,6 +329,7 @@ export const changeLogs = pgTable(
       .references(() => projects.id),
     worksheetId: uuid('worksheet_id').references(() => worksheets.id),
     taskId: uuid('task_id').references(() => tasks.id),
+    artifactId: uuid('artifact_id').references(() => artifacts.id),
     actorUserId: uuid('actor_user_id')
       .notNull()
       .references(() => users.id),
@@ -337,5 +351,127 @@ export const changeLogs = pgTable(
       t.createdAt.desc(),
       t.id.desc(),
     ),
+    index('change_logs_project_docs_created_idx')
+      .on(t.projectId, t.createdAt.desc(), t.id.desc())
+      .where(sql`${isNull(t.worksheetId)} AND ${isNotNull(t.artifactId)}`),
+  ],
+);
+
+// ---- 阶段 3 新增表（四级资源、版本历史、网盘入口） ----
+
+export const artifacts = pgTable(
+  'artifacts',
+  {
+    id: id(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
+    worksheetId: uuid('worksheet_id').references(() => worksheets.id),
+    workId: uuid('work_id').references(() => works.id),
+    taskId: uuid('task_id').references(() => tasks.id),
+    stageColumnId: uuid('stage_column_id').references(() => columnConfigs.id),
+    name: text('name').notNull(),
+    latestVersionId: uuid('latest_version_id'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    deletedAt: ts('deleted_at'),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      'artifacts_scope_check',
+      sql`(
+        (${t.worksheetId} IS NULL AND ${t.workId} IS NULL AND ${t.taskId} IS NULL AND ${t.stageColumnId} IS NULL)
+        OR
+        (${t.worksheetId} IS NOT NULL AND ${t.workId} IS NOT NULL AND ${t.taskId} IS NULL AND ${t.stageColumnId} IS NULL)
+        OR
+        (${t.worksheetId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.taskId} IS NOT NULL AND ${t.stageColumnId} IS NULL)
+        OR
+        (${t.worksheetId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.taskId} IS NOT NULL AND ${t.stageColumnId} IS NOT NULL)
+      )`,
+    ),
+    index('artifacts_project_docs_active_idx')
+      .on(t.projectId, t.updatedAt.desc())
+      .where(sql`${isNull(t.worksheetId)} AND ${isNull(t.deletedAt)}`),
+    index('artifacts_project_ws_active_idx')
+      .on(t.projectId, t.worksheetId)
+      .where(sql`${isNotNull(t.worksheetId)} AND ${isNull(t.deletedAt)}`),
+    index('artifacts_project_work_active_idx')
+      .on(t.projectId, t.workId)
+      .where(sql`${isNotNull(t.workId)} AND ${isNull(t.deletedAt)}`),
+    index('artifacts_project_task_active_idx')
+      .on(t.projectId, t.taskId)
+      .where(sql`${isNotNull(t.taskId)} AND ${isNull(t.deletedAt)}`),
+    index('artifacts_project_stage_col_active_idx')
+      .on(t.projectId, t.stageColumnId)
+      .where(sql`${isNotNull(t.stageColumnId)} AND ${isNull(t.deletedAt)}`),
+  ],
+);
+
+export const artifactVersions = pgTable(
+  'artifact_versions',
+  {
+    id: id(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => artifacts.id),
+    versionNumber: integer('version_number').notNull(),
+    note: text('note').notNull().default(''),
+    originalFilename: text('original_filename'),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }),
+    mimeType: text('mime_type'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    deletedAt: ts('deleted_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('artifact_versions_artifact_num_key').on(t.artifactId, t.versionNumber),
+    index('artifact_versions_project_artifact_active_idx')
+      .on(t.projectId, t.artifactId, t.versionNumber.desc())
+      .where(isNull(t.deletedAt)),
+  ],
+);
+
+export const resourceLocations = pgTable(
+  'resource_locations',
+  {
+    id: id(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => artifacts.id),
+    versionId: uuid('version_id')
+      .notNull()
+      .references(() => artifactVersions.id),
+    type: locationTypeEnum('type').notNull().default('cloud_link'),
+    provider: cloudProviderEnum('provider'),
+    url: text('url'),
+    extractCode: text('extract_code'),
+    isFolder: boolean('is_folder').notNull().default(false),
+    expiresAt: text('expires_at'),
+    note: text('note').notNull().default(''),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    deletedAt: ts('deleted_at'),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('resource_locations_project_version_active_idx')
+      .on(t.projectId, t.versionId, t.createdAt.asc())
+      .where(isNull(t.deletedAt)),
+    index('resource_locations_project_artifact_active_idx')
+      .on(t.projectId, t.artifactId)
+      .where(isNull(t.deletedAt)),
   ],
 );

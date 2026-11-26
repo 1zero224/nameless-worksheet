@@ -8,6 +8,8 @@ import {
   type StageCell,
   type SystemColumnsConfig,
   type TaskDetail,
+  type UngroupWorkResponse,
+  ungroupWorkBodySchema,
   updateWorkBodySchema,
   updateWorksheetBodySchema,
   WORKSHEET_TEMPLATES,
@@ -23,6 +25,7 @@ import { type Db, schema, type Tx } from '../db/index.js';
 import { withTx } from '../db/tx.js';
 import { AppError, notFound, uniqueViolation } from '../errors.js';
 import type { EventBus } from '../realtime/bus.js';
+import { buildWorksheetArtifactSummary } from './artifacts.js';
 import { toBoardColumnDto } from './board-columns.js';
 import { findActiveWorksheet, recordChangeLog } from './change-logs.js';
 import { ascC, parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
@@ -394,6 +397,8 @@ export function registerWorksheetRoutes(
       ]);
 
       const activeColIds = new Set(colRows.map((c) => c.id));
+      const activeStageColIds = new Set(colRows.filter((c) => c.type === 'stage').map((c) => c.id));
+      const activeTaskIds = new Set(taskRows.map((t) => t.id));
       const cellsByTask = new Map<string, Record<string, StageCell>>();
       for (const cell of cellRows) {
         if (!activeColIds.has(cell.columnId)) continue;
@@ -405,11 +410,22 @@ export function registerWorksheetRoutes(
         map[cell.columnId] = toStageCellDto(cell);
       }
 
-      // 仅返回至少有 1 条未删任务的作品（空作品自动隐藏）
+      const { summary: artifactSummary, workIdsWithArtifacts } =
+        await buildWorksheetArtifactSummary(
+          db,
+          auth.projectId,
+          worksheetId,
+          activeTaskIds,
+          activeStageColIds,
+        );
+
+      // 返回至少有 1 条未删任务，或至少有 1 个未删共用资源的作品
       const activeWorkIds = new Set(
         taskRows.map((t) => t.workId).filter((id): id is string => id !== null),
       );
-      const visibleWorks = workRows.filter((w) => activeWorkIds.has(w.id)).map(toWorkDto);
+      const visibleWorks = workRows
+        .filter((w) => activeWorkIds.has(w.id) || workIdsWithArtifacts.has(w.id))
+        .map(toWorkDto);
 
       const res: WorksheetFullResponse = {
         worksheet: toWorksheetDto(ws),
@@ -417,6 +433,7 @@ export function registerWorksheetRoutes(
         works: visibleWorks,
         tasks: taskRows.map((t) => toTaskDetailDto(t, cellsByTask.get(t.id) ?? {})),
         boardColumns: boardColRows.map(toBoardColumnDto),
+        artifactSummary,
       };
       return res;
     },
@@ -718,6 +735,145 @@ export function registerWorksheetRoutes(
         }
         throw err;
       }
+    },
+  );
+
+  // POST /api/worksheets/:worksheetId/works/:workId/ungroup
+  app.post<{ Params: { worksheetId: string; workId: string } }>(
+    '/api/worksheets/:worksheetId/works/:workId/ungroup',
+    { config: { access: 'authenticated' } },
+    async (request) => {
+      const auth = request.auth!;
+      const worksheetId = parseUuidParam(request.params.worksheetId);
+      const workId = parseUuidParam(request.params.workId);
+      const body = parseBody(ungroupWorkBodySchema, request.body);
+      const originConnId = readOriginConnId(request);
+
+      const { result } = await withTx(
+        db,
+        bus,
+        { projectId: auth.projectId, userId: auth.userId, originConnId },
+        async ({ tx, emit }) => {
+          const ws = await findActiveWorksheet(tx, auth.projectId, worksheetId);
+          if (!ws) throw notFound();
+
+          const [work] = await tx
+            .select()
+            .from(schema.works)
+            .where(
+              and(
+                eq(schema.works.projectId, auth.projectId),
+                eq(schema.works.worksheetId, worksheetId),
+                eq(schema.works.id, workId),
+              ),
+            )
+            .limit(1);
+          if (!work) throw notFound();
+
+          const now = new Date();
+          const ungroupedTasks = await tx
+            .update(schema.tasks)
+            .set({
+              workId: null,
+              revision: sql`${schema.tasks.revision} + 1`,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(schema.tasks.projectId, auth.projectId),
+                eq(schema.tasks.worksheetId, worksheetId),
+                eq(schema.tasks.workId, work.id),
+                isNull(schema.tasks.deletedAt),
+              ),
+            )
+            .returning({ id: schema.tasks.id });
+
+          let deletedArtifactCount = 0;
+          if (body.deleteSharedArtifacts) {
+            const deletedArtifacts = await tx
+              .update(schema.artifacts)
+              .set({ deletedAt: now, updatedAt: now })
+              .where(
+                and(
+                  eq(schema.artifacts.projectId, auth.projectId),
+                  eq(schema.artifacts.worksheetId, worksheetId),
+                  eq(schema.artifacts.workId, work.id),
+                  isNull(schema.artifacts.deletedAt),
+                ),
+              )
+              .returning({
+                id: schema.artifacts.id,
+                name: schema.artifacts.name,
+                latestVersionId: schema.artifacts.latestVersionId,
+              });
+            deletedArtifactCount = deletedArtifacts.length;
+
+            for (const art of deletedArtifacts) {
+              let latestVersionNumber: number | null = null;
+              if (art.latestVersionId) {
+                const [ver] = await tx
+                  .select({ versionNumber: schema.artifactVersions.versionNumber })
+                  .from(schema.artifactVersions)
+                  .where(eq(schema.artifactVersions.id, art.latestVersionId))
+                  .limit(1);
+                latestVersionNumber = ver?.versionNumber ?? null;
+              }
+              await recordChangeLog(tx, {
+                projectId: auth.projectId,
+                worksheetId,
+                taskId: null,
+                artifactId: art.id,
+                actorUserId: auth.userId,
+                action: 'artifact.deleted',
+                summary: `解散作品「${work.name}」时删除了共用资源「${art.name}」`,
+                changes: {
+                  artifactId: art.id,
+                  name: art.name,
+                  scopeKind: 'work',
+                  latestVersionNumber,
+                },
+              });
+            }
+          }
+
+          await recordChangeLog(tx, {
+            projectId: auth.projectId,
+            worksheetId,
+            taskId: null,
+            actorUserId: auth.userId,
+            action: 'work.ungrouped',
+            summary:
+              deletedArtifactCount > 0
+                ? `解散了作品分组「${work.name}」（移出 ${ungroupedTasks.length} 条任务，删除 ${deletedArtifactCount} 个共用资源）`
+                : `解散了作品分组「${work.name}」（移出 ${ungroupedTasks.length} 条任务）`,
+            changes: {
+              workId: work.id,
+              workName: work.name,
+              ungroupedTaskCount: ungroupedTasks.length,
+              deletedArtifactCount,
+            },
+          });
+
+          emit({
+            scope: { type: 'worksheet', id: worksheetId },
+            type: 'work.ungrouped',
+            payload: { workId: work.id, deleteSharedArtifacts: body.deleteSharedArtifacts },
+          });
+          emit({
+            scope: { type: 'project', id: auth.projectId },
+            type: 'board.task_changed',
+            payload: { worksheetId, action: 'work.ungrouped' },
+          });
+
+          const res: UngroupWorkResponse = {
+            ungroupedTaskCount: ungroupedTasks.length,
+            deletedArtifactCount,
+          };
+          return res;
+        },
+      );
+
+      return result;
     },
   );
 }

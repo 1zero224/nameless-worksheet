@@ -1,5 +1,6 @@
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 import { z } from 'zod';
+import type { SearchDocItem, WorksheetArtifactSummary } from './artifact.js';
 
 export { generateKeyBetween, generateNKeysBetween };
 
@@ -196,6 +197,18 @@ export const CHANGE_LOG_ACTIONS = [
   'column.updated',
   'column.deleted',
   'board_column.updated',
+  'work.ungrouped',
+  'artifact.created',
+  'artifact.updated',
+  'artifact.deleted',
+  'artifact.restored',
+  'artifact_version.created',
+  'artifact_version.deleted',
+  'artifact_version.restored',
+  'location.created',
+  'location.updated',
+  'location.deleted',
+  'location.restored',
 ] as const;
 export type ChangeLogAction = (typeof CHANGE_LOG_ACTIONS)[number];
 
@@ -504,6 +517,7 @@ export interface WorksheetFullResponse {
   works: Work[];
   tasks: TaskDetail[];
   boardColumns: BoardColumn[];
+  artifactSummary: WorksheetArtifactSummary;
 }
 
 export interface FieldConflictItem {
@@ -533,6 +547,7 @@ export interface ChangeLogItem {
   id: string;
   worksheetId: string | null;
   taskId: string | null;
+  artifactId?: string | null;
   actor: { id: string; displayName: string };
   action: ChangeLogAction;
   summary: string;
@@ -573,6 +588,7 @@ export interface BoardCard {
   workName: string | null;
   missingStages: Array<{ columnId: string; name: string }>;
   stageProgress: BoardStageSummary[];
+  resourceCount?: number;
 }
 
 export interface MyTaskItem {
@@ -592,6 +608,7 @@ export interface MyTaskItem {
   stageAssignees: Assignee[];
   stageNote: string;
   stageRevision: number;
+  resourceCount?: number;
 }
 
 export interface BoardResponse {
@@ -629,9 +646,11 @@ export interface SearchTaskItem {
     assigneeNames: string[];
     note: string;
   }>;
+  matchedArtifactNames?: string[];
 }
 
 export interface SearchResponse {
   items: SearchTaskItem[];
   total: number;
+  docs: SearchDocItem[];
 }

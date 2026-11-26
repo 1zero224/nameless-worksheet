@@ -7,6 +7,7 @@ import { RequireAuth, RequirePermission, useMe } from '@/app/AuthContext.js';
 import { ToastProvider } from '@/components/ui/overlays.js';
 import { AdminRealtimePage } from '@/pages/AdminRealtimePage.js';
 import { AdminUsersPage } from '@/pages/AdminUsersPage.js';
+import { DocsPage } from '@/pages/DocsPage.js';
 import { HomePage } from '@/pages/HomePage.js';
 import { InviteRegisterPage } from '@/pages/InviteRegisterPage.js';
 import { LoginPage } from '@/pages/LoginPage.js';
@@ -60,6 +61,7 @@ function AppRoutes() {
           }
         >
           <Route index element={<HomePage />} />
+          <Route path="/docs" element={<DocsPage />} />
           <Route path="/worksheets" element={<WorksheetsPage />} />
           <Route path="/worksheets/:id" element={<WorksheetDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
