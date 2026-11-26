@@ -47,8 +47,8 @@ function SortableBoardColumnRow({
       style={style}
       data-testid={`board-column-row-${col.id}`}
       className={cn(
-        'flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2',
-        isDragging && 'z-10 shadow-md ring-2 ring-sky-500/25',
+        'flex items-center justify-between gap-3 rounded-lg border border-black/[0.08] bg-white px-3 py-2',
+        isDragging && 'z-10 shadow-md ring-2 ring-zinc-900/15',
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -57,18 +57,18 @@ function SortableBoardColumnRow({
           {...attributes}
           {...listeners}
           aria-label={`拖动排序看板列 ${col.name}`}
-          className="cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+          className="cursor-grab rounded p-1 text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-600 active:cursor-grabbing"
         >
           <GripVertical className="h-4 w-4" />
         </button>
-        <span className="truncate text-sm font-medium text-slate-800">{col.name}</span>
+        <span className="truncate text-sm font-medium text-zinc-900">{col.name}</span>
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <button
           type="button"
           onClick={() => onRename(col)}
           aria-label={`重命名看板列 ${col.name}`}
-          className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 cursor-pointer"
+          className="rounded p-1.5 text-zinc-500 hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
@@ -76,7 +76,7 @@ function SortableBoardColumnRow({
           type="button"
           onClick={() => onDelete(col)}
           aria-label={`删除看板列 ${col.name}`}
-          className="rounded p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 cursor-pointer"
+          className="rounded p-1.5 text-zinc-500 hover:bg-red-50 hover:text-red-600 cursor-pointer"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -194,7 +194,7 @@ export function BoardColumnsManager() {
   return (
     <div>
       {isLoading ? (
-        <div className="py-6 text-center text-sm text-slate-500">正在加载看板列…</div>
+        <div className="py-6 text-center text-sm text-zinc-500">正在加载看板列…</div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext

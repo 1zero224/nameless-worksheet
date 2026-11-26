@@ -35,7 +35,6 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { useMe } from '@/app/AuthContext.js';
-import { WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,7 +117,6 @@ function SortableTopWorksheetTab({
     id: ws.id,
   });
   const [menuOpen, setMenuOpen] = useState(false);
-  const colorStyle = WORKSHEET_COLOR_STYLES[ws.color] ?? WORKSHEET_COLOR_STYLES.sky;
 
   return (
     <div
@@ -149,16 +147,10 @@ function SortableTopWorksheetTab({
       <NavLink
         to={`/worksheets/${ws.id}`}
         className={cn(
-          'relative z-10 flex h-full items-center gap-1.5 pl-2.5 pr-6 text-sm transition-colors duration-150',
+          'relative z-10 flex h-full items-center pl-2.5 pr-6 text-sm transition-colors duration-150',
           isActive ? 'font-medium text-zinc-950' : 'text-zinc-600 group-hover:text-zinc-950',
         )}
       >
-        <span
-          className={cn(
-            'h-1.5 w-1.5 shrink-0 rounded-full transition-transform duration-150 group-hover:scale-110',
-            colorStyle.dot,
-          )}
-        />
         <span className="max-w-[132px] truncate">{ws.name}</span>
       </NavLink>
 
@@ -190,7 +182,7 @@ function SortableTopWorksheetTab({
               }}
             >
               <Pencil className="h-3.5 w-3.5 text-zinc-400" />
-              重命名 / 改色
+              重命名
             </DropdownMenuItem>
             <DropdownMenuItem
               variant="destructive"

@@ -31,11 +31,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
-import {
-  PRIORITY_DOT_STYLES,
-  STAGE_STATUS_STYLES,
-  WORKSHEET_COLOR_STYLES,
-} from '@/components/ui/colors.js';
+import { PRIORITY_DOT_STYLES, STAGE_STATUS_STYLES } from '@/components/ui/colors.js';
 import { Sheet, useToast } from '@/components/ui/overlays.js';
 import { Button, cn, Input, Label } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
@@ -189,9 +185,6 @@ export function TaskDetailDrawer({
 
   const stageCols = wsData?.columns.filter((c) => c.type === 'stage') ?? [];
   const customCols = wsData?.columns.filter((c) => c.type !== 'stage') ?? [];
-  const wsColor = wsData
-    ? (WORKSHEET_COLOR_STYLES[wsData.worksheet.color] ?? WORKSHEET_COLOR_STYLES.sky)
-    : WORKSHEET_COLOR_STYLES.sky;
 
   return (
     <Sheet
@@ -225,13 +218,7 @@ export function TaskDetailDrawer({
         <div className="space-y-5" data-testid="task-detail-drawer">
           {/* 所属工作表标签 */}
           <div className="flex items-center justify-between gap-2">
-            <span
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                wsColor.badge,
-              )}
-            >
-              <span className={cn('h-2 w-2 rounded-full', wsColor.dot)} />
+            <span className="inline-flex items-center rounded-md border border-black/[0.08] bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-700">
               {wsData.worksheet.name}
             </span>
             <Button

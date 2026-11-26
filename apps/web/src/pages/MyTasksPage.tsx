@@ -13,9 +13,9 @@ import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { useMe } from '@/app/AuthContext.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
-import { STAGE_STATUS_STYLES, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
+import { STAGE_STATUS_STYLES } from '@/components/ui/colors.js';
 import { useToast } from '@/components/ui/overlays.js';
-import { Button, Card, cn } from '@/components/ui/primitives.js';
+import { Button, Card } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
 import { useRealtimeScope } from '@/realtime/context.js';
 
@@ -78,22 +78,15 @@ export function MyTasksPage() {
   });
 
   const renderItem = (item: MyTaskItem) => {
-    const wsColor = WORKSHEET_COLOR_STYLES[item.worksheetColor] ?? WORKSHEET_COLOR_STYLES.sky;
     return (
       <div
         key={`${item.taskId}:${item.stageColumnId}`}
         data-testid={`my-task-row-${item.taskId}-${item.stageColumnId}`}
-        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-black/[0.08] bg-white px-3.5 py-2.5"
       >
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
-                wsColor.badge,
-              )}
-            >
-              <span className={cn('h-1.5 w-1.5 rounded-full', wsColor.dot)} />
+            <span className="inline-flex items-center rounded-md border border-black/[0.08] bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-700">
               {item.worksheetName}
             </span>
             {item.workName && (

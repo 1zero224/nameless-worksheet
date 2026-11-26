@@ -1,82 +1,4 @@
-import type { Priority, StageStatus, WorksheetColor } from '@nw/shared';
-
-export const WORKSHEET_COLOR_STYLES: Record<
-  WorksheetColor,
-  { dot: string; badge: string; border: string; hex: string }
-> = {
-  slate: {
-    dot: 'bg-zinc-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-zinc-300',
-    hex: '#71717a',
-  },
-  red: {
-    dot: 'bg-red-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-red-300',
-    hex: '#ef4444',
-  },
-  orange: {
-    dot: 'bg-orange-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-orange-300',
-    hex: '#f97316',
-  },
-  amber: {
-    dot: 'bg-amber-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-amber-300',
-    hex: '#f59e0b',
-  },
-  emerald: {
-    dot: 'bg-emerald-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-emerald-300',
-    hex: '#10b981',
-  },
-  teal: {
-    dot: 'bg-teal-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-teal-300',
-    hex: '#14b8a6',
-  },
-  sky: {
-    dot: 'bg-sky-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-sky-300',
-    hex: '#0ea5e9',
-  },
-  blue: {
-    dot: 'bg-blue-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-blue-300',
-    hex: '#3b82f6',
-  },
-  indigo: {
-    dot: 'bg-indigo-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-indigo-300',
-    hex: '#6366f1',
-  },
-  violet: {
-    dot: 'bg-violet-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-violet-300',
-    hex: '#8b5cf6',
-  },
-  pink: {
-    dot: 'bg-pink-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-pink-300',
-    hex: '#ec4899',
-  },
-  rose: {
-    dot: 'bg-rose-500',
-    badge: 'bg-white text-zinc-700 border-black/[0.08]',
-    border: 'border-rose-300',
-    hex: '#f43f5e',
-  },
-};
+import type { Priority, StageStatus } from '@nw/shared';
 
 export const STAGE_STATUS_STYLES: Record<
   StageStatus,
@@ -129,25 +51,45 @@ export type BoardCardVisualState = 'in_progress' | 'missing' | 'waiting';
 
 export const BOARD_CARD_STATE_STYLES: Record<
   BoardCardVisualState,
-  { card: string; subCard: string; statusText: string; dot: string }
+  {
+    card: string;
+    subCard: string;
+    title: string;
+    statusText: string;
+    dot: string;
+    actionBtn: string;
+    meTag: string;
+  }
 > = {
   in_progress: {
-    card: 'border-amber-200/90 bg-[#FEFCE8] hover:border-amber-300 hover:bg-[#FEF9C3]/65',
-    subCard: 'border-amber-200/85 bg-[#FEFCE8] hover:border-amber-300 hover:bg-[#FEF9C3]/70',
-    statusText: 'text-amber-900 font-medium',
-    dot: 'bg-amber-400',
+    card: 'border-amber-200/80 bg-[#FEFCE8] hover:border-amber-300/95 hover:bg-[#FEF9C3]/60',
+    subCard: 'border-amber-200/75 bg-[#FEFCE8] hover:border-amber-300/90 hover:bg-[#FEF9C3]/65',
+    title: 'text-zinc-900 group-hover:text-amber-950',
+    statusText: 'text-amber-900/90 font-medium',
+    dot: 'bg-amber-500/85',
+    actionBtn:
+      'border-amber-900/[0.12] bg-amber-950/[0.045] text-amber-950/85 hover:border-emerald-600/30 hover:bg-emerald-500/[0.12] hover:text-emerald-900',
+    meTag: 'bg-amber-950/[0.07] text-amber-950/80',
   },
   missing: {
-    card: 'border-red-200/85 bg-[#FEF2F2] hover:border-red-300 hover:bg-[#FEE2E2]/60',
-    subCard: 'border-red-200/80 bg-[#FEF2F2] hover:border-red-300 hover:bg-[#FEE2E2]/65',
-    statusText: 'text-red-800 font-medium',
-    dot: 'bg-red-400',
+    card: 'border-red-200/75 bg-[#FEF2F2] hover:border-red-300/90 hover:bg-[#FEE2E2]/55',
+    subCard: 'border-red-200/70 bg-[#FEF2F2] hover:border-red-300/85 hover:bg-[#FEE2E2]/60',
+    title: 'text-zinc-900 group-hover:text-red-950',
+    statusText: 'text-red-900/85 font-medium',
+    dot: 'bg-red-500/80',
+    actionBtn:
+      'border-red-900/[0.11] bg-red-500/[0.08] text-red-900/90 hover:border-red-900/[0.22] hover:bg-red-500/[0.15] hover:text-red-950',
+    meTag: 'bg-red-950/[0.07] text-red-950/80',
   },
   waiting: {
-    card: 'border-black/[0.08] bg-white hover:border-black/[0.16] hover:bg-[#fcfcfd]',
-    subCard: 'border-black/[0.08] bg-white hover:border-black/[0.15] hover:bg-[#fcfcfd]',
-    statusText: 'text-zinc-700',
+    card: 'border-black/[0.10] bg-white hover:border-black/[0.18] hover:bg-[#fafafa]',
+    subCard: 'border-black/[0.08] bg-[#fafafa]/70 hover:border-black/[0.15] hover:bg-zinc-100/65',
+    title: 'text-zinc-900 group-hover:text-zinc-950',
+    statusText: 'text-zinc-600',
     dot: 'bg-zinc-300',
+    actionBtn:
+      'border-black/[0.09] bg-zinc-900/[0.04] text-zinc-700 hover:border-amber-500/30 hover:bg-amber-500/[0.12] hover:text-amber-950',
+    meTag: 'bg-black/[0.06] text-zinc-700',
   },
 };
 
@@ -197,9 +139,9 @@ export const STAGE_STATUS_CANVAS_COLORS: Record<
 };
 
 export const PRIORITY_STYLES: Record<Priority, string> = {
-  normal: 'bg-zinc-100/80 text-zinc-600 border-black/[0.06]',
-  high: 'bg-amber-50/90 text-amber-800 border-amber-200/80',
-  urgent: 'bg-red-50/90 text-red-700 border-red-200/80',
+  normal: 'bg-black/[0.04] text-zinc-600 border-black/[0.07]',
+  high: 'bg-amber-500/[0.10] text-amber-900 border-amber-500/[0.22]',
+  urgent: 'bg-red-500/[0.10] text-red-800 border-red-500/[0.22]',
 };
 
 export const PRIORITY_DOT_STYLES: Record<Priority, string> = {

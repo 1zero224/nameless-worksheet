@@ -1,16 +1,8 @@
-import {
-  WORKSHEET_COLOR_LABELS,
-  WORKSHEET_COLORS,
-  WORKSHEET_TEMPLATES,
-  type WorksheetColor,
-  type WorksheetSummary,
-  type WorksheetTemplateId,
-} from '@nw/shared';
+import { WORKSHEET_TEMPLATES, type WorksheetSummary, type WorksheetTemplateId } from '@nw/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
-import { WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import { ConfirmDialog, ModalDialog, useToast } from '@/components/ui/overlays.js';
 import { Alert, Button, cn, Input, Label } from '@/components/ui/primitives.js';
 
@@ -30,14 +22,12 @@ export function CreateWorksheetModal({
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const [name, setName] = useState('');
-  const [color, setColor] = useState<WorksheetColor>('sky');
   const [template, setTemplate] = useState<WorksheetTemplateId>('standard_video');
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName('');
-      setColor('sky');
       setTemplate('standard_video');
       setErr(null);
     }
@@ -47,7 +37,7 @@ export function CreateWorksheetModal({
     mutationFn: () =>
       apiFetch<CreatedWorksheetResponse>('/api/worksheets', {
         method: 'POST',
-        body: { name, color, template },
+        body: { name, color: 'slate', template },
       }),
     onSuccess: (res) => {
       onOpenChange(false);
@@ -94,34 +84,6 @@ export function CreateWorksheetModal({
         </div>
 
         <div>
-          <Label>标签颜色</Label>
-          <div className="flex flex-wrap gap-2">
-            {WORKSHEET_COLORS.map((c) => {
-              const style = WORKSHEET_COLOR_STYLES[c];
-              const selected = color === c;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  title={WORKSHEET_COLOR_LABELS[c]}
-                  aria-label={`颜色 ${WORKSHEET_COLOR_LABELS[c]}`}
-                  aria-pressed={selected}
-                  className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded-full border cursor-pointer transition-transform',
-                    selected
-                      ? 'scale-110 border-slate-900 ring-2 ring-slate-900/20'
-                      : 'border-slate-200',
-                  )}
-                >
-                  <span className={cn('h-4 w-4 rounded-full', style.dot)} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div>
           <Label>初始列模板</Label>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {WORKSHEET_TEMPLATES.map((t) => {
@@ -135,12 +97,12 @@ export function CreateWorksheetModal({
                   className={cn(
                     'rounded-lg border p-2.5 text-left transition-colors cursor-pointer',
                     selected
-                      ? 'border-sky-600 bg-sky-50/60 ring-1 ring-sky-600'
-                      : 'border-slate-200 hover:border-slate-300',
+                      ? 'border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900'
+                      : 'border-black/[0.1] hover:border-black/[0.2]',
                   )}
                 >
-                  <div className="text-sm font-medium text-slate-900">{t.name}</div>
-                  <div className="mt-0.5 text-xs text-slate-500">{t.description}</div>
+                  <div className="text-sm font-medium text-zinc-900">{t.name}</div>
+                  <div className="mt-0.5 text-xs text-zinc-500">{t.description}</div>
                 </button>
               );
             })}
@@ -170,13 +132,11 @@ export function EditWorksheetModal({
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const [name, setName] = useState('');
-  const [color, setColor] = useState<WorksheetColor>('sky');
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (worksheet) {
       setName(worksheet.name);
-      setColor(worksheet.color);
       setErr(null);
     }
   }, [worksheet]);
@@ -185,7 +145,7 @@ export function EditWorksheetModal({
     mutationFn: () =>
       apiFetch(`/api/worksheets/${worksheet?.id}`, {
         method: 'PATCH',
-        body: { name, color },
+        body: { name },
       }),
     onSuccess: () => {
       const id = worksheet?.id;
@@ -213,7 +173,7 @@ export function EditWorksheetModal({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title="编辑工作表"
+      title="重命名工作表"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {err && <Alert variant="error">{err}</Alert>}
@@ -227,29 +187,6 @@ export function EditWorksheetModal({
             maxLength={32}
             autoFocus
           />
-        </div>
-        <div>
-          <Label>标签颜色</Label>
-          <div className="flex flex-wrap gap-2">
-            {WORKSHEET_COLORS.map((c) => {
-              const style = WORKSHEET_COLOR_STYLES[c];
-              const selected = color === c;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  aria-label={`颜色 ${WORKSHEET_COLOR_LABELS[c]}`}
-                  className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded-full border cursor-pointer',
-                    selected ? 'border-slate-900 ring-2 ring-slate-900/20' : 'border-slate-200',
-                  )}
-                >
-                  <span className={cn('h-4 w-4 rounded-full', style.dot)} />
-                </button>
-              );
-            })}
-          </div>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>

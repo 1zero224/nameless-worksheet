@@ -17,13 +17,12 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { WorksheetSummary } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowRight, GripVertical, Pencil, Plus, Table2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { BoardColumnsManager } from '@/components/board/BoardColumnsModal.js';
-import { WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import { Button, Card, cn } from '@/components/ui/primitives.js';
 import {
   CreateWorksheetModal,
@@ -47,7 +46,6 @@ function SortableWorksheetRow({
     transform: CSS.Transform.toString(transform),
     transition,
   };
-  const colorStyle = WORKSHEET_COLOR_STYLES[ws.color] ?? WORKSHEET_COLOR_STYLES.sky;
 
   return (
     <div
@@ -55,8 +53,8 @@ function SortableWorksheetRow({
       style={style}
       data-testid={`worksheet-row-${ws.id}`}
       className={cn(
-        'flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-2xs',
-        isDragging && 'z-10 shadow-md ring-2 ring-slate-900/15',
+        'flex items-center justify-between gap-3 rounded-lg border border-black/[0.08] bg-white px-3 py-2.5',
+        isDragging && 'z-10 shadow-md ring-2 ring-zinc-900/15',
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -65,11 +63,11 @@ function SortableWorksheetRow({
           {...attributes}
           {...listeners}
           aria-label={`拖动排序 ${ws.name}`}
-          className="cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+          className="cursor-grab rounded p-1 text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-600 active:cursor-grabbing"
         >
           <GripVertical className="h-4 w-4" />
         </button>
-        <span className={cn('h-3 w-3 shrink-0 rounded-full', colorStyle.dot)} />
+        <Table2 className="h-4 w-4 shrink-0 text-zinc-400" strokeWidth={1.75} />
         <Link
           to={`/worksheets/${ws.id}`}
           className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900 hover:underline"

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
-import { STAGE_STATUS_STYLES, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
+import { STAGE_STATUS_STYLES } from '@/components/ui/colors.js';
 import { cn, Input } from '@/components/ui/primitives.js';
 
 export interface KeywordSearchInputProps {
@@ -136,71 +136,64 @@ export function KeywordSearchInput({
                 没有在任何工作表中找到匹配任务
               </div>
             ) : (
-              data.items.map((item) => {
-                const wsColor =
-                  WORKSHEET_COLOR_STYLES[item.worksheetColor] ?? WORKSHEET_COLOR_STYLES.sky;
-                return (
-                  <button
-                    key={item.taskId}
-                    type="button"
-                    data-testid={`search-result-${item.taskId}`}
-                    onClick={() => {
-                      setFocused(false);
-                      navigate(`/worksheets/${item.worksheetId}?taskId=${item.taskId}`);
-                    }}
-                    className="flex w-full items-start justify-between gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] cursor-pointer"
-                  >
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
-                          <span className={cn('h-1.5 w-1.5 rounded-full', wsColor.dot)} />
-                          {item.worksheetName}
+              data.items.map((item) => (
+                <button
+                  key={item.taskId}
+                  type="button"
+                  data-testid={`search-result-${item.taskId}`}
+                  onClick={() => {
+                    setFocused(false);
+                    navigate(`/worksheets/${item.worksheetId}?taskId=${item.taskId}`);
+                  }}
+                  className="flex w-full items-start justify-between gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] cursor-pointer"
+                >
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-medium text-zinc-500">
+                        {item.worksheetName}
+                      </span>
+                      {item.workName && (
+                        <span className="rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-700">
+                          {item.workName}
                         </span>
-                        {item.workName && (
-                          <span className="rounded bg-indigo-50 px-1.5 py-0 text-[10px] font-medium text-indigo-700">
-                            {item.workName}
-                          </span>
-                        )}
-                        {item.publishStatus === 'published' && (
-                          <span className="rounded-full bg-emerald-50 px-1.5 py-0 text-[10px] font-medium text-emerald-700">
-                            {PUBLISH_STATUS_LABELS.published}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="truncate text-xs font-semibold text-zinc-950">
-                        {item.taskTitle}
-                      </div>
-
-                      {item.divisionNote && (
-                        <div className="truncate text-[11px] text-zinc-500">
-                          {item.divisionNote}
-                        </div>
                       )}
-
-                      {item.stages.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-0.5">
-                          {item.stages.slice(0, 4).map((st) => (
-                            <span
-                              key={st.columnId}
-                              className={cn(
-                                'rounded px-1.5 py-0.25 text-[10px]',
-                                STAGE_STATUS_STYLES[st.status].badge,
-                              )}
-                            >
-                              {st.name}
-                              {st.assigneeNames.length > 0
-                                ? `·${st.assigneeNames.join('、')}`
-                                : `·${STAGE_STATUS_LABELS[st.status]}`}
-                            </span>
-                          ))}
-                        </div>
+                      {item.publishStatus === 'published' && (
+                        <span className="rounded-full bg-emerald-50 px-1.5 py-0 text-[10px] font-medium text-emerald-700">
+                          {PUBLISH_STATUS_LABELS.published}
+                        </span>
                       )}
                     </div>
-                    <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-zinc-400" />
-                  </button>
-                );
-              })
+
+                    <div className="truncate text-xs font-semibold text-zinc-950">
+                      {item.taskTitle}
+                    </div>
+
+                    {item.divisionNote && (
+                      <div className="truncate text-[11px] text-zinc-500">{item.divisionNote}</div>
+                    )}
+
+                    {item.stages.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {item.stages.slice(0, 4).map((st) => (
+                          <span
+                            key={st.columnId}
+                            className={cn(
+                              'rounded px-1.5 py-0.25 text-[10px]',
+                              STAGE_STATUS_STYLES[st.status].badge,
+                            )}
+                          >
+                            {st.name}
+                            {st.assigneeNames.length > 0
+                              ? `·${st.assigneeNames.join('、')}`
+                              : `·${STAGE_STATUS_LABELS[st.status]}`}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                </button>
+              ))
             )}
           </div>
         </div>

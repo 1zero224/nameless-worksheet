@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
-import { STAGE_STATUS_STYLES, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
+import { STAGE_STATUS_STYLES } from '@/components/ui/colors.js';
 import { Card, cn, Input } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
 
@@ -79,7 +79,6 @@ export function SearchPage() {
               ...worksheets.map((w) => ({
                 value: w.id,
                 label: w.name,
-                dotClass: (WORKSHEET_COLOR_STYLES[w.color] ?? WORKSHEET_COLOR_STYLES.sky).dot,
               })),
             ]}
           />
@@ -121,70 +120,58 @@ export function SearchPage() {
         ) : (
           <>
             <div className="text-xs text-slate-500">共找到 {data.total} 条任务</div>
-            {data.items.map((item) => {
-              const wsColor =
-                WORKSHEET_COLOR_STYLES[item.worksheetColor] ?? WORKSHEET_COLOR_STYLES.sky;
-              return (
-                <Link
-                  key={item.taskId}
-                  to={`/worksheets/${item.worksheetId}?taskId=${item.taskId}`}
-                  data-testid={`search-result-${item.taskId}`}
-                  className="block rounded-lg border border-slate-200 bg-white p-4 shadow-2xs transition-colors hover:border-slate-300 hover:bg-slate-50/70"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
-                            wsColor.badge,
-                          )}
-                        >
-                          <span className={cn('h-1.5 w-1.5 rounded-full', wsColor.dot)} />
-                          {item.worksheetName}
+            {data.items.map((item) => (
+              <Link
+                key={item.taskId}
+                to={`/worksheets/${item.worksheetId}?taskId=${item.taskId}`}
+                data-testid={`search-result-${item.taskId}`}
+                className="block rounded-lg border border-black/[0.08] bg-white p-4 transition-colors hover:border-black/[0.16] hover:bg-zinc-50/70"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex items-center rounded-md border border-black/[0.08] bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-700">
+                        {item.worksheetName}
+                      </span>
+                      {item.workName && (
+                        <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-medium text-indigo-700">
+                          {item.workName}
                         </span>
-                        {item.workName && (
-                          <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-medium text-indigo-700">
-                            {item.workName}
-                          </span>
-                        )}
-                        {item.publishStatus === 'published' && (
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                            {PUBLISH_STATUS_LABELS.published}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-sm font-semibold text-slate-900">{item.taskTitle}</div>
-                      {item.divisionNote && (
-                        <div className="text-xs text-slate-600">{item.divisionNote}</div>
                       )}
-
-                      {item.stages.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {item.stages.map((st) => (
-                            <span
-                              key={st.columnId}
-                              className={cn(
-                                'rounded px-2 py-0.5 text-xs',
-                                STAGE_STATUS_STYLES[st.status].badge,
-                              )}
-                            >
-                              {st.name}：
-                              {st.assigneeNames.length > 0
-                                ? `${st.assigneeNames.join('、')} · `
-                                : ''}
-                              {STAGE_STATUS_LABELS[st.status]}
-                            </span>
-                          ))}
-                        </div>
+                      {item.publishStatus === 'published' && (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                          {PUBLISH_STATUS_LABELS.published}
+                        </span>
                       )}
                     </div>
-                    <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
+
+                    <div className="text-sm font-semibold text-slate-900">{item.taskTitle}</div>
+                    {item.divisionNote && (
+                      <div className="text-xs text-slate-600">{item.divisionNote}</div>
+                    )}
+
+                    {item.stages.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {item.stages.map((st) => (
+                          <span
+                            key={st.columnId}
+                            className={cn(
+                              'rounded px-2 py-0.5 text-xs',
+                              STAGE_STATUS_STYLES[st.status].badge,
+                            )}
+                          >
+                            {st.name}：
+                            {st.assigneeNames.length > 0 ? `${st.assigneeNames.join('、')} · ` : ''}
+                            {STAGE_STATUS_LABELS[st.status]}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </Link>
-              );
-            })}
+                  <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-zinc-400" />
+                </div>
+              </Link>
+            ))}
           </>
         )}
       </div>

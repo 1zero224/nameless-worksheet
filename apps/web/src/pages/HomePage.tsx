@@ -11,7 +11,6 @@ import { KanbanBoard } from '@/components/board/KanbanBoard.js';
 import { MyTasksListContent, MyTasksRail } from '@/components/board/MyTasksRail.js';
 import { KeywordSearchInput } from '@/components/search/KeywordSearchInput.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
-import { WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import { Sheet, useToast } from '@/components/ui/overlays.js';
 import { cn } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
@@ -244,7 +243,6 @@ export function HomePage() {
             ...(board?.worksheets ?? []).map((ws) => ({
               value: ws.id,
               label: ws.name,
-              dotClass: (WORKSHEET_COLOR_STYLES[ws.color] ?? WORKSHEET_COLOR_STYLES.sky).dot,
             })),
           ]}
         />
@@ -276,10 +274,10 @@ export function HomePage() {
           onClick={() => setOnlyMissing((v) => !v)}
           aria-pressed={onlyMissing}
           className={cn(
-            'rounded-md border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
+            'inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium cursor-pointer transition-colors',
             onlyMissing
               ? 'border-zinc-900 bg-zinc-900 text-white'
-              : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04]',
+              : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
           )}
         >
           仅看缺人
@@ -290,10 +288,10 @@ export function HomePage() {
           onClick={() => setOnlyMine((v) => !v)}
           aria-pressed={onlyMine}
           className={cn(
-            'rounded-md border px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors',
+            'inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium cursor-pointer transition-colors',
             onlyMine
               ? 'border-zinc-900 bg-zinc-900 text-white'
-              : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04]',
+              : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
           )}
         >
           仅看与我有关
@@ -302,14 +300,14 @@ export function HomePage() {
         {activeWorkObj && (
           <span
             data-testid="active-work-filter-chip"
-            className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50/70 px-2.5 py-0.5 text-xs font-medium text-indigo-900"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-black/[0.1] bg-zinc-100 px-2 text-xs font-medium text-zinc-800"
           >
             作品：{activeWorkObj.name}
             <button
               type="button"
               onClick={() => setWorkFilter(null)}
               aria-label="清除作品筛选"
-              className="rounded-full p-0.5 text-indigo-500 hover:bg-indigo-100 hover:text-indigo-900 cursor-pointer"
+              className="rounded p-0.5 text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
             >
               <X className="h-3 w-3" />
             </button>
