@@ -42,9 +42,10 @@ test.describe
       await page.getByRole('button', { name: '登录' }).click();
 
       await expect(page).toHaveURL(/\/$/);
-      await expect(page.getByRole('heading', { name: '首页' })).toBeVisible();
-      await expect(page.getByRole('link', { name: '用户与邀请' })).toBeVisible();
-      await expect(page.getByRole('link', { name: '实时通道诊断' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '首页' })).toBeAttached();
+      await page.getByTestId('user-avatar-trigger').click();
+      await expect(page.getByRole('menuitem', { name: '用户与邀请' })).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: '实时通道诊断' })).toBeVisible();
     });
 
     test('V1 + V9 + V4(UI) + 390px: 邀请注册中文/假名/全角显示名、单次邀请失效、普通用户权限与窄屏', async ({
@@ -59,7 +60,8 @@ test.describe
       await adminPage.getByRole('button', { name: '登录' }).click();
       await expect(adminPage).toHaveURL(/\/$/);
 
-      await adminPage.getByRole('link', { name: '用户与邀请' }).click();
+      await adminPage.getByTestId('user-avatar-trigger').click();
+      await adminPage.getByRole('menuitem', { name: '用户与邀请' }).click();
       await expect(adminPage.getByRole('heading', { name: '用户与邀请' })).toBeVisible();
 
       await adminPage.getByRole('button', { name: '生成邀请链接' }).click();
@@ -83,11 +85,13 @@ test.describe
       await userPage.getByRole('button', { name: '完成注册' }).click();
 
       await expect(userPage).toHaveURL(/\/$/);
+      await userPage.getByTestId('user-avatar-trigger').click();
       await expect(userPage.getByText('さくら＿ＡＢＣ测试').first()).toBeVisible();
 
-      // V4(UI): 普通用户看不到管理入口，直接访问管理页显示无权访问
-      await expect(userPage.getByRole('link', { name: '用户与邀请' })).toHaveCount(0);
-      await expect(userPage.getByRole('link', { name: '实时通道诊断' })).toHaveCount(0);
+      // V4(UI): 普通用户在右上角头像菜单中看不到管理入口，直接访问管理页显示无权访问
+      await expect(userPage.getByRole('menuitem', { name: '用户与邀请' })).toHaveCount(0);
+      await expect(userPage.getByRole('menuitem', { name: '实时通道诊断' })).toHaveCount(0);
+      await userPage.keyboard.press('Escape');
       await userPage.goto('/admin/users');
       await expect(userPage.getByRole('heading', { name: '无权访问' })).toBeVisible();
 
@@ -97,14 +101,14 @@ test.describe
       await userPage.getByRole('button', { name: '保存显示名' }).click();
       await expect(userPage.getByText('显示名已更新')).toBeVisible();
 
-      // 390px 窄屏抽屉与无横向滚动
+      // 390px 窄屏顶部标签栏与头像菜单无横向滚动
       await userPage.setViewportSize({ width: 390, height: 844 });
       const overflow = await userPage.evaluate(
         () => document.documentElement.scrollWidth > window.innerWidth,
       );
       expect(overflow).toBe(false);
-      await userPage.getByRole('button', { name: '打开导航' }).click();
-      await expect(userPage.getByRole('link', { name: '工作表' })).toBeVisible();
+      await userPage.getByTestId('user-avatar-trigger').click();
+      await expect(userPage.getByRole('menuitem', { name: '工作表总览' })).toBeVisible();
       await userCtx.close();
 
       // 再次打开同一条单次邀请 -> 显示无效
@@ -125,7 +129,8 @@ test.describe
       await expect(pageA).toHaveURL(/\/$/);
 
       // 管理员甲创建一条管理员邀请给乙
-      await pageA.getByRole('link', { name: '用户与邀请' }).click();
+      await pageA.getByTestId('user-avatar-trigger').click();
+      await pageA.getByRole('menuitem', { name: '用户与邀请' }).click();
       await pageA.locator('#invRole').click();
       await pageA.getByRole('option', { name: '管理员', exact: true }).click();
       await pageA.getByRole('button', { name: '生成邀请链接' }).click();
@@ -143,8 +148,10 @@ test.describe
       await pageB.getByRole('button', { name: '完成注册' }).click();
       await expect(pageB).toHaveURL(/\/$/);
 
-      await pageA.getByRole('link', { name: '实时通道诊断' }).click();
-      await pageB.getByRole('link', { name: '实时通道诊断' }).click();
+      await pageA.getByTestId('user-avatar-trigger').click();
+      await pageA.getByRole('menuitem', { name: '实时通道诊断' }).click();
+      await pageB.getByTestId('user-avatar-trigger').click();
+      await pageB.getByRole('menuitem', { name: '实时通道诊断' }).click();
 
       await expect(pageA.getByText('已连接')).toBeVisible();
       await expect(pageB.getByText('已连接')).toBeVisible();
@@ -182,7 +189,8 @@ test.describe
       expect(logText.split('replay-msg-1')).toHaveLength(2); // 不重复
 
       // V6: 乙停留在诊断页，甲为乙生成重置链接 -> 乙自动跳回登录页
-      await pageA.getByRole('link', { name: '用户与邀请' }).click();
+      await pageA.getByTestId('user-avatar-trigger').click();
+      await pageA.getByRole('menuitem', { name: '用户与邀请' }).click();
       const rowB = pageA.locator('tr', { hasText: '管理员乙' });
       await rowB.getByRole('button', { name: '生成重置链接' }).click();
       await pageA.getByRole('button', { name: '确认生成' }).click();

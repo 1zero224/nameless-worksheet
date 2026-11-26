@@ -167,28 +167,32 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     const pageA = await ctxA.newPage();
     await loginViaUi(pageA, USER_A_LOGIN, USER_A_PW);
 
-    // 确认导航无“归档”入口（ADR-0004）
+    // 确认无侧边栏、无「归档 / 我的任务 / 参考资料」入口，任务看板与工作表位于顶部标签栏
+    await expect(pageA.locator('aside')).toHaveCount(0);
     await expect(pageA.getByRole('link', { name: '归档' })).toHaveCount(0);
+    await expect(pageA.getByRole('link', { name: '我的任务' })).toHaveCount(0);
+    await expect(pageA.getByRole('link', { name: '参考资料' })).toHaveCount(0);
+    await expect(
+      pageA.getByTestId('top-nav-tabs').getByRole('link', { name: '任务看板' }),
+    ).toBeVisible();
 
     // 验证首页右上角「管理看板列」弹窗可用
     await pageA.getByRole('button', { name: '管理看板列' }).click();
     await expect(pageA.getByRole('heading', { name: '管理看板列' })).toBeVisible();
     await pageA.getByRole('button', { name: '关闭', exact: true }).click();
 
-    // 验证桌面端极简左侧栏可折叠再展开
-    await pageA.getByRole('button', { name: '折叠侧栏' }).click();
-    await expect(pageA.getByTestId('sidebar-worksheets')).toHaveCount(0);
-    await pageA.getByRole('button', { name: '展开侧栏' }).click();
-    await expect(pageA.getByTestId('sidebar-worksheets')).toBeVisible();
+    // 验证右上角头像菜单包含个人设置与工作表总览
+    await pageA.getByTestId('user-avatar-trigger').click();
+    await expect(pageA.getByRole('menuitem', { name: '个人设置' })).toBeVisible();
+    await pageA.getByRole('menuitem', { name: '工作表总览' }).click();
 
     // V1: 普通用户进入 /worksheets，新建工作表（标准视频模板）
-    await pageA.goto('/worksheets');
     await pageA.getByRole('button', { name: '新建工作表' }).click();
     await pageA.getByLabel('工作表名称').fill('演唱会视频');
     await pageA.getByRole('button', { name: '创建工作表' }).click();
 
-    // 左侧导航立即出现新工作表
-    await expect(pageA.getByTestId('sidebar-worksheets')).toContainText('演唱会视频');
+    // 顶部标签栏立即出现新工作表
+    await expect(pageA.getByTestId('topbar-worksheets')).toContainText('演唱会视频');
 
     // 普通用户新增再删除一个看板列，确认首页看板列配置开放
     await pageA.getByLabel('新看板列名称').fill('临时特效列');
@@ -198,8 +202,8 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await pageA.getByRole('button', { name: '确认删除' }).click();
     await expect(pageA.getByTestId('board-columns-list')).not.toContainText('临时特效列');
 
-    // 进入「演唱会视频」工作表
-    await pageA.getByTestId('sidebar-worksheets').getByRole('link', { name: '演唱会视频' }).click();
+    // 通过顶部标签页进入「演唱会视频」工作表
+    await pageA.getByTestId('topbar-worksheets').getByRole('link', { name: '演唱会视频' }).click();
     await expect(pageA.getByRole('heading', { name: '演唱会视频' })).toBeVisible();
 
     // 新增不上看板工序列「压制」与自定义文本列「片源备注」
@@ -283,8 +287,14 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await divInput.press('Enter');
     await expect(pageA.getByTestId(`cell-${task1Id}-divisionNote`)).toContainText('P1 00:00–13:00');
 
-    // 顶栏「+ 新建作品」-> 原生 LinearRowType.Group 作品大标题横幅 + 作品附件槽位 + 连续添加两段
-    await pageA.getByTestId('create-work-trigger').click();
+    // 确认不再有独立的「新建作品」工具栏按钮，且「新增」行紧贴最新任务下方并支持切换 任务 / 作品
+    await expect(pageA.getByTestId('create-work-trigger')).toHaveCount(0);
+    const addRowBox = await pageA.getByTestId('inline-quick-add-row').boundingBox();
+    const gridBox = await pageA.getByTestId('worksheet-canvas-grid').boundingBox();
+    expect(addRowBox && gridBox ? addRowBox.y - gridBox.y : 999).toBeLessThan(180);
+
+    await pageA.getByTestId('quick-add-mode-trigger').click();
+    await pageA.getByRole('menuitem', { name: '新增作品' }).click();
     await pageA.getByLabel('新作品名称').fill('5th 演唱会');
     await pageA.getByRole('button', { name: '创建作品' }).click();
 
@@ -556,17 +566,12 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
       .click();
     await expect(myBar).not.toContainText('并行直播剪辑');
 
-    // /my-tasks 页面分组正确
-    await pageA.goto('/my-tasks');
-    await expect(pageA.getByTestId('my-tasks-not-started')).toContainText('待认领短片');
-    await pageA.getByRole('button', { name: /我已完成/ }).click();
-    await expect(pageA.getByTestId('my-tasks-completed')).toContainText('并行直播剪辑');
-
-    // V12: /search 跨表搜索自定义文本列 & 纯文本负责人，点击直达工作表并打开详情侧栏
-    await pageA.goto('/search');
-    await pageA.getByLabel('检索关键词').fill('BD_RAW_2026');
+    // V12: 融合在「筛选关键词」中的跨表资源检索（支持自定义文本列 & 纯文本负责人），点击直达工作表并打开详情侧栏
+    const homeKeywordInput = pageA.getByLabel('筛选关键词');
+    await homeKeywordInput.fill('BD_RAW_2026');
+    await expect(pageA.getByTestId('global-search-dropdown')).toBeVisible();
     await expect(pageA.getByTestId(`search-result-${tParallel.id}`)).toBeVisible();
-    await pageA.getByLabel('检索关键词').fill('官中字幕');
+    await homeKeywordInput.fill('官中字幕');
     await expect(pageA.getByTestId(`search-result-${tParallel.id}`)).toBeVisible();
     await pageA.getByTestId(`search-result-${tParallel.id}`).click();
     await expect(pageA).toHaveURL(new RegExp(`/worksheets/${ws1.worksheet.id}`));

@@ -43,6 +43,17 @@
   pointer-events: none !important;
 }
 
+/* 隐藏显眼的系统默认滚动条（仍保留滚轮/触控板/手势顺滑滚动） */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

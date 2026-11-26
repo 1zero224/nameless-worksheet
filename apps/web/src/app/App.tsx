@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo } from 'react';
-import { BrowserRouter, Route, Routes, useNavigate } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router';
 import { configureApiClient } from '@/api/client.js';
 import { AppShell } from '@/app/AppShell.js';
 import { RequireAuth, RequirePermission, useMe } from '@/app/AuthContext.js';
@@ -10,10 +10,8 @@ import { AdminUsersPage } from '@/pages/AdminUsersPage.js';
 import { HomePage } from '@/pages/HomePage.js';
 import { InviteRegisterPage } from '@/pages/InviteRegisterPage.js';
 import { LoginPage } from '@/pages/LoginPage.js';
-import { MyTasksPage } from '@/pages/MyTasksPage.js';
 import { PlaceholderPage } from '@/pages/PlaceholderPage.js';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage.js';
-import { SearchPage } from '@/pages/SearchPage.js';
 import { SettingsPage } from '@/pages/SettingsPage.js';
 import { WorksheetDetailPage } from '@/pages/WorksheetDetailPage.js';
 import { WorksheetsPage } from '@/pages/WorksheetsPage.js';
@@ -62,11 +60,8 @@ function AppRoutes() {
           }
         >
           <Route index element={<HomePage />} />
-          <Route path="/my-tasks" element={<MyTasksPage />} />
           <Route path="/worksheets" element={<WorksheetsPage />} />
           <Route path="/worksheets/:id" element={<WorksheetDetailPage />} />
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/references" element={<PlaceholderPage title="参考资料" />} />
           <Route path="/settings" element={<SettingsPage />} />
 
           <Route
@@ -93,6 +88,8 @@ function AppRoutes() {
               </RequirePermission>
             }
           />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </RealtimeProvider>

@@ -204,6 +204,7 @@ export const calcCells = (props: ILayoutDrawerProps, renderRegion: RenderRegion)
       const recordId = cell.id?.split('-')[0];
 
       if (linearRowType === LinearRowType.Group) {
+        if (linearRow.id.startsWith('__spacer__')) continue;
         const { depth, value, isCollapsed, realIndex } = linearRow;
         if (isFirstColumn) {
           groupRowHeaderList.push({

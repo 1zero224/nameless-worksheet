@@ -24,6 +24,8 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  FolderPlus,
+  ListPlus,
   MoreHorizontal,
   PanelRightOpen,
   Paperclip,
@@ -204,17 +206,17 @@ function CanvasWorkBannerOverlay({
       data-testid={`work-banner-${work.id}`}
       data-work-banner={work.id}
       style={{ top, height }}
-      className="pointer-events-auto absolute inset-x-0 z-10 flex items-center justify-between gap-2 border-y border-black/[0.08] bg-[#f8f8fa] px-2.5"
+      className="pointer-events-auto absolute inset-x-0 z-10 flex items-center justify-between gap-2 border-y border-indigo-200/80 bg-[#EEF2FF] px-2.5"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span aria-hidden="true" className="h-4 w-[3px] shrink-0 rounded-full bg-zinc-900/75" />
+        <span aria-hidden="true" className="h-4 w-[3px] shrink-0 rounded-full bg-indigo-500" />
 
         <button
           type="button"
           onClick={onToggleCollapse}
           aria-label={collapsed ? `展开作品 ${work.name}` : `折叠作品 ${work.name}`}
           aria-expanded={!collapsed}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-indigo-600/80 transition-colors hover:bg-indigo-200/50 hover:text-indigo-950 cursor-pointer"
         >
           {collapsed ? (
             <ChevronRight className="h-3.5 w-3.5" />
@@ -251,14 +253,14 @@ function CanvasWorkBannerOverlay({
             }}
             aria-label={`重命名作品 ${work.name}`}
             maxLength={80}
-            className="h-6 min-w-[140px] max-w-xs rounded border border-blue-500 bg-white px-1.5 text-[13px] font-semibold text-zinc-950 outline-none"
+            className="h-6 min-w-[140px] max-w-xs rounded border border-indigo-500 bg-white px-1.5 text-[13px] font-semibold text-zinc-950 outline-none"
           />
         ) : (
           <button
             type="button"
             onDoubleClick={() => setRenaming(true)}
             title={`${work.name}（双击重命名）`}
-            className="min-w-0 truncate text-left text-[13px] font-semibold text-zinc-900 hover:text-blue-600 cursor-text"
+            className="min-w-0 truncate text-left text-[13px] font-semibold text-indigo-950 hover:text-indigo-700 cursor-text"
           >
             {work.name}
           </button>
@@ -266,14 +268,14 @@ function CanvasWorkBannerOverlay({
 
         <span
           data-testid={`work-progress-${work.id}`}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-2 py-0.5 text-[11px] font-medium text-zinc-500"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-indigo-200/80 bg-white/90 px-2 py-0.5 text-[11px] font-medium text-indigo-700"
         >
           {hasStages && taskCount > 0 && (
-            <span className="hidden h-1.5 w-10 overflow-hidden rounded-full bg-zinc-200 sm:inline-block">
+            <span className="hidden h-1.5 w-10 overflow-hidden rounded-full bg-indigo-100 sm:inline-block">
               <span
                 className={cn(
                   'block h-full rounded-full transition-all',
-                  progressPct === 100 ? 'bg-emerald-500' : 'bg-blue-500',
+                  progressPct === 100 ? 'bg-emerald-500' : 'bg-indigo-500',
                 )}
                 style={{ width: `${progressPct}%` }}
               />
@@ -290,7 +292,7 @@ function CanvasWorkBannerOverlay({
           type="button"
           onClick={onAddSegment}
           aria-label={`在 ${work.name} 下添加分段`}
-          className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+          className="inline-flex h-6 items-center gap-1 rounded-md border border-indigo-200/90 bg-white/95 px-2 text-[11px] font-medium text-indigo-900 transition-colors hover:bg-indigo-50 hover:text-indigo-950 cursor-pointer"
         >
           <Plus className="h-3 w-3" />
           <span>添加分段</span>
@@ -301,7 +303,7 @@ function CanvasWorkBannerOverlay({
             <button
               type="button"
               aria-label={`作品操作 ${work.name}`}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-indigo-500/80 transition-colors hover:bg-indigo-200/50 hover:text-indigo-950 cursor-pointer"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
@@ -1154,6 +1156,7 @@ export interface WorksheetCanvasGridProps {
   dragEnabled: boolean;
   isFilteredOrSorted: boolean;
   createTaskPending: boolean;
+  createWorkPending: boolean;
   onSelectCell: (taskId: string, columnKey: string) => void;
   onSetEditingFocus: (taskId: string | null, columnKey: string | null, editing: boolean) => void;
   onPatchTask: (
@@ -1178,6 +1181,7 @@ export interface WorksheetCanvasGridProps {
     afterTaskId?: string | null;
     workId?: string | null;
   }) => void;
+  onCreateWork: (name: string) => Promise<void>;
   onDeleteTask: (task: TaskDetail) => void;
   onReorderRows: (movingTaskId: string, targetRowIndex: number) => void;
   onResizeColumn: (colId: string, width: number, isSystem: boolean) => void;
@@ -1214,11 +1218,13 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     dragEnabled,
     isFilteredOrSorted,
     createTaskPending,
+    createWorkPending,
     onSelectCell,
     onSetEditingFocus,
     onPatchTask,
     onPatchStage,
     onCreateTask,
+    onCreateWork,
     onDeleteTask,
     onReorderRows,
     onResizeColumn,
@@ -1245,6 +1251,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
   );
   const [previewWidths, setPreviewWidths] = useState<Record<string, number>>({});
   const [layoutTick, setLayoutTick] = useState(0);
+  const [createMode, setCreateMode] = useState<'task' | 'work'>('task');
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [segmentTitle, setSegmentTitle] = useState('');
   const [insertingAfterId, setInsertingAfterId] = useState<string | null>(null);
@@ -1425,18 +1432,29 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     [columnDefs],
   );
 
-  // 原生 LinearRowType.Group 分组点（无作品任务直接平铺，归属作品的任务归入作品大标题横幅下）
+  // 原生 LinearRowType.Group 分组点（无作品任务直接平铺，作品块上下自动插 14px 纯白呼吸间距）
   const groupPoints = useMemo<IGroupPoint[] | null>(() => {
     const hasWorkBlocks = displayBlocks.some((b) => b.kind === 'work');
     if (!hasWorkBlocks) return null;
 
     const pts: IGroupPoint[] = [];
-    for (const block of displayBlocks) {
+    for (let idx = 0; idx < displayBlocks.length; idx++) {
+      const block = displayBlocks[idx];
+      if (!block) continue;
       if (block.kind === 'standalone') {
         if (block.tasks.length > 0) {
           pts.push({ type: LinearRowType.Row, count: block.tasks.length });
         }
       } else {
+        if (idx > 0) {
+          pts.push({
+            type: LinearRowType.Group,
+            id: `__spacer__before_${block.work.id}`,
+            depth: 0,
+            value: null,
+            isCollapsed: false,
+          });
+        }
         const isCollapsed = collapsedWorkIds.has(block.work.id);
         pts.push({
           type: LinearRowType.Group,
@@ -1447,6 +1465,16 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         });
         if (!isCollapsed && block.tasks.length > 0) {
           pts.push({ type: LinearRowType.Row, count: block.tasks.length });
+        }
+        const nextBlock = displayBlocks[idx + 1];
+        if (nextBlock?.kind === 'standalone') {
+          pts.push({
+            type: LinearRowType.Group,
+            id: `__spacer__after_${block.work.id}`,
+            depth: 0,
+            value: null,
+            isCollapsed: false,
+          });
         }
       }
     }
@@ -1922,10 +1950,30 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     return map;
   }, [displayBlocks]);
 
-  // 读取当前帧的分组头坐标（依赖 layoutTick 随滚动实时更新）
+  // 读取当前帧的分组头坐标、作品分段左导轨与表格底部坐标（随滚动实时更新）
   const groupHeadersLayout = useMemo(() => {
     void layoutTick;
     return gridRef.current?.getGroupHeadersLayout() ?? [];
+  }, [layoutTick]);
+
+  const workRowRails = useMemo(() => {
+    void layoutTick;
+    const rails: Array<{ key: string; top: number; height: number }> = [];
+    for (let i = 0; i < visualActiveTasks.length; i++) {
+      const t = visualActiveTasks[i];
+      if (!t?.workId) continue;
+      const b = gridRef.current?.getCellBounds([0, i]);
+      if (!b) continue;
+      const relTop = b.y - 34;
+      if (relTop < -b.height || relTop > 2400) continue;
+      rails.push({ key: t.id, top: relTop, height: b.height });
+    }
+    return rails;
+  }, [layoutTick, visualActiveTasks]);
+
+  const contentBottomY = useMemo(() => {
+    void layoutTick;
+    return gridRef.current?.getContentBottomY() ?? 34;
   }, [layoutTick]);
 
   // 计算可见远端协作者浮标坐标
@@ -1967,10 +2015,20 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     return gridRef.current?.getCellBounds([activePopover.colIndex, activePopover.rowIndex]) ?? null;
   }, [layoutTick, activePopover]);
 
-  const handleQuickAdd = (e: FormEvent) => {
+  const handleQuickAdd = async (e: FormEvent) => {
     e.preventDefault();
     const title = quickAddTitle.trim();
     if (!title) return;
+    if (createMode === 'work') {
+      try {
+        await onCreateWork(title);
+        setQuickAddTitle('');
+        setCreateMode('task');
+      } catch {
+        // 错误提示已在父层 toast 弹出，保留输入内容方便修改
+      }
+      return;
+    }
     onCreateTask({ title });
     setQuickAddTitle('');
     requestAnimationFrame(() => quickAddInputRef.current?.focus());
@@ -2118,10 +2176,101 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         data-testid="worksheet-canvas-grid"
       >
         {displayBlocks.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center px-4 text-center text-xs text-zinc-400">
-            {isFilteredOrSorted
-              ? '没有符合筛选条件的任务'
-              : '暂无未发布任务，点击工具栏「新建作品」或下方输入框开始录入'}
+          <div className="flex flex-col">
+            <div
+              data-testid="inline-quick-add-row"
+              className="flex h-10 items-center border-b border-black/[0.08] bg-[#fafafa]/80 px-2.5 transition-colors focus-within:bg-white"
+            >
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="quick-add-mode-trigger"
+                    aria-label="切换新增类型"
+                    className={cn(
+                      'mr-2 inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors cursor-pointer',
+                      createMode === 'work'
+                        ? 'border-indigo-200 bg-[#EEF2FF] text-indigo-800 hover:bg-indigo-100/80'
+                        : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
+                    )}
+                  >
+                    {createMode === 'work' ? (
+                      <FolderPlus className="h-3.5 w-3.5 text-indigo-600" strokeWidth={1.75} />
+                    ) : (
+                      <ListPlus className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.75} />
+                    )}
+                    <span>{createMode === 'work' ? '作品' : '任务'}</span>
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[144px]">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setCreateMode('task');
+                      requestAnimationFrame(() => quickAddInputRef.current?.focus());
+                    }}
+                  >
+                    <ListPlus className="h-3.5 w-3.5 text-zinc-500" />
+                    <span>新增任务</span>
+                    {createMode === 'task' && (
+                      <Check className="ml-auto h-3.5 w-3.5 text-zinc-900" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setCreateMode('work');
+                      requestAnimationFrame(() => quickAddInputRef.current?.focus());
+                    }}
+                  >
+                    <FolderPlus className="h-3.5 w-3.5 text-indigo-600" />
+                    <span>新增作品</span>
+                    {createMode === 'work' && (
+                      <Check className="ml-auto h-3.5 w-3.5 text-indigo-600" />
+                    )}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <form
+                onSubmit={(e) => void handleQuickAdd(e)}
+                className="flex h-full min-w-0 flex-1 items-center gap-2"
+              >
+                <input
+                  ref={quickAddInputRef}
+                  id="worksheet-quick-add-input"
+                  value={quickAddTitle}
+                  onChange={(e) => setQuickAddTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                    }
+                  }}
+                  placeholder={
+                    createMode === 'work'
+                      ? '新增作品大标题（输入作品名，回车创建并添加分段）'
+                      : '新增任务（输入标题，回车连续添加）'
+                  }
+                  aria-label={createMode === 'work' ? '新作品名称' : '新建任务标题'}
+                  maxLength={createMode === 'work' ? 80 : 200}
+                  className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-zinc-950 placeholder:text-zinc-400 focus:outline-none"
+                />
+                {quickAddTitle.trim() && (
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="secondary"
+                    className="h-6 shrink-0 whitespace-nowrap px-2 text-xs"
+                    disabled={createMode === 'work' ? createWorkPending : createTaskPending}
+                  >
+                    {createMode === 'work' ? '创建作品' : '添加'}
+                  </Button>
+                )}
+              </form>
+            </div>
+            <div className="px-4 py-10 text-center text-xs text-zinc-400">
+              {isFilteredOrSorted
+                ? '没有符合筛选条件的任务'
+                : '暂无未发布任务，可直接在上方新增行录入任务或切换为「作品」创建作品大标题'}
+            </div>
           </div>
         ) : (
           <Grid
@@ -2130,6 +2279,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             rowCount={visualActiveTasks.length}
             rowHeight={36}
             columnHeaderHeight={34}
+            scrollBufferY={76}
             freezeColumnCount={isNarrow ? 0 : 1}
             isTouchDevice={isNarrow}
             isMultiSelectionEnable={false}
@@ -2178,8 +2328,16 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           />
         )}
 
-        {/* 原生 LinearRowType.Group 作品大标题横幅精确对齐浮层 */}
+        {/* 原生 LinearRowType.Group 作品大标题横幅 + 作品分段左导轨精确对齐浮层 */}
         <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 overflow-hidden">
+          {workRowRails.map((rail) => (
+            <span
+              key={rail.key}
+              aria-hidden="true"
+              style={{ top: rail.top, height: rail.height }}
+              className="pointer-events-none absolute left-0 z-[5] w-[3px] bg-indigo-300/80"
+            />
+          ))}
           {groupHeadersLayout.map((hdr) => {
             const block = workBlockById.get(hdr.id);
             if (!block) return null;
@@ -2505,39 +2663,106 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             </form>
           </div>
         )}
-      </div>
-
-      {/* 贴合网格的底部 `+ 新建独立任务` 原地输入条（回车连续加行） */}
-      <div className="flex h-9 shrink-0 items-center border-t border-black/[0.08] bg-[#fafafa]/70 px-3 transition-colors focus-within:bg-white">
-        <Plus className="mr-2 h-3.5 w-3.5 shrink-0 text-zinc-400" strokeWidth={1.75} />
-        <form onSubmit={handleQuickAdd} className="flex h-full min-w-0 flex-1 items-center gap-2">
-          <input
-            ref={quickAddInputRef}
-            id="worksheet-quick-add-input"
-            value={quickAddTitle}
-            onChange={(e) => setQuickAddTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && e.nativeEvent.isComposing) {
-                e.preventDefault();
-              }
+        {/* 紧贴最新任务行下方的统一「新增」行（支持左侧下拉切换 任务 / 作品） */}
+        {displayBlocks.length > 0 && (
+          <div
+            data-testid="inline-quick-add-row"
+            style={{
+              top: Math.max(
+                34,
+                Math.min(
+                  contentBottomY,
+                  Math.max(34, (canvasHostRef.current?.clientHeight ?? 600) - 38),
+                ),
+              ),
             }}
-            placeholder="新建独立任务（输入标题，回车连续添加）"
-            aria-label="新建任务标题"
-            maxLength={200}
-            className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-zinc-950 placeholder:text-zinc-400 focus:outline-none"
-          />
-          {quickAddTitle.trim() && (
-            <Button
-              type="submit"
-              size="sm"
-              variant="secondary"
-              className="h-6 px-2 text-xs"
-              disabled={createTaskPending}
+            className="pointer-events-auto absolute inset-x-0 z-20 flex h-[38px] items-center border-y border-black/[0.08] bg-[#fafafa]/95 px-2.5 backdrop-blur-[2px] transition-colors focus-within:bg-white"
+          >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="quick-add-mode-trigger"
+                  aria-label="切换新增类型"
+                  className={cn(
+                    'mr-2 inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors cursor-pointer',
+                    createMode === 'work'
+                      ? 'border-indigo-200 bg-[#EEF2FF] text-indigo-800 hover:bg-indigo-100/80'
+                      : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
+                  )}
+                >
+                  {createMode === 'work' ? (
+                    <FolderPlus className="h-3.5 w-3.5 text-indigo-600" strokeWidth={1.75} />
+                  ) : (
+                    <ListPlus className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.75} />
+                  )}
+                  <span>{createMode === 'work' ? '作品' : '任务'}</span>
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[144px]">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setCreateMode('task');
+                    requestAnimationFrame(() => quickAddInputRef.current?.focus());
+                  }}
+                >
+                  <ListPlus className="h-3.5 w-3.5 text-zinc-500" />
+                  <span>新增任务</span>
+                  {createMode === 'task' && <Check className="ml-auto h-3.5 w-3.5 text-zinc-900" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setCreateMode('work');
+                    requestAnimationFrame(() => quickAddInputRef.current?.focus());
+                  }}
+                >
+                  <FolderPlus className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>新增作品</span>
+                  {createMode === 'work' && (
+                    <Check className="ml-auto h-3.5 w-3.5 text-indigo-600" />
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <form
+              onSubmit={(e) => void handleQuickAdd(e)}
+              className="flex h-full min-w-0 flex-1 items-center gap-2"
             >
-              添加
-            </Button>
-          )}
-        </form>
+              <input
+                ref={quickAddInputRef}
+                id="worksheet-quick-add-input"
+                value={quickAddTitle}
+                onChange={(e) => setQuickAddTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                  }
+                }}
+                placeholder={
+                  createMode === 'work'
+                    ? '新增作品大标题（输入作品名，回车创建并添加分段）'
+                    : '新增任务（输入标题，回车连续添加）'
+                }
+                aria-label={createMode === 'work' ? '新作品名称' : '新建任务标题'}
+                maxLength={createMode === 'work' ? 80 : 200}
+                className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-zinc-950 placeholder:text-zinc-400 focus:outline-none"
+              />
+              {quickAddTitle.trim() && (
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="secondary"
+                  className="h-6 shrink-0 whitespace-nowrap px-2 text-xs"
+                  disabled={createMode === 'work' ? createWorkPending : createTaskPending}
+                >
+                  {createMode === 'work' ? '创建作品' : '添加'}
+                </Button>
+              )}
+            </form>
+          </div>
+        )}
       </div>
 
       {/* 右键整行上下文菜单 */}

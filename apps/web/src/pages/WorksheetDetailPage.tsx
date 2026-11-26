@@ -30,7 +30,6 @@ import {
   History,
   Kanban,
   RotateCcw,
-  Search,
   Table2,
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -38,19 +37,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
-import { SidebarExpandButton } from '@/app/AppShell.js';
 import { useMe } from '@/app/AuthContext.js';
 import { KanbanBoard } from '@/components/board/KanbanBoard.js';
+import { KeywordSearchInput } from '@/components/search/KeywordSearchInput.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import { peerColorForUser, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
 import { ConfirmDialog, useToast } from '@/components/ui/overlays.js';
-import { Button, cn, Input } from '@/components/ui/primitives.js';
+import { Button, cn } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
 import { AddColumnPopover } from '@/components/worksheet/AddColumnPopover.js';
 import type { ActiveCellConflict, StageCellConflict } from '@/components/worksheet/CellEditors.js';
 import { ChangeLogDrawer } from '@/components/worksheet/ChangeLogDrawer.js';
 import { ColumnManagerModal } from '@/components/worksheet/ColumnManagerModal.js';
-import { CreateWorkPopover } from '@/components/worksheet/CreateWorkPopover.js';
 import { FieldVisibilityPopover } from '@/components/worksheet/FieldVisibilityPopover.js';
 import {
   type GridDisplayBlock,
@@ -525,10 +523,23 @@ export function WorksheetDetailPage() {
 
         if (kw) {
           const wName = task.workId ? (workMap.get(task.workId)?.name ?? '') : '';
+          const customHit = Object.values(task.customValues).some((v) =>
+            (v ?? '').toLowerCase().includes(kw),
+          );
+          const stageHit = applicableCells.some(
+            (c) =>
+              c.note.toLowerCase().includes(kw) ||
+              c.assignees.some((a) => {
+                const n = a.type === 'user' ? (userMap.get(a.userId) ?? '') : a.name;
+                return n.toLowerCase().includes(kw);
+              }),
+          );
           const hit =
             task.title.toLowerCase().includes(kw) ||
             task.divisionNote.toLowerCase().includes(kw) ||
-            wName.toLowerCase().includes(kw);
+            wName.toLowerCase().includes(kw) ||
+            customHit ||
+            stageHit;
           if (!hit) return false;
         }
         return true;
@@ -543,7 +554,7 @@ export function WorksheetDetailPage() {
         return wa.localeCompare(wb, 'zh-CN');
       });
     },
-    [keyword, workFilter, stageCols, statusChip, me, assigneeFilter, workMap, localSort],
+    [keyword, workFilter, stageCols, statusChip, me, assigneeFilter, workMap, userMap, localSort],
   );
 
   const publishedTasks = useMemo(
@@ -696,6 +707,39 @@ export function WorksheetDetailPage() {
     onError: (err) => {
       pushToast({
         message: err instanceof ApiError ? err.message : '新建任务失败',
+        variant: 'error',
+      });
+    },
+  });
+
+  const createWorkMutation = useMutation({
+    mutationFn: (name: string) =>
+      apiFetch<Work>(`/api/worksheets/${worksheetId}/works`, {
+        method: 'POST',
+        body: { name },
+      }),
+    onSuccess: (createdWork) => {
+      if (!worksheetId) return;
+      setViewMode('grid');
+      setPendingWorks((prev) =>
+        prev.some((w) => w.id === createdWork.id) ||
+        (data?.works ?? []).some((w) => w.id === createdWork.id)
+          ? prev
+          : [...prev, createdWork],
+      );
+      setCollapsedWorkIds((prev) => {
+        if (!prev.has(createdWork.id)) return prev;
+        const next = new Set(prev);
+        next.delete(createdWork.id);
+        return next;
+      });
+      setAddingSegmentWorkId(createdWork.id);
+      pushToast({ message: `已创建作品「${createdWork.name}」`, variant: 'success' });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.board });
+    },
+    onError: (err) => {
+      pushToast({
+        message: err instanceof ApiError ? err.message : '新建作品失败',
         variant: 'error',
       });
     },
@@ -1035,7 +1079,6 @@ export function WorksheetDetailPage() {
       <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-black/[0.08] px-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <SidebarExpandButton />
             <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', wsColor.dot)} />
             <h1 className="truncate text-[14px] font-semibold text-zinc-950">
               {data.worksheet.name}
@@ -1126,20 +1169,6 @@ export function WorksheetDetailPage() {
 
       {/* 下层 36px 极简图标工具栏 */}
       <div className="flex min-h-[36px] shrink-0 flex-wrap items-center gap-1.5 border-b border-black/[0.08] bg-[#fafafa]/60 px-3 py-1">
-        <CreateWorkPopover
-          worksheetId={data.worksheet.id}
-          onCreated={(createdWork) => {
-            setViewMode('grid');
-            setPendingWorks((prev) =>
-              prev.some((w) => w.id === createdWork.id) ||
-              data.works.some((w) => w.id === createdWork.id)
-                ? prev
-                : [...prev, createdWork],
-            );
-            openAddSegmentForWork(createdWork.id);
-          }}
-        />
-
         {viewMode === 'grid' && (
           <>
             <FieldVisibilityPopover
@@ -1152,10 +1181,9 @@ export function WorksheetDetailPage() {
               columns={data.columns}
               boardColumns={data.boardColumns}
             />
+            <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />
           </>
         )}
-
-        <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />
 
         <div className="flex flex-wrap items-center gap-0.5">
           {(
@@ -1184,16 +1212,14 @@ export function WorksheetDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-            <Input
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              placeholder="筛选关键词…"
-              aria-label="表内筛选关键词"
-              className="h-7 w-32 pl-7 text-xs sm:w-36"
-            />
-          </div>
+          <KeywordSearchInput
+            value={keyword}
+            onChange={setKeyword}
+            placeholder="筛选或跨表检索关键词…"
+            aria-label="表内筛选关键词"
+            align="right"
+            className="w-36 sm:w-44"
+          />
 
           <SelectField
             aria-label="按作品筛选"
@@ -1382,11 +1408,15 @@ export function WorksheetDetailPage() {
           dragEnabled={dragEnabled}
           isFilteredOrSorted={isFilteredOrSorted}
           createTaskPending={createTaskMutation.isPending}
+          createWorkPending={createWorkMutation.isPending}
           onSelectCell={selectCell}
           onSetEditingFocus={setEditingFocus}
           onPatchTask={patchTask}
           onPatchStage={patchStage}
           onCreateTask={(payload) => createTaskMutation.mutate(payload)}
+          onCreateWork={async (name) => {
+            await createWorkMutation.mutateAsync(name);
+          }}
           onDeleteTask={(t) => void deleteTask(t)}
           onReorderRows={(movingTaskId, dropRowIndex) =>
             void handleReorderRows(movingTaskId, dropRowIndex)

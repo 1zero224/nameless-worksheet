@@ -320,6 +320,7 @@ const checkIsRowHeader = (props: ICheckRegionProps): IRegionData | null => {
   const linearRow = props.getLinearRow(rowIndex);
 
   if (linearRow.type === LinearRowType.Group) {
+    if (linearRow.id.startsWith('__spacer__')) return null;
     return { ...BLANK_REGION_DATA, type: RegionType.RowGroupControl };
   }
 
@@ -367,9 +368,9 @@ const checkIsRowGroupHeader = (props: ICheckRegionProps): IRegionData | null => 
   const { x, y, rowIndex, columnIndex } = position;
   if (rowIndex <= -1 || columnIndex !== 0) return null;
 
-  const { type } = getLinearRow(rowIndex);
+  const linearRow = getLinearRow(rowIndex);
 
-  if (type !== LinearRowType.Group) return null;
+  if (linearRow.type !== LinearRowType.Group || linearRow.id.startsWith('__spacer__')) return null;
 
   const columnWidth = coordInstance.getColumnWidth(columnIndex);
   const columnOffsetX = coordInstance.getColumnRelativeOffset(columnIndex, scrollLeft);

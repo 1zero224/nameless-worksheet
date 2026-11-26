@@ -203,6 +203,7 @@ export interface IGridRef {
   }>;
   getLinearRowAt: (linearIndex: number) => ILinearRow;
   getColumnHeaderBounds: (colIndex: number) => IRectangle | null;
+  getContentBottomY: () => number;
 }
 
 const {
@@ -366,7 +367,7 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
       }> = [];
       for (let i = 0; i < linearRows.length; i++) {
         const lr = linearRows[i];
-        if (lr && lr.type === LinearRowType.Group) {
+        if (lr && lr.type === LinearRowType.Group && !lr.id.startsWith('__spacer__')) {
           res.push({
             id: lr.id,
             y: coordInstance.getRowOffset(i) - scrollTop,
@@ -390,6 +391,11 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
         width: colW,
         height: coordInstance.rowInitSize,
       };
+    },
+    getContentBottomY: () => {
+      const { scrollTop } = scrollState;
+      if (rowCount <= 0) return coordInstance.rowInitSize;
+      return coordInstance.totalHeight - scrollTop;
     },
   }));
 
@@ -484,7 +490,7 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
           return;
         }
 
-        rowHeightMap[totalIndex] = groupHeaderHeight;
+        rowHeightMap[totalIndex] = id.startsWith('__spacer__') ? 14 : groupHeaderHeight;
         linearRows.push({
           id,
           type: LinearRowType.Group,
