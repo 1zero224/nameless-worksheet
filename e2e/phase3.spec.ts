@@ -41,6 +41,19 @@ async function waitForCanvasPoint(
   return pt as { x: number; y: number };
 }
 
+async function clickCanvasPoint(
+  page: Page,
+  fn: 'getCellPoint' | 'getStageBadgePoint',
+  taskId: string,
+  columnKey: string,
+  options?: { button?: 'left' | 'right' },
+) {
+  const pt = await waitForCanvasPoint(page, fn, taskId, columnKey);
+  await page.mouse.move(pt.x, pt.y);
+  await page.mouse.click(pt.x, pt.y, options);
+  return pt;
+}
+
 async function ensureAdminCookie(request: APIRequestContext): Promise<string> {
   const tryLogin = await request.post(`${ORIGIN}/api/auth/login`, {
     headers: { origin: ORIGIN },
@@ -260,10 +273,11 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     request,
   }) => {
     const authHdr = { cookie: userA.cookie, origin: ORIGIN };
+    const wsName = `阶段3资源表-${Date.now().toString(36)}`;
     // API 预置一张工作表 + 1 个空作品（0 任务），让前端全程交互走真实 UI
     const wsRes = await request.post(`${ORIGIN}/api/worksheets`, {
       headers: authHdr,
-      data: { name: '阶段3资源表', template: 'standard_video' },
+      data: { name: wsName, template: 'standard_video' },
     });
     expect(wsRes.ok()).toBe(true);
     const { worksheet, columns } = (await wsRes.json()) as {
@@ -307,7 +321,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await page.getByTestId('quick-popover-add-btn').click();
     // 新建资源窗口弹出时，背后的资源浮层已自动关闭（只聚焦新建资源窗口）
     await expect(page.getByTestId('artifact-quick-popover')).toHaveCount(0);
-    await expect(page.getByTestId('artifact-scope-tags')).toContainText('阶段3资源表');
+    await expect(page.getByTestId('artifact-scope-tags')).toContainText(wsName);
     await expect(page.getByTestId('artifact-scope-tags')).toContainText('5th-BD');
     await page
       .getByTestId('share-paste-input')
@@ -375,14 +389,13 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await expect(page.getByTestId(`work-banner-${work.id}`)).toBeVisible();
 
     // V1: 点击「时轴」工序格 -> 点击「+ 添加资源」-> 验证亮色层级标签与默认资源名「作品名-任务名-工序」
-    const stagePt = await waitForCanvasPoint(page, 'getCellPoint', task.id, timingCol.id);
-    await page.mouse.click(stagePt.x, stagePt.y);
+    await clickCanvasPoint(page, 'getCellPoint', task.id, timingCol.id);
     await expect(page.getByTestId('stage-cell-popover')).toBeVisible();
     await page.getByTestId('stage-popover-manage-artifacts').click();
     await expect(page.getByTestId('artifact-quick-popover')).toBeVisible();
     await page.getByTestId('quick-popover-add-btn').click();
     await expect(page.getByTestId('artifact-quick-popover')).toHaveCount(0);
-    await expect(page.getByTestId('artifact-scope-tags')).toContainText('阶段3资源表');
+    await expect(page.getByTestId('artifact-scope-tags')).toContainText(wsName);
     await expect(page.getByTestId('artifact-scope-tags')).toContainText('5th-BD');
     await expect(page.getByTestId('artifact-scope-tags')).toContainText('Disc 1 正片');
     await expect(page.getByTestId('artifact-scope-tags')).toContainText('时轴');
@@ -394,8 +407,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await expect(page.getByTestId('artifact-create-form')).toHaveCount(0);
 
     // 直接点击 Canvas 工序格右侧角标热区 -> 弹出靠左对齐的轻量快速取用浮层（非大侧栏）
-    const badgePt = await waitForCanvasPoint(page, 'getStageBadgePoint', task.id, timingCol.id);
-    await page.mouse.click(badgePt.x, badgePt.y);
+    await clickCanvasPoint(page, 'getStageBadgePoint', task.id, timingCol.id);
     const quickPop = page.getByTestId('artifact-quick-popover');
     await expect(quickPop).toBeVisible();
     await expect(quickPop).toContainText('5th-BD-Disc 1 正片-时轴');
@@ -404,8 +416,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await page.keyboard.press('Escape');
 
     // 右键「时轴」单元格 -> 点击「查看单元格修改记录」-> 仅展示该单元格的修改记录并支持切至整条任务
-    const stagePtForMenu = await waitForCanvasPoint(page, 'getCellPoint', task.id, timingCol.id);
-    await page.mouse.click(stagePtForMenu.x, stagePtForMenu.y, { button: 'right' });
+    await clickCanvasPoint(page, 'getCellPoint', task.id, timingCol.id, { button: 'right' });
     await expect(page.getByTestId('context-menu-cell-history')).toBeVisible();
     await page.getByTestId('context-menu-cell-history').click();
     await expect(page.getByTestId('cell-history-scope-bar')).toContainText('Disc 1 正片');
@@ -415,8 +426,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
     // 点击固定「文件」列 -> 打开 TaskDetailDrawer，作品共用资源位于最下方，上方按工序与任务分组
-    const filesPt = await waitForCanvasPoint(page, 'getCellPoint', task.id, 'files');
-    await page.mouse.click(filesPt.x, filesPt.y);
+    await clickCanvasPoint(page, 'getCellPoint', task.id, 'files');
     const drawer = page.getByTestId('task-detail-drawer');
     await expect(drawer).toBeVisible();
     await expect(page.getByTestId('work-shared-attachments-slot')).toContainText('全篇原片');
@@ -474,8 +484,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     expect(delColRes.status()).toBe(204);
     await page.reload();
 
-    const filesPt2 = await waitForCanvasPoint(page, 'getCellPoint', task.id, 'files');
-    await page.mouse.click(filesPt2.x, filesPt2.y);
+    await clickCanvasPoint(page, 'getCellPoint', task.id, 'files');
     await expect(page.getByTestId('drawer-task-other-files')).toContainText(
       '5th-BD-Disc 1 正片-时轴',
     );
@@ -514,7 +523,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     const authHdr = { cookie: userA.cookie, origin: ORIGIN };
     const wsRes = await request.post(`${ORIGIN}/api/worksheets`, {
       headers: authHdr,
-      data: { name: '实时同步资源表', template: 'standard_video' },
+      data: { name: `实时同步资源表-${Date.now().toString(36)}`, template: 'standard_video' },
     });
     const { worksheet } = (await wsRes.json()) as { worksheet: { id: string } };
     const work = (await (
