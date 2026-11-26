@@ -37,7 +37,7 @@ export function MyTasksListContent({
     return (
       <div className="rounded-lg border border-dashed border-black/[0.08] bg-white/70 px-3 py-6 text-center text-xs text-zinc-400">
         当前没有认领中的任务
-        <div className="mt-1 text-xs text-zinc-400/80">可在右侧看板直接点击「认领」</div>
+        <div className="mt-1 text-xs text-zinc-400/80">可在右侧看板直接点击「空缺」认领</div>
       </div>
     );
   }

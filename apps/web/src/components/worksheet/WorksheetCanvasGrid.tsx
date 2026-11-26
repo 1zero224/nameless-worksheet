@@ -755,7 +755,7 @@ function AnchoredStagePopover({
           <div className="mb-1 text-xs text-zinc-500">已选负责人</div>
           <div className="flex flex-wrap gap-1">
             {assignees.length === 0 ? (
-              <span className="text-xs text-zinc-400">无（将标记为缺人）</span>
+              <span className="text-xs text-zinc-400">无（将标记为空缺）</span>
             ) : (
               assignees.map((a, i) => {
                 const label = a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name;

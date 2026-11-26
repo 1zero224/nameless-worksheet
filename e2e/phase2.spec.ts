@@ -540,7 +540,7 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     );
     await expect(timingGroupCards.nth(0)).toHaveAttribute('data-card-state', 'missing');
     await expect(timingGroupCards.nth(0)).toContainText('并行直播后半段');
-    await expect(timingGroupCards.nth(0)).toContainText('时轴 · 缺人');
+    await expect(timingGroupCards.nth(0)).toContainText('时轴 · 空缺');
     await expect(timingGroupCards.nth(1)).toHaveAttribute(
       'data-testid',
       new RegExp(`^board-card-${tParallel.id}-`),
@@ -578,16 +578,16 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await expect(transSingleWorkCard).toContainText('看板主表');
     await expect(transSingleWorkCard).toContainText('翻译 · 官中字幕 · 进行中');
 
-    // 开启「仅看缺人」时，其他缺人工序（如不上看板的「压制」）展开为可点击认领按钮
-    await pageA.getByRole('button', { name: '仅看缺人' }).click();
+    // 开启「仅看空缺」时，其他空缺工序（如不上看板的「压制」）展开为可点击认领按钮
+    await pageA.getByRole('button', { name: '仅看空缺' }).click();
     await expect(timingChild1.getByRole('button', { name: '缺 压制' })).toBeVisible();
-    await pageA.getByRole('button', { name: '仅看缺人' }).click();
+    await pageA.getByRole('button', { name: '仅看空缺' }).click();
 
-    // 无作品独立任务保持极简卡片、浅红缺人底色且不出「还缺 / 缺 校对」
+    // 无作品独立任务保持极简卡片、浅红空缺底色且不出「还缺 / 缺 校对」
     const claimCardA = colTransEl.locator(`[data-testid^="board-card-${tClaim.id}-"]`);
     await expect(claimCardA).toBeVisible();
     await expect(claimCardA).toHaveAttribute('data-card-state', 'missing');
-    await expect(claimCardA).toContainText('翻译 · 缺人');
+    await expect(claimCardA).toContainText('翻译 · 空缺');
     await expect(claimCardA).not.toContainText('还缺');
     await expect(claimCardA).not.toContainText('缺 校对');
     await expect(colProofEl.locator(`[data-testid^="board-card-${tClaim.id}-"]`)).toHaveCount(0);
@@ -615,7 +615,7 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     const claimCardB = pageB
       .locator('[data-board-column-name="翻译"]')
       .locator(`[data-testid^="board-card-${tClaim.id}-"]`);
-    await expect(claimCardB).toContainText('翻译 · 缺人');
+    await expect(claimCardB).toContainText('翻译 · 空缺');
 
     await claimCardA.getByRole('button', { name: '认领 翻译' }).click();
     await expect(claimCardA).toHaveAttribute('data-card-state', 'waiting');

@@ -280,7 +280,7 @@ export function HomePage() {
               : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
           )}
         >
-          仅看缺人
+          仅看空缺
         </button>
 
         <button

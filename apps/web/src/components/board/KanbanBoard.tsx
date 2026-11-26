@@ -1,5 +1,5 @@
 import { type BoardCard, type BoardColumn, PRIORITY_LABELS, STAGE_STATUS_LABELS } from '@nw/shared';
-import { ChevronDown, Folder, Minimize2, PanelLeftOpen, Plus } from 'lucide-react';
+import { ChevronDown, Folder, Hand, Minimize2, PanelLeftOpen } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import {
   type MouseEvent as ReactMouseEvent,
@@ -323,9 +323,65 @@ export function KanbanBoard({
       return `${card.stageColumnName} · ${assigneesText} · ${STAGE_STATUS_LABELS[card.stageStatus]}`;
     }
     if (card.stageStatus === 'in_progress') {
-      return `${card.stageColumnName} · 缺人 · ${STAGE_STATUS_LABELS.in_progress}`;
+      return `${card.stageColumnName} · 空缺 · ${STAGE_STATUS_LABELS.in_progress}`;
     }
-    return `${card.stageColumnName} · 缺人`;
+    return `${card.stageColumnName} · 空缺`;
+  };
+
+  const renderStageStatusRow = (
+    card: BoardCard,
+    stateStyle: (typeof BOARD_CARD_STATE_STYLES)[BoardCardVisualState],
+    mine: boolean,
+  ) => {
+    const currentStageMissing = card.missingStages.find((ms) => ms.columnId === card.stageColumnId);
+    const currentClaimKey = `${card.taskId}:${card.stageColumnId}`;
+    const claimingCurrent = claimingKeys.has(currentClaimKey);
+
+    if (currentStageMissing) {
+      return (
+        <div className="flex min-w-0 items-center gap-1.5 text-xs">
+          <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', stateStyle.dot)} />
+          <span className={cn('flex min-w-0 items-center truncate', stateStyle.statusText)}>
+            <span className="truncate">{card.stageColumnName}</span>
+            <span className="shrink-0 whitespace-pre"> · </span>
+            <button
+              type="button"
+              disabled={claimingCurrent}
+              aria-label={`认领 ${currentStageMissing.name}`}
+              title={`点击认领「${currentStageMissing.name}」`}
+              onClick={(e) => {
+                e.stopPropagation();
+                void onClaim(card.taskId, currentStageMissing.columnId, currentStageMissing.name);
+              }}
+              className={cn(
+                'pointer-events-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 -mx-0.5 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-50 cursor-pointer',
+                stateStyle.actionBtn,
+              )}
+            >
+              <span>{claimingCurrent ? '认领中…' : '空缺'}</span>
+              <Hand className="h-3 w-3 shrink-0" strokeWidth={1.85} />
+            </button>
+            {card.stageStatus === 'in_progress' && (
+              <span className="shrink-0 whitespace-pre"> · {STAGE_STATUS_LABELS.in_progress}</span>
+            )}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex min-w-0 items-center gap-1.5 text-xs">
+        <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', stateStyle.dot)} />
+        <span className={cn('truncate', stateStyle.statusText)}>{formatStageStatusLine(card)}</span>
+        {mine && (
+          <span
+            className={cn('shrink-0 rounded px-1 py-0 text-[11px] font-medium', stateStyle.meTag)}
+          >
+            我
+          </span>
+        )}
+      </div>
+    );
   };
 
   const isAssignedToMe = (card: BoardCard) =>
@@ -355,7 +411,7 @@ export function KanbanBoard({
                 }}
                 className={cn(INLINE_ACTION_BTN_BASE, BOARD_CARD_STATE_STYLES.missing.actionBtn)}
               >
-                <Plus className="h-3 w-3" strokeWidth={2} />
+                <Hand className="h-3 w-3" strokeWidth={1.85} />
                 {claiming ? '认领中…' : `缺 ${ms.name}`}
               </button>
             );
@@ -484,11 +540,6 @@ export function KanbanBoard({
                               const { card, workKey } = item;
                               const cardState = getBoardCardState(card);
                               const stateStyle = BOARD_CARD_STATE_STYLES[cardState];
-                              const currentStageMissing = card.missingStages.find(
-                                (ms) => ms.columnId === card.stageColumnId,
-                              );
-                              const currentClaimKey = `${card.taskId}:${card.stageColumnId}`;
-                              const claimingCurrent = claimingKeys.has(currentClaimKey);
                               const isWorkHighlighted = Boolean(
                                 workKey && hoveredWorkKey === workKey,
                               );
@@ -586,54 +637,11 @@ export function KanbanBoard({
                                     )}
                                   </div>
 
-                                  {/* 第 2 层：本列「工序 · 负责人 · 状态」+ 认领 / 快速查看可下载资源 */}
+                                  {/* 第 2 层：本列「工序 · 负责人 · 状态 / 空缺可认领」+ 快速查看可下载资源 */}
                                   <div className="mt-1.5 flex items-center justify-between gap-1.5">
-                                    <div className="flex min-w-0 items-center gap-1.5 text-xs">
-                                      <span
-                                        className={cn(
-                                          'h-1.5 w-1.5 shrink-0 rounded-full',
-                                          stateStyle.dot,
-                                        )}
-                                      />
-                                      <span className={cn('truncate', stateStyle.statusText)}>
-                                        {formatStageStatusLine(card)}
-                                      </span>
-                                      {mine && (
-                                        <span
-                                          className={cn(
-                                            'shrink-0 rounded px-1 py-0 text-[11px] font-medium',
-                                            stateStyle.meTag,
-                                          )}
-                                        >
-                                          我
-                                        </span>
-                                      )}
-                                    </div>
+                                    {renderStageStatusRow(card, stateStyle, mine)}
 
                                     <div className="flex shrink-0 items-center gap-0.5">
-                                      {currentStageMissing && (
-                                        <button
-                                          type="button"
-                                          disabled={claimingCurrent}
-                                          aria-label={`认领 ${currentStageMissing.name}`}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            void onClaim(
-                                              card.taskId,
-                                              currentStageMissing.columnId,
-                                              currentStageMissing.name,
-                                            );
-                                          }}
-                                          className={cn(
-                                            INLINE_ACTION_BTN_BASE,
-                                            stateStyle.actionBtn,
-                                          )}
-                                        >
-                                          <Plus className="h-3 w-3" strokeWidth={2} />
-                                          {claimingCurrent ? '认领中…' : '认领'}
-                                        </button>
-                                      )}
-
                                       <TaskResourcesPopover
                                         taskId={card.taskId}
                                         taskTitle={card.taskTitle}
@@ -735,7 +743,7 @@ export function KanbanBoard({
                                           {missingCount > 0 && (
                                             <span className="inline-flex items-center gap-1 font-medium text-red-900/85">
                                               <span className="h-1.5 w-1.5 rounded-full bg-red-500/80" />
-                                              缺人 {missingCount}
+                                              空缺 {missingCount}
                                             </span>
                                           )}
                                           {inProgressCount > 0 && (
@@ -772,11 +780,6 @@ export function KanbanBoard({
                                           const isLast = idx === item.cards.length - 1;
                                           const cardState = getBoardCardState(card);
                                           const stateStyle = BOARD_CARD_STATE_STYLES[cardState];
-                                          const currentStageMissing = card.missingStages.find(
-                                            (ms) => ms.columnId === card.stageColumnId,
-                                          );
-                                          const currentClaimKey = `${card.taskId}:${card.stageColumnId}`;
-                                          const claimingCurrent = claimingKeys.has(currentClaimKey);
                                           const mine = isAssignedToMe(card);
                                           const openChildDetail = () =>
                                             onOpenDetail({
@@ -849,57 +852,9 @@ export function KanbanBoard({
                                                 </div>
 
                                                 <div className="pointer-events-none relative z-10 mt-1.5 flex items-center justify-between gap-1">
-                                                  <div className="flex min-w-0 items-center gap-1.5 text-xs">
-                                                    <span
-                                                      className={cn(
-                                                        'h-1.5 w-1.5 shrink-0 rounded-full',
-                                                        stateStyle.dot,
-                                                      )}
-                                                    />
-                                                    <span
-                                                      className={cn(
-                                                        'truncate',
-                                                        stateStyle.statusText,
-                                                      )}
-                                                    >
-                                                      {formatStageStatusLine(card)}
-                                                    </span>
-                                                    {mine && (
-                                                      <span
-                                                        className={cn(
-                                                          'shrink-0 rounded px-1 py-0 text-[11px] font-medium',
-                                                          stateStyle.meTag,
-                                                        )}
-                                                      >
-                                                        我
-                                                      </span>
-                                                    )}
-                                                  </div>
+                                                  {renderStageStatusRow(card, stateStyle, mine)}
 
                                                   <div className="pointer-events-auto flex shrink-0 items-center gap-0.5">
-                                                    {currentStageMissing && (
-                                                      <button
-                                                        type="button"
-                                                        disabled={claimingCurrent}
-                                                        aria-label={`认领 ${currentStageMissing.name}`}
-                                                        onClick={(e) => {
-                                                          e.stopPropagation();
-                                                          void onClaim(
-                                                            card.taskId,
-                                                            currentStageMissing.columnId,
-                                                            currentStageMissing.name,
-                                                          );
-                                                        }}
-                                                        className={cn(
-                                                          INLINE_ACTION_BTN_BASE,
-                                                          stateStyle.actionBtn,
-                                                        )}
-                                                      >
-                                                        <Plus className="h-3 w-3" strokeWidth={2} />
-                                                        {claimingCurrent ? '认领中…' : '认领'}
-                                                      </button>
-                                                    )}
-
                                                     <TaskResourcesPopover
                                                       taskId={card.taskId}
                                                       taskTitle={card.taskTitle}
