@@ -37,11 +37,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
+import { TopBarCenterSlot, TopBarRightSlot } from '@/app/AppShell.js';
 import { useMe } from '@/app/AuthContext.js';
 import { KanbanBoard } from '@/components/board/KanbanBoard.js';
 import { KeywordSearchInput } from '@/components/search/KeywordSearchInput.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
-import { peerColorForUser, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
+import { peerColorForUser } from '@/components/ui/colors.js';
 import { ConfirmDialog, useToast } from '@/components/ui/overlays.js';
 import { Button, cn } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
@@ -1070,104 +1071,95 @@ export function WorksheetDetailPage() {
     );
   }
 
-  const wsColor = WORKSHEET_COLOR_STYLES[data.worksheet.color] ?? WORKSHEET_COLOR_STYLES.sky;
   const dragEnabled = !isFilteredOrSorted;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      {/* 上层 44px Teable 风格视图标签栏 */}
-      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-black/[0.08] px-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', wsColor.dot)} />
-            <h1 className="truncate text-[14px] font-semibold text-zinc-950">
-              {data.worksheet.name}
-            </h1>
-          </div>
+      <h1 className="sr-only">{data.worksheet.name}</h1>
 
-          <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />
+      {/* 注入全局单行顶栏：表格视图 / 看板视图切换 */}
+      <TopBarCenterSlot>
+        <span className="mx-1 h-4 w-px shrink-0 bg-black/[0.08]" />
+        <div className="flex h-11 items-center gap-0.5" role="tablist" aria-label="工作表视图">
+          {(
+            [
+              { id: 'grid', label: '表格视图', icon: Table2, testId: 'view-tab-grid' },
+              { id: 'board', label: '看板视图', icon: Kanban, testId: 'view-tab-board' },
+            ] as const
+          ).map((tab) => {
+            const active = viewMode === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                data-testid={tab.testId}
+                onClick={() => setViewMode(tab.id)}
+                className={cn(
+                  'relative inline-flex h-11 shrink-0 items-center gap-1.5 px-2 text-xs font-medium transition-colors cursor-pointer',
+                  active ? 'text-zinc-950' : 'text-zinc-500 hover:text-zinc-900',
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                <span>{tab.label}</span>
+                {active && (
+                  <motion.span
+                    layoutId="worksheet-view-tab-indicator"
+                    transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+                    className="absolute right-1.5 bottom-0 left-1.5 h-[2px] rounded-full bg-zinc-950"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </TopBarCenterSlot>
 
-          {/* 表格视图 / 看板视图标签切换（motion layoutId 平滑滑移指示线） */}
-          <div className="flex h-11 items-center gap-1" role="tablist" aria-label="工作表视图">
-            {(
-              [
-                { id: 'grid', label: '表格视图', icon: Table2, testId: 'view-tab-grid' },
-                { id: 'board', label: '看板视图', icon: Kanban, testId: 'view-tab-board' },
-              ] as const
-            ).map((tab) => {
-              const active = viewMode === tab.id;
-              const Icon = tab.icon;
+      {/* 注入全局单行顶栏右侧：在线状态 + 修改记录（紧邻用户头像左侧） */}
+      <TopBarRightSlot>
+        {onlineUsers.length > 0 && (
+          <div
+            data-testid="presence-bar"
+            className="flex items-center gap-1 rounded-full border border-black/[0.08] bg-[#fafafa] px-2 py-0.5"
+          >
+            <span className="hidden text-[11px] text-zinc-400 sm:inline">在线</span>
+            {onlineUsers.map((peer) => {
+              const color = peerColorForUser(peer.userId);
               return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  data-testid={tab.testId}
-                  onClick={() => setViewMode(tab.id)}
+                <span
+                  key={peer.userId}
+                  title={
+                    peer.focus
+                      ? `${peer.displayName}${peer.focus.editing ? '（正在编辑）' : '（正在查看）'}`
+                      : `${peer.displayName}（在线）`
+                  }
                   className={cn(
-                    'relative inline-flex h-11 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors cursor-pointer',
-                    active ? 'text-zinc-950' : 'text-zinc-500 hover:text-zinc-900',
+                    'inline-flex items-center rounded-full px-1.5 py-0.25 text-[11px] font-medium',
+                    color.bg,
+                    color.text,
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  <span>{tab.label}</span>
-                  {active && (
-                    <motion.span
-                      layoutId="worksheet-view-tab-indicator"
-                      transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-                      className="absolute right-1.5 bottom-0 left-1.5 h-[2px] rounded-full bg-zinc-950"
-                    />
-                  )}
-                </button>
+                  {peer.displayName}
+                </span>
               );
             })}
           </div>
-        </div>
+        )}
 
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {onlineUsers.length > 0 && (
-            <div
-              data-testid="presence-bar"
-              className="flex items-center gap-1 rounded-full border border-black/[0.08] bg-[#fafafa] px-2 py-0.5"
-            >
-              <span className="hidden text-[11px] text-zinc-400 sm:inline">在线</span>
-              {onlineUsers.map((peer) => {
-                const color = peerColorForUser(peer.userId);
-                return (
-                  <span
-                    key={peer.userId}
-                    title={
-                      peer.focus
-                        ? `${peer.displayName}${peer.focus.editing ? '（正在编辑）' : '（正在查看）'}`
-                        : `${peer.displayName}（在线）`
-                    }
-                    className={cn(
-                      'inline-flex items-center rounded-full px-1.5 py-0.25 text-[11px] font-medium',
-                      color.bg,
-                      color.text,
-                    )}
-                  >
-                    {peer.displayName}
-                  </span>
-                );
-              })}
-            </div>
-          )}
+        <button
+          type="button"
+          onClick={() => setLogsOpen(true)}
+          className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+        >
+          <History className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
+          <span className="hidden sm:inline">修改记录</span>
+          <span className="sr-only sm:hidden">修改记录</span>
+        </button>
+      </TopBarRightSlot>
 
-          <button
-            type="button"
-            onClick={() => setLogsOpen(true)}
-            className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
-          >
-            <History className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
-            <span className="hidden sm:inline">修改记录</span>
-            <span className="sr-only sm:hidden">修改记录</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 下层 36px 极简图标工具栏 */}
+      {/* 工具栏（36px） */}
       <div className="flex min-h-[36px] shrink-0 flex-wrap items-center gap-1.5 border-b border-black/[0.08] bg-[#fafafa]/60 px-3 py-1">
         {viewMode === 'grid' && (
           <>

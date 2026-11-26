@@ -28,7 +28,8 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { createContext, type ReactNode, useContext, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
@@ -78,6 +79,28 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   },
 ];
 
+interface TopBarSlotsContextValue {
+  centerEl: HTMLDivElement | null;
+  rightEl: HTMLDivElement | null;
+}
+
+const TopBarSlotsContext = createContext<TopBarSlotsContextValue>({
+  centerEl: null,
+  rightEl: null,
+});
+
+export function TopBarCenterSlot({ children }: { children: ReactNode }) {
+  const { centerEl } = useContext(TopBarSlotsContext);
+  if (!centerEl) return null;
+  return createPortal(children, centerEl);
+}
+
+export function TopBarRightSlot({ children }: { children: ReactNode }) {
+  const { rightEl } = useContext(TopBarSlotsContext);
+  if (!rightEl) return null;
+  return createPortal(children, rightEl);
+}
+
 function avatarInitial(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return 'U';
@@ -109,9 +132,9 @@ function SortableTopWorksheetTab({
       {...attributes}
       {...listeners}
       className={cn(
-        'group relative flex h-8 shrink-0 items-center rounded-md transition-colors select-none',
+        'group relative flex h-7 shrink-0 items-center rounded-md transition-colors select-none',
         isActive
-          ? 'bg-white text-zinc-950 shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.08]'
+          ? 'bg-black/[0.06] text-zinc-950'
           : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
         isDragging && 'z-30 opacity-85 shadow-md ring-1 ring-black/15',
       )}
@@ -178,6 +201,8 @@ export function AppShell() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingWs, setEditingWs] = useState<WorksheetSummary | null>(null);
   const [deletingWs, setDeletingWs] = useState<WorksheetSummary | null>(null);
+  const [centerSlotEl, setCenterSlotEl] = useState<HTMLDivElement | null>(null);
+  const [rightSlotEl, setRightSlotEl] = useState<HTMLDivElement | null>(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -255,182 +280,191 @@ export function AppShell() {
   const showDisconnectBanner = status === 'disconnected';
 
   return (
-    <div
-      className={cn(
-        'flex w-full flex-col overflow-x-hidden',
-        isCanvasPage ? 'h-dvh overflow-hidden bg-white' : 'min-h-screen bg-[#fafafa]',
-      )}
-    >
-      {/* 顶部全局标签栏：项目名 + 任务看板与工作表标签页 + 右上角头像管理菜单 */}
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-black/[0.08] bg-[#fafafa] px-2.5 sm:px-3">
-        <NavLink
-          to="/"
-          className="hidden shrink-0 items-center gap-1.5 pr-1 text-[13px] font-semibold tracking-tight text-zinc-950 sm:flex"
-        >
-          <span className="max-w-[120px] truncate">{me.project.name}</span>
-        </NavLink>
-
-        <span className="hidden h-4 w-px shrink-0 bg-black/[0.08] sm:inline-block" />
-
-        {/* 顶部标签页区（任务看板 + 各工作表 + 新建表） */}
-        <nav
-          aria-label="主导航"
-          data-testid="top-nav-tabs"
-          className="no-scrollbar flex h-11 min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-        >
+    <TopBarSlotsContext.Provider value={{ centerEl: centerSlotEl, rightEl: rightSlotEl }}>
+      <div
+        className={cn(
+          'flex w-full flex-col overflow-x-hidden',
+          isCanvasPage ? 'h-dvh overflow-hidden bg-white' : 'min-h-screen bg-[#fafafa]',
+        )}
+      >
+        {/* 单行统一顶栏（44px）：项目名 + 任务看板/多工作表标签/+建表 + 页面视图切换 + 在线/修改记录 + 右上角头像管理菜单 */}
+        <header className="flex h-11 shrink-0 items-center gap-2 border-b border-black/[0.08] bg-white px-2.5 sm:px-3">
           <NavLink
             to="/"
-            end
-            className={({ isActive }) =>
-              cn(
-                'flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] transition-colors select-none',
-                isActive
-                  ? 'bg-white font-medium text-zinc-950 shadow-[0_1px_2px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.08]'
-                  : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
-              )
-            }
+            className="hidden shrink-0 items-center gap-1.5 pr-0.5 text-[13px] font-semibold tracking-tight text-zinc-950 lg:flex"
           >
-            <Kanban className="h-3.5 w-3.5 shrink-0 text-zinc-500" strokeWidth={1.75} />
-            <span>任务看板</span>
+            <span className="max-w-[116px] truncate">{me.project.name}</span>
           </NavLink>
 
-          <span className="mx-0.5 h-4 w-px shrink-0 bg-black/[0.08]" />
+          <span className="hidden h-4 w-px shrink-0 bg-black/[0.08] lg:inline-block" />
 
-          <div className="flex shrink-0 items-center gap-1" data-testid="topbar-worksheets">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleTabsDragEnd}
+          {/* 左侧主区：任务看板 + 多工作表标签页 + 新建表 + 工作表视图切换（同一行内顺滑横滚） */}
+          <div className="no-scrollbar flex h-11 min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            <nav
+              aria-label="主导航"
+              data-testid="top-nav-tabs"
+              className="flex h-11 shrink-0 items-center gap-1"
             >
-              <SortableContext
-                items={worksheets.map((w) => w.id)}
-                strategy={horizontalListSortingStrategy}
+              <NavLink
+                to="/"
+                end
+                className={({ isActive }) =>
+                  cn(
+                    'flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] transition-colors select-none',
+                    isActive
+                      ? 'bg-black/[0.06] font-medium text-zinc-950'
+                      : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
+                  )
+                }
               >
-                {worksheets.map((ws) => (
-                  <SortableTopWorksheetTab
-                    key={ws.id}
-                    ws={ws}
-                    isActive={location.pathname === `/worksheets/${ws.id}`}
-                    onEdit={(target) => setEditingWs(target)}
-                    onDelete={(target) => setDeletingWs(target)}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-          </div>
+                <Kanban className="h-3.5 w-3.5 shrink-0 text-zinc-500" strokeWidth={1.75} />
+                <span>任务看板</span>
+              </NavLink>
 
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            title="新建工作表"
-            aria-label="快速建表"
-            data-testid="topbar-create-worksheet"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-950 cursor-pointer"
-          >
-            <Plus className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-        </nav>
+              <span className="mx-0.5 h-4 w-px shrink-0 bg-black/[0.08]" />
 
-        {/* 右上角用户头像与管理菜单 */}
-        <div className="flex shrink-0 items-center">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                data-testid="user-avatar-trigger"
-                aria-label="用户与管理菜单"
-                title={`${me.user.displayName} · ${ROLE_LABELS[me.role]}`}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-white ring-2 ring-transparent transition-all hover:ring-black/[0.12] focus-visible:outline-none focus-visible:ring-blue-500/40 cursor-pointer"
-              >
-                {avatarInitial(me.user.displayName)}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[208px]">
-              <div className="px-2.5 py-2">
-                <div className="truncate text-[13px] font-semibold text-zinc-950">
-                  {me.user.displayName}
-                </div>
-                <div className="mt-0.5 text-[11px] text-zinc-400">
-                  {me.project.name} · {ROLE_LABELS[me.role]}
-                </div>
+              <div className="flex shrink-0 items-center gap-1" data-testid="topbar-worksheets">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleTabsDragEnd}
+                >
+                  <SortableContext
+                    items={worksheets.map((w) => w.id)}
+                    strategy={horizontalListSortingStrategy}
+                  >
+                    {worksheets.map((ws) => (
+                      <SortableTopWorksheetTab
+                        key={ws.id}
+                        ws={ws}
+                        isActive={location.pathname === `/worksheets/${ws.id}`}
+                        onEdit={(target) => setEditingWs(target)}
+                        onDelete={(target) => setDeletingWs(target)}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
               </div>
 
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem onSelect={() => navigate('/worksheets')}>
-                <FolderKanban className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
-                工作表总览
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => navigate('/settings')}>
-                <Settings className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
-                个人设置
-              </DropdownMenuItem>
-
-              {visibleAdminItems.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>管理</DropdownMenuLabel>
-                  {visibleAdminItems.map((item) => (
-                    <DropdownMenuItem key={item.to} onSelect={() => navigate(item.to)}>
-                      {item.icon}
-                      {item.label}
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              )}
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={logoutMutation.isPending}
-                onSelect={() => logoutMutation.mutate()}
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                title="新建工作表"
+                aria-label="快速建表"
+                data-testid="topbar-create-worksheet"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-950 cursor-pointer"
               >
-                <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
-                退出登录
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
+                <Plus className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            </nav>
 
-      {/* 断线重连提示条 */}
-      {showDisconnectBanner && (
-        <div
-          role="status"
-          className="shrink-0 bg-amber-100 px-4 py-1.5 text-center text-xs font-medium text-amber-900"
-        >
-          连接中断，正在重连
-        </div>
-      )}
+            {/* 页面内联插槽（例如工作表的「表格视图 / 看板视图」切换） */}
+            <div ref={setCenterSlotEl} className="flex h-11 shrink-0 items-center" />
+          </div>
 
-      {/* 主内容区域 */}
-      {isCanvasPage ? (
-        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-white p-0">
-          <Outlet />
-        </main>
-      ) : (
-        <main className="mx-auto w-full min-w-0 max-w-5xl flex-1 p-4 sm:p-6">
-          <Outlet />
-        </main>
-      )}
+          {/* 右侧固定操作区：页面扩展操作（在线状态 / 修改记录等） + 用户头像下拉菜单 */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <div ref={setRightSlotEl} className="flex shrink-0 items-center gap-1.5" />
 
-      {/* 顶栏原地新建/编辑/删除工作表弹窗 */}
-      <CreateWorksheetModal
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={(wsId) => navigate(`/worksheets/${wsId}`)}
-      />
-      <EditWorksheetModal worksheet={editingWs} onClose={() => setEditingWs(null)} />
-      <DeleteWorksheetDialog
-        worksheet={deletingWs}
-        onClose={() => setDeletingWs(null)}
-        onDeleted={(deletedId) => {
-          if (location.pathname === `/worksheets/${deletedId}`) {
-            navigate('/', { replace: true });
-          }
-        }}
-      />
-    </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="user-avatar-trigger"
+                  aria-label="用户与管理菜单"
+                  title={`${me.user.displayName} · ${ROLE_LABELS[me.role]}`}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-white ring-2 ring-transparent transition-all hover:ring-black/[0.12] focus-visible:outline-none focus-visible:ring-blue-500/40 cursor-pointer"
+                >
+                  {avatarInitial(me.user.displayName)}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[208px]">
+                <div className="px-2.5 py-2">
+                  <div className="truncate text-[13px] font-semibold text-zinc-950">
+                    {me.user.displayName}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-zinc-400">
+                    {me.project.name} · {ROLE_LABELS[me.role]}
+                  </div>
+                </div>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem onSelect={() => navigate('/worksheets')}>
+                  <FolderKanban className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
+                  工作表总览
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate('/settings')}>
+                  <Settings className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
+                  个人设置
+                </DropdownMenuItem>
+
+                {visibleAdminItems.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>管理</DropdownMenuLabel>
+                    {visibleAdminItems.map((item) => (
+                      <DropdownMenuItem key={item.to} onSelect={() => navigate(item.to)}>
+                        {item.icon}
+                        {item.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={logoutMutation.isPending}
+                  onSelect={() => logoutMutation.mutate()}
+                >
+                  <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  退出登录
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        {/* 断线重连提示条 */}
+        {showDisconnectBanner && (
+          <div
+            role="status"
+            className="shrink-0 bg-amber-100 px-4 py-1.5 text-center text-xs font-medium text-amber-900"
+          >
+            连接中断，正在重连
+          </div>
+        )}
+
+        {/* 主内容区域 */}
+        {isCanvasPage ? (
+          <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-white p-0">
+            <Outlet />
+          </main>
+        ) : (
+          <main className="mx-auto w-full min-w-0 max-w-5xl flex-1 p-4 sm:p-6">
+            <Outlet />
+          </main>
+        )}
+
+        {/* 顶栏原地新建/编辑/删除工作表弹窗 */}
+        <CreateWorksheetModal
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreated={(wsId) => navigate(`/worksheets/${wsId}`)}
+        />
+        <EditWorksheetModal worksheet={editingWs} onClose={() => setEditingWs(null)} />
+        <DeleteWorksheetDialog
+          worksheet={deletingWs}
+          onClose={() => setDeletingWs(null)}
+          onDeleted={(deletedId) => {
+            if (location.pathname === `/worksheets/${deletedId}`) {
+              navigate('/', { replace: true });
+            }
+          }}
+        />
+      </div>
+    </TopBarSlotsContext.Provider>
   );
 }
