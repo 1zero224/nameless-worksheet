@@ -158,10 +158,10 @@ export function ModalDialog({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-50 bg-black/35 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-150" />
+        <RadixDialog.Overlay className="fixed inset-0 z-[90] bg-black/35 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-150" />
         <RadixDialog.Content
           className={cn(
-            'fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/[0.08] bg-white p-5 shadow-xl outline-none max-h-[85vh] overflow-y-auto',
+            'fixed top-1/2 left-1/2 z-[95] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/[0.08] bg-white p-5 shadow-xl outline-none max-h-[85vh] overflow-y-auto',
             'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-150',
             maxWidthClass,
           )}

@@ -6,21 +6,22 @@ import type {
 } from '@nw/shared';
 import { useQuery } from '@tanstack/react-query';
 import { PanelRightOpen, Plus, X } from 'lucide-react';
-import { useState } from 'react';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { LocationActionRow } from '@/components/artifact/ArtifactCardList.js';
-import { CreateArtifactModal } from '@/components/artifact/ArtifactFormModal.js';
 import {
-  CreateVersionModal,
-  LocationFormModal,
-} from '@/components/artifact/VersionAndLocationModals.js';
+  buildDefaultArtifactName,
+  buildScopeTags,
+  type ScopeTagItem,
+} from '@/components/artifact/utils.js';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/overlays.js';
 
 export type QuickPopoverTarget =
   | {
       kind: 'stage';
       worksheetId: string;
+      worksheetName: string;
+      workName?: string | null;
       taskId: string;
       taskTitle: string;
       stageColumnId: string;
@@ -29,24 +30,35 @@ export type QuickPopoverTarget =
   | {
       kind: 'work';
       worksheetId: string;
+      worksheetName: string;
       workId: string;
       workName: string;
       focusArtifactId?: string;
     };
 
+export interface QuickCreateRequest {
+  scope: ArtifactScope;
+  scopeLabel: string;
+  scopeTags: ScopeTagItem[];
+  defaultName: string;
+  worksheetId: string;
+}
+
 export function ArtifactQuickPopoverContent({
   target,
   onClose,
+  onRequestCreate,
+  onRequestCreateVersion,
+  onRequestAddLocation,
   onOpenTaskDetail,
 }: {
   target: QuickPopoverTarget;
   onClose: () => void;
+  onRequestCreate: (req: QuickCreateRequest) => void;
+  onRequestCreateVersion: (artifact: ArtifactDetail) => void;
+  onRequestAddLocation: (artifact: ArtifactDetail) => void;
   onOpenTaskDetail?: (taskId: string) => void;
 }) {
-  const [createOpen, setCreateOpen] = useState(false);
-  const [versionArtifact, setVersionArtifact] = useState<ArtifactDetail | null>(null);
-  const [locationArtifact, setLocationArtifact] = useState<ArtifactDetail | null>(null);
-
   const workQuery = useQuery<WorkArtifactsResponse>({
     queryKey:
       target.kind === 'work' ? queryKeys.workArtifacts(target.workId) : ['work-art', 'none'],
@@ -82,24 +94,54 @@ export function ArtifactQuickPopoverContent({
         ]
       : rawArtifacts;
 
-  const createScope: ArtifactScope =
-    target.kind === 'work'
-      ? { kind: 'work', workId: target.workId }
-      : { kind: 'stage', taskId: target.taskId, stageColumnId: target.stageColumnId };
+  const handleOpenCreate = () => {
+    const createScope: ArtifactScope =
+      target.kind === 'work'
+        ? { kind: 'work', workId: target.workId }
+        : { kind: 'stage', taskId: target.taskId, stageColumnId: target.stageColumnId };
 
-  const scopeLabel =
-    target.kind === 'work'
-      ? `作品「${target.workName}」共用`
-      : `任务「${target.taskTitle}」· ${target.stageColumnName}`;
+    const scopeLabel =
+      target.kind === 'work'
+        ? `${target.worksheetName} · ${target.workName}`
+        : [target.worksheetName, target.workName, target.taskTitle, target.stageColumnName]
+            .filter(Boolean)
+            .join(' - ');
 
-  const defaultName = target.kind === 'stage' ? target.stageColumnName : '';
+    const scopeTags =
+      target.kind === 'work'
+        ? buildScopeTags({ worksheetName: target.worksheetName, workName: target.workName })
+        : buildScopeTags({
+            worksheetName: target.worksheetName,
+            workName: target.workName,
+            taskTitle: target.taskTitle,
+            stageColumnName: target.stageColumnName,
+          });
+
+    const defaultName =
+      target.kind === 'stage'
+        ? buildDefaultArtifactName({
+            workName: target.workName,
+            taskTitle: target.taskTitle,
+            stageColumnName: target.stageColumnName,
+          })
+        : '';
+
+    onClose();
+    onRequestCreate({
+      scope: createScope,
+      scopeLabel,
+      scopeTags,
+      defaultName,
+      worksheetId: target.worksheetId,
+    });
+  };
 
   return (
     <div data-testid="artifact-quick-popover" className="space-y-2.5">
       <div className="flex items-start justify-between gap-2 border-b border-black/[0.06] pb-2">
         <div className="min-w-0">
           <div className="text-xs font-semibold text-zinc-950">
-            {target.kind === 'work' ? `作品共用资源` : `${target.stageColumnName} · 工序资源`}
+            {target.kind === 'work' ? '作品共用资源' : `${target.stageColumnName} · 工序资源`}
           </div>
           <div className="mt-0.5 truncate text-[11px] text-zinc-500">
             {target.kind === 'work' ? target.workName : target.taskTitle}
@@ -109,7 +151,7 @@ export function ArtifactQuickPopoverContent({
           <button
             type="button"
             data-testid="quick-popover-add-btn"
-            onClick={() => setCreateOpen(true)}
+            onClick={handleOpenCreate}
             className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-zinc-900 px-2 text-[11px] font-medium text-white hover:bg-zinc-800 cursor-pointer"
           >
             <Plus className="h-3 w-3" />
@@ -147,23 +189,36 @@ export function ArtifactQuickPopoverContent({
                   <div className="flex min-w-0 items-center gap-1.5">
                     <span className="truncate text-xs font-semibold text-zinc-900">{art.name}</span>
                     {latest && (
-                      <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0 text-[10px] font-medium text-zinc-700 tabular-nums">
-                        v{latest.versionNumber}
+                      <span className="inline-flex shrink-0 items-center overflow-hidden rounded-full bg-zinc-900 text-white">
+                        <span className="pl-1.5 pr-1 py-0 text-[10px] font-medium tabular-nums">
+                          v{latest.versionNumber}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="更新版本"
+                          title="更新版本"
+                          onClick={() => {
+                            onClose();
+                            onRequestCreateVersion(art);
+                          }}
+                          className="group/ver inline-flex items-center gap-0.5 border-l border-white/20 px-1 py-0 text-[10px] font-medium text-white/90 hover:bg-white/15 hover:text-white cursor-pointer"
+                        >
+                          <Plus className="h-2.5 w-2.5 shrink-0" />
+                          <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[26px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[26px] group-focus-visible/ver:opacity-100">
+                            更新
+                          </span>
+                        </button>
                       </span>
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setVersionArtifact(art)}
-                      className="rounded px-1.5 py-0.5 text-[11px] text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900 cursor-pointer"
-                    >
-                      + 新版本
-                    </button>
                     {latest && (
                       <button
                         type="button"
-                        onClick={() => setLocationArtifact(art)}
+                        onClick={() => {
+                          onClose();
+                          onRequestAddLocation(art);
+                        }}
                         className="rounded px-1.5 py-0.5 text-[11px] text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900 cursor-pointer"
                       >
                         + 入口
@@ -210,56 +265,28 @@ export function ArtifactQuickPopoverContent({
           </button>
         </div>
       )}
-
-      <CreateArtifactModal
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        scope={createScope}
-        scopeLabel={scopeLabel}
-        defaultName={defaultName}
-        worksheetId={target.worksheetId}
-      />
-
-      <CreateVersionModal
-        open={Boolean(versionArtifact)}
-        onOpenChange={(o) => {
-          if (!o) setVersionArtifact(null);
-        }}
-        artifact={versionArtifact}
-      />
-
-      <LocationFormModal
-        open={Boolean(locationArtifact && locationArtifact.latestVersion)}
-        onOpenChange={(o) => {
-          if (!o) setLocationArtifact(null);
-        }}
-        target={
-          locationArtifact?.latestVersion
-            ? {
-                mode: 'create',
-                artifact: locationArtifact,
-                versionId: locationArtifact.latestVersion.id,
-                versionNumber: locationArtifact.latestVersion.versionNumber,
-              }
-            : null
-        }
-      />
     </div>
   );
 }
 
 /**
- * 锚定在指定矩形坐标上的轻量快速取用浮层（用于 Canvas 工序格角标点击）。
+ * 锚定在指定矩形坐标上的轻量快速取用浮层（用于 Canvas 工序格角标点击，与工序格编辑器一致靠左对齐）。
  */
 export function AnchoredArtifactQuickPopover({
   anchorRect,
   target,
   onClose,
+  onRequestCreate,
+  onRequestCreateVersion,
+  onRequestAddLocation,
   onOpenTaskDetail,
 }: {
   anchorRect: { x: number; y: number; width: number; height: number };
   target: QuickPopoverTarget;
   onClose: () => void;
+  onRequestCreate: (req: QuickCreateRequest) => void;
+  onRequestCreateVersion: (artifact: ArtifactDetail) => void;
+  onRequestAddLocation: (artifact: ArtifactDetail) => void;
   onOpenTaskDetail?: (taskId: string) => void;
 }) {
   return (
@@ -280,10 +307,18 @@ export function AnchoredArtifactQuickPopover({
           }}
         />
       </PopoverAnchor>
-      <PopoverContent align="end" sideOffset={6} className="w-[min(360px,calc(100vw-1.5rem))] p-3">
+      <PopoverContent
+        align="start"
+        sideOffset={6}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        className="w-[min(360px,calc(100vw-1.5rem))] p-3"
+      >
         <ArtifactQuickPopoverContent
           target={target}
           onClose={onClose}
+          onRequestCreate={onRequestCreate}
+          onRequestCreateVersion={onRequestCreateVersion}
+          onRequestAddLocation={onRequestAddLocation}
           onOpenTaskDetail={onOpenTaskDetail}
         />
       </PopoverContent>

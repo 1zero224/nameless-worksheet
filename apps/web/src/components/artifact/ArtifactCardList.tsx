@@ -98,18 +98,10 @@ export function LocationActionRow({
         <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-zinc-800 ring-1 ring-black/[0.08]">
           {providerLabel}
         </span>
-        <span className="shrink-0 text-[11px] text-zinc-400">
-          {location.isFolder ? '文件夹' : '文件'}
-        </span>
         {location.extractCode && (
           <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] text-zinc-700">
             <KeyRound className="h-2.5 w-2.5 text-zinc-400" />
             {location.extractCode}
-          </span>
-        )}
-        {location.expiresAt && (
-          <span className="shrink-0 text-[11px] text-zinc-400 tabular-nums">
-            至 {location.expiresAt}
           </span>
         )}
         {location.note && (
@@ -367,15 +359,43 @@ export function ArtifactCardList({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate text-sm font-semibold text-zinc-950">{art.name}</span>
                   {latest ? (
-                    <span
-                      data-testid={`artifact-latest-badge-${art.id}`}
-                      className="rounded-full bg-zinc-900 px-2 py-0.5 text-[11px] font-medium text-white tabular-nums"
-                    >
-                      v{latest.versionNumber}
+                    <span className="inline-flex items-center overflow-hidden rounded-full bg-zinc-900 text-white">
+                      <span
+                        data-testid={`artifact-latest-badge-${art.id}`}
+                        className="pl-2 pr-1.5 py-0.5 text-[11px] font-medium tabular-nums"
+                      >
+                        v{latest.versionNumber}
+                      </span>
+                      <button
+                        type="button"
+                        data-testid={`artifact-add-version-${art.id}`}
+                        aria-label="更新版本"
+                        title="更新版本"
+                        onClick={() => setVersionArtifact(art)}
+                        className="group/ver inline-flex items-center gap-0.5 border-l border-white/20 px-1.5 py-0.5 text-[11px] font-medium text-white/90 transition-colors hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:outline-none cursor-pointer"
+                      >
+                        <Plus className="h-3 w-3 shrink-0" />
+                        <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">
+                          更新
+                        </span>
+                      </button>
                     </span>
                   ) : (
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
-                      暂无版本
+                    <span className="inline-flex items-center overflow-hidden rounded-full bg-zinc-100 text-zinc-600">
+                      <span className="pl-2 pr-1.5 py-0.5 text-[11px] font-medium">暂无版本</span>
+                      <button
+                        type="button"
+                        data-testid={`artifact-add-version-${art.id}`}
+                        aria-label="更新版本"
+                        title="更新版本"
+                        onClick={() => setVersionArtifact(art)}
+                        className="group/ver inline-flex items-center gap-0.5 border-l border-black/10 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-black/[0.06] hover:text-zinc-950 focus-visible:bg-black/[0.06] focus-visible:outline-none cursor-pointer"
+                      >
+                        <Plus className="h-3 w-3 shrink-0" />
+                        <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">
+                          更新
+                        </span>
+                      </button>
                     </span>
                   )}
                   <span className="text-[11px] text-zinc-400">
@@ -392,15 +412,6 @@ export function ArtifactCardList({
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center gap-1">
-                <button
-                  type="button"
-                  data-testid={`artifact-add-version-${art.id}`}
-                  onClick={() => setVersionArtifact(art)}
-                  className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
-                >
-                  <Plus className="h-3 w-3" />
-                  新版本
-                </button>
                 {latest && (
                   <button
                     type="button"

@@ -11,21 +11,30 @@ import {
   type WorksheetSummary,
 } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { File as FileIcon, Folder } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { SharePasteInput } from '@/components/artifact/SharePasteInput.js';
-import { invalidateArtifactQueries } from '@/components/artifact/utils.js';
+import { invalidateArtifactQueries, type ScopeTagItem } from '@/components/artifact/utils.js';
 import { ModalDialog, useToast } from '@/components/ui/overlays.js';
 import { Alert, Button, cn, Input, Label } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
+
+const SCOPE_TAG_STYLES: Record<ScopeTagItem['kind'], string> = {
+  doc: 'bg-sky-50 text-sky-700 ring-sky-200/90',
+  worksheet: 'bg-sky-50 text-sky-700 ring-sky-200/90',
+  work: 'bg-indigo-50 text-indigo-700 ring-indigo-200/90',
+  task: 'bg-emerald-50 text-emerald-700 ring-emerald-200/90',
+  stage: 'bg-amber-50 text-amber-800 ring-amber-200/90',
+};
 
 export function CreateArtifactModal({
   open,
   onOpenChange,
   scope,
   scopeLabel,
+  scopeTags,
   defaultName = '',
   worksheetId,
   onSuccess,
@@ -34,6 +43,7 @@ export function CreateArtifactModal({
   onOpenChange: (open: boolean) => void;
   scope: ArtifactScope;
   scopeLabel: string;
+  scopeTags?: ScopeTagItem[];
   defaultName?: string;
   worksheetId?: string | null;
   onSuccess?: (artifact: ArtifactDetail) => void;
@@ -42,27 +52,21 @@ export function CreateArtifactModal({
   const { pushToast } = useToast();
 
   const [name, setName] = useState(defaultName);
-  const [versionNote, setVersionNote] = useState('');
   const [url, setUrl] = useState('');
   const [provider, setProvider] = useState<CloudProvider>('other');
   const [providerTouched, setProviderTouched] = useState(false);
   const [extractCode, setExtractCode] = useState('');
-  const [isFolder, setIsFolder] = useState(false);
-  const [expiresAt, setExpiresAt] = useState('');
-  const [locationNote, setLocationNote] = useState('');
+  const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(defaultName);
-      setVersionNote('');
       setUrl('');
       setProvider('other');
       setProviderTouched(false);
       setExtractCode('');
-      setIsFolder(false);
-      setExpiresAt('');
-      setLocationNote('');
+      setNote('');
       setError(null);
     }
   }, [open, defaultName]);
@@ -86,19 +90,19 @@ export function CreateArtifactModal({
   const mutation = useMutation({
     mutationFn: () => {
       const trimmedUrl = url.trim();
+      const trimmedNote = note.trim();
       const body: Record<string, unknown> = {
         scope,
         name: name.trim(),
-        ...(versionNote.trim() ? { versionNote: versionNote.trim() } : {}),
+        ...(!trimmedUrl && trimmedNote ? { versionNote: trimmedNote } : {}),
       };
       if (trimmedUrl) {
         body.location = {
           provider,
           url: trimmedUrl,
           extractCode: extractCode.trim() || null,
-          isFolder,
-          expiresAt: expiresAt.trim() || null,
-          note: locationNote.trim(),
+          isFolder: false,
+          note: trimmedNote,
         };
       }
       return apiFetch<ArtifactDetail>('/api/artifacts', {
@@ -131,15 +135,33 @@ export function CreateArtifactModal({
     mutation.mutate();
   };
 
+  const displayTags: ScopeTagItem[] =
+    scopeTags && scopeTags.length > 0 ? scopeTags : [{ kind: 'doc', label: scopeLabel }];
+
   return (
-    <ModalDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="新建资源"
-      description={`挂载位置：${scopeLabel}`}
-      maxWidthClass="max-w-lg"
-    >
+    <ModalDialog open={open} onOpenChange={onOpenChange} title="新建资源" maxWidthClass="max-w-lg">
       <form onSubmit={handleSubmit} className="space-y-3" data-testid="artifact-create-form">
+        {/* 亮色层级归属标签：工作表 - 作品 - 任务 - 工序 */}
+        <div
+          data-testid="artifact-scope-tags"
+          className="flex flex-wrap items-center gap-1 rounded-lg border border-black/[0.06] bg-[#fafafa] px-2.5 py-2"
+        >
+          <span className="mr-1 text-[11px] font-medium text-zinc-500">挂载位置</span>
+          {displayTags.map((tag, idx) => (
+            <span key={`${tag.kind}-${tag.label}`} className="inline-flex items-center gap-1">
+              {idx > 0 && <ChevronRight className="h-3 w-3 text-zinc-300" />}
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1',
+                  SCOPE_TAG_STYLES[tag.kind],
+                )}
+              >
+                {tag.label}
+              </span>
+            </span>
+          ))}
+        </div>
+
         {error && <Alert variant="error">{error}</Alert>}
 
         <SharePasteInput onParsed={handleParsed} />
@@ -205,70 +227,16 @@ export function CreateArtifactModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <Label>链接指向类型</Label>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setIsFolder(false)}
-                className={cn(
-                  'inline-flex h-9 items-center justify-center gap-1.5 rounded-md border text-xs font-medium transition-colors cursor-pointer',
-                  !isFolder
-                    ? 'border-zinc-900 bg-zinc-900 text-white'
-                    : 'border-black/[0.12] bg-white text-zinc-700 hover:bg-black/[0.04]',
-                )}
-              >
-                <FileIcon className="h-3.5 w-3.5" />
-                文件
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsFolder(true)}
-                className={cn(
-                  'inline-flex h-9 items-center justify-center gap-1.5 rounded-md border text-xs font-medium transition-colors cursor-pointer',
-                  isFolder
-                    ? 'border-zinc-900 bg-zinc-900 text-white'
-                    : 'border-black/[0.12] bg-white text-zinc-700 hover:bg-black/[0.04]',
-                )}
-              >
-                <Folder className="h-3.5 w-3.5" />
-                文件夹
-              </button>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="art-expires">有效期至（可选）</Label>
-            <Input
-              id="art-expires"
-              type="date"
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="art-ver-note">v1 版本说明（可选）</Label>
-            <Input
-              id="art-ver-note"
-              value={versionNote}
-              onChange={(e) => setVersionNote(e.target.value)}
-              placeholder="如：蓝光原片 / 初版"
-              maxLength={200}
-            />
-          </div>
-          <div>
-            <Label htmlFor="art-loc-note">入口备注（可选）</Label>
-            <Input
-              id="art-loc-note"
-              value={locationNote}
-              onChange={(e) => setLocationNote(e.target.value)}
-              placeholder="如：主链 / 备用镜像"
-              maxLength={200}
-            />
-          </div>
+        <div>
+          <Label htmlFor="art-note">备注（可选）</Label>
+          <Input
+            id="art-note"
+            data-testid="artifact-note-input"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="补充说明（如版本特点、镜像来源等）"
+            maxLength={200}
+          />
         </div>
 
         <div className="flex justify-end gap-2 pt-2">

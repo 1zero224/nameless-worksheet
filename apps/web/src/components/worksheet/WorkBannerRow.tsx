@@ -1,5 +1,5 @@
 import { useDroppable } from '@dnd-kit/core';
-import type { Work, WorkCapsuleSummary } from '@nw/shared';
+import type { ArtifactDetail, Work, WorkCapsuleSummary } from '@nw/shared';
 import {
   ChevronDown,
   ChevronRight,
@@ -13,8 +13,16 @@ import {
   Unlink,
 } from 'lucide-react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
-import { ArtifactQuickPopoverContent } from '@/components/artifact/ArtifactQuickPopover.js';
+import { CreateArtifactModal } from '@/components/artifact/ArtifactFormModal.js';
+import {
+  ArtifactQuickPopoverContent,
+  type QuickCreateRequest,
+} from '@/components/artifact/ArtifactQuickPopover.js';
 import { isSafeExternalUrl } from '@/components/artifact/utils.js';
+import {
+  CreateVersionModal,
+  LocationFormModal,
+} from '@/components/artifact/VersionAndLocationModals.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,31 +30,57 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Popover,
+  PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
 } from '@/components/ui/overlays.js';
 import { Button, cn } from '@/components/ui/primitives.js';
 
-/** 阶段 3 作品大标题横幅右侧共用资源快捷槽位 */
+interface WorkSlotPopoverState {
+  key: string;
+  focusArtifactId?: string;
+  rect: { left: number; top: number; width: number; height: number };
+}
+
+/** 阶段 3 作品大标题横幅共用资源快捷槽位 */
 export function WorkAttachmentSlots({
   worksheetId,
+  worksheetName = '',
   workId,
   workName,
   capsules = [],
 }: {
   worksheetId: string;
+  worksheetName?: string;
   workId: string;
   workName: string;
   capsules?: WorkCapsuleSummary[];
 }) {
-  const [manageOpen, setManageOpen] = useState(false);
-  const [openCapsuleId, setOpenCapsuleId] = useState<string | null>(null);
+  // 整个作品槽位共用唯一一个 Popover，切换不同资源胶囊时直接切换锚点与焦点资源，杜绝双 Popover 互相关闭闪退
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [openTarget, setOpenTarget] = useState<WorkSlotPopoverState | null>(null);
+  const [createReq, setCreateReq] = useState<QuickCreateRequest | null>(null);
+  const [versionTarget, setVersionTarget] = useState<ArtifactDetail | null>(null);
+  const [locationTarget, setLocationTarget] = useState<ArtifactDetail | null>(null);
 
   const visibleCapsules = capsules.slice(0, 3);
   const overflowCount = Math.max(0, capsules.length - visibleCapsules.length);
 
+  const handleToggleSlot = (key: string, el: HTMLButtonElement, focusArtifactId?: string) => {
+    const r = el.getBoundingClientRect();
+    setOpenTarget((prev) =>
+      prev?.key === key
+        ? null
+        : {
+            key,
+            focusArtifactId,
+            rect: { left: r.left, top: r.top, width: r.width, height: r.height },
+          },
+    );
+  };
+
   return (
     <div
+      ref={containerRef}
       className="flex shrink-0 items-center gap-1"
       data-testid="work-attachment-slots"
       data-work-attachment-slots={workId}
@@ -75,84 +109,156 @@ export function WorkAttachmentSlots({
           );
         }
 
+        const isActive = openTarget?.key === cap.artifactId;
         return (
-          <Popover
+          <button
             key={cap.artifactId}
-            open={openCapsuleId === cap.artifactId}
-            onOpenChange={(next) => setOpenCapsuleId(next ? cap.artifactId : null)}
+            type="button"
+            data-work-slot-trigger={cap.artifactId}
+            data-testid={`work-capsule-popover-${cap.artifactId}`}
+            aria-expanded={isActive}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleSlot(cap.artifactId, e.currentTarget, cap.artifactId);
+            }}
+            title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击查看入口与提取码`}
+            className={cn(
+              'inline-flex h-6 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-zinc-700 ring-1 transition-colors hover:text-indigo-700 hover:ring-indigo-300 cursor-pointer',
+              isActive ? 'text-indigo-700 ring-indigo-400' : 'ring-black/[0.08]',
+            )}
           >
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                data-testid={`work-capsule-popover-${cap.artifactId}`}
-                onClick={(e) => e.stopPropagation()}
-                title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击查看入口与提取码`}
-                className="inline-flex h-6 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-zinc-700 ring-1 ring-black/[0.08] transition-colors hover:text-indigo-700 hover:ring-indigo-300 cursor-pointer"
-              >
-                {cap.hasExtractCode ? (
-                  <KeyRound className="h-3 w-3 shrink-0 text-amber-600" />
-                ) : (
-                  <Link2 className="h-3 w-3 shrink-0 text-indigo-500" />
-                )}
-                <span className="max-w-[92px] truncate">{cap.name}</span>
-                {cap.locationCount > 1 && (
-                  <span className="text-[10px] text-zinc-400 tabular-nums">
-                    {cap.locationCount}
-                  </span>
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              sideOffset={6}
-              onClick={(e) => e.stopPropagation()}
-              className="w-[min(360px,calc(100vw-1.5rem))] p-3"
-            >
-              <ArtifactQuickPopoverContent
-                target={{
-                  kind: 'work',
-                  worksheetId,
-                  workId,
-                  workName,
-                  focusArtifactId: cap.artifactId,
-                }}
-                onClose={() => setOpenCapsuleId(null)}
-              />
-            </PopoverContent>
-          </Popover>
+            {cap.hasExtractCode ? (
+              <KeyRound className="h-3 w-3 shrink-0 text-amber-600" />
+            ) : (
+              <Link2 className="h-3 w-3 shrink-0 text-indigo-500" />
+            )}
+            <span className="max-w-[92px] truncate">{cap.name}</span>
+            {cap.locationCount > 1 && (
+              <span className="text-[10px] text-zinc-400 tabular-nums">{cap.locationCount}</span>
+            )}
+          </button>
         );
       })}
 
-      <Popover open={manageOpen} onOpenChange={setManageOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            data-testid={`work-add-attachment-${workId}`}
-            aria-label={`作品 ${workName} 共用资源`}
-            title="管理或添加作品共用资源"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-6 items-center gap-1 rounded-md border border-dashed border-indigo-300/90 bg-white/85 px-1.5 text-[11px] font-medium text-indigo-700/80 transition-colors hover:border-indigo-400 hover:bg-white hover:text-indigo-900 cursor-pointer"
-          >
-            <Paperclip className="h-3 w-3" />
-            {overflowCount > 0 ? (
-              <span className="tabular-nums">+{overflowCount}</span>
-            ) : (
-              <span className="hidden sm:inline">附件</span>
-            )}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          sideOffset={6}
-          onClick={(e) => e.stopPropagation()}
-          className="w-[min(360px,calc(100vw-1.5rem))] p-3"
+      <button
+        type="button"
+        data-work-slot-trigger="manage"
+        data-testid={`work-add-attachment-${workId}`}
+        aria-label={`作品 ${workName} 共用资源`}
+        aria-expanded={openTarget?.key === 'manage'}
+        title="管理或添加作品共用资源"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleToggleSlot('manage', e.currentTarget);
+        }}
+        className={cn(
+          'inline-flex h-6 items-center gap-1 rounded-md border border-dashed bg-white/85 px-1.5 text-[11px] font-medium transition-colors hover:border-indigo-400 hover:bg-white hover:text-indigo-900 cursor-pointer',
+          openTarget?.key === 'manage'
+            ? 'border-indigo-400 bg-white text-indigo-900'
+            : 'border-indigo-300/90 text-indigo-700/80',
+        )}
+      >
+        <Paperclip className="h-3 w-3" />
+        {overflowCount > 0 ? (
+          <span className="tabular-nums">+{overflowCount}</span>
+        ) : (
+          <span className="hidden sm:inline">附件</span>
+        )}
+      </button>
+
+      {openTarget && (
+        <Popover
+          open
+          onOpenChange={(next) => {
+            if (!next) setOpenTarget(null);
+          }}
         >
-          <ArtifactQuickPopoverContent
-            target={{ kind: 'work', worksheetId, workId, workName }}
-            onClose={() => setManageOpen(false)}
-          />
-        </PopoverContent>
-      </Popover>
+          <PopoverAnchor asChild>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none fixed"
+              style={{
+                left: openTarget.rect.left,
+                top: openTarget.rect.top,
+                width: openTarget.rect.width,
+                height: openTarget.rect.height,
+              }}
+            />
+          </PopoverAnchor>
+          <PopoverContent
+            key={openTarget.key}
+            align="start"
+            sideOffset={6}
+            onClick={(e) => e.stopPropagation()}
+            onCloseAutoFocus={(e) => e.preventDefault()}
+            onPointerDownOutside={(e) => {
+              const targetEl = e.target as HTMLElement | null;
+              if (
+                targetEl &&
+                containerRef.current?.contains(targetEl) &&
+                targetEl.closest('[data-work-slot-trigger]')
+              ) {
+                e.preventDefault();
+              }
+            }}
+            className="w-[min(360px,calc(100vw-1.5rem))] p-3"
+          >
+            <ArtifactQuickPopoverContent
+              target={{
+                kind: 'work',
+                worksheetId,
+                worksheetName,
+                workId,
+                workName,
+                focusArtifactId: openTarget.focusArtifactId,
+              }}
+              onClose={() => setOpenTarget(null)}
+              onRequestCreate={(req) => setCreateReq(req)}
+              onRequestCreateVersion={(art) => setVersionTarget(art)}
+              onRequestAddLocation={(art) => setLocationTarget(art)}
+            />
+          </PopoverContent>
+        </Popover>
+      )}
+
+      {createReq && (
+        <CreateArtifactModal
+          open
+          onOpenChange={(o) => {
+            if (!o) setCreateReq(null);
+          }}
+          scope={createReq.scope}
+          scopeLabel={createReq.scopeLabel}
+          scopeTags={createReq.scopeTags}
+          defaultName={createReq.defaultName}
+          worksheetId={createReq.worksheetId}
+        />
+      )}
+
+      {versionTarget && (
+        <CreateVersionModal
+          open
+          onOpenChange={(o) => {
+            if (!o) setVersionTarget(null);
+          }}
+          artifact={versionTarget}
+        />
+      )}
+
+      {locationTarget?.latestVersion && (
+        <LocationFormModal
+          open
+          onOpenChange={(o) => {
+            if (!o) setLocationTarget(null);
+          }}
+          target={{
+            mode: 'create',
+            artifact: locationTarget,
+            versionId: locationTarget.latestVersion.id,
+            versionNumber: locationTarget.latestVersion.versionNumber,
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -251,11 +357,11 @@ export function WorkBannerRow({
     >
       <td colSpan={colSpan} className="p-0 align-middle">
         <div
-          className="sticky left-0 flex min-h-[38px] items-center justify-between gap-2 px-2.5 py-1"
+          className="sticky left-0 flex min-h-[38px] items-center justify-start gap-2 px-2.5 py-1"
           style={{ width: 'min(100%, var(--ws-scroll-w, 100%))' }}
         >
           {/* 左侧：色条 + 折叠箭头 + 作品名 + 紧凑进度统计 */}
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="flex min-w-0 shrink items-center gap-1.5">
             <span aria-hidden="true" className="h-4 w-1 shrink-0 rounded-full bg-indigo-500/85" />
 
             <button
@@ -307,7 +413,7 @@ export function WorkBannerRow({
                 type="button"
                 onDoubleClick={() => setRenaming(true)}
                 title={`${work.name}（双击重命名）`}
-                className="min-w-0 truncate text-left text-[13px] font-semibold text-slate-800 hover:text-indigo-700 cursor-text"
+                className="min-w-0 max-w-[240px] truncate text-left text-[13px] font-semibold text-slate-800 hover:text-indigo-700 cursor-text"
               >
                 {work.name}
               </button>
@@ -435,10 +541,6 @@ export function InlineAddSegmentRow({
       className="h-9 border-b border-indigo-200/80 bg-indigo-50/40"
     >
       <td className="sticky left-0 z-20 h-9 w-10 min-w-10 border-r border-slate-200/80 bg-indigo-50/80 text-center text-indigo-500">
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-indigo-400/75"
-        />
         <Plus className="mx-auto h-3.5 w-3.5" />
       </td>
       <td colSpan={colSpan - 1} className="h-9 p-0 align-middle">

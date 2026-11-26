@@ -301,9 +301,13 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await expect(directCapsule).toHaveAttribute('href', 'https://mega.nz/file/p3workraw');
     await expect(directCapsule).toHaveAttribute('target', '_blank');
 
-    // 通过作品横幅 `+ 附件` 再挂一个带提取码的共用资源
+    // 通过作品横幅 `+ 附件` 再挂两个带提取码的共用资源，并验证点击切换不同作品资源弹窗不会闪退
     await page.getByTestId(`work-add-attachment-${work.id}`).click();
     await page.getByTestId('quick-popover-add-btn').click();
+    // 新建资源窗口弹出时，背后的资源浮层已自动关闭（只聚焦新建资源窗口）
+    await expect(page.getByTestId('artifact-quick-popover')).toHaveCount(0);
+    await expect(page.getByTestId('artifact-scope-tags')).toContainText('阶段3资源表');
+    await expect(page.getByTestId('artifact-scope-tags')).toContainText('5th-BD');
     await page
       .getByTestId('share-paste-input')
       .fill('通用字体包 https://pan.baidu.com/s/1p3fonts 提取码：f0nt');
@@ -313,7 +317,39 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await expect(page.locator(`[data-work-attachment-slots="${work.id}"]`)).toContainText(
       '通用字体包',
     );
+
+    // 挂第二个带提取码的共用资源（验证连续点击同一作品的两个共用资源胶囊弹窗稳定切换不闪退）
+    const extraWorkArtRes = await request.post(`${ORIGIN}/api/artifacts`, {
+      headers: authHdr,
+      data: {
+        scope: { kind: 'work', workId: work.id },
+        name: '场刊扫描',
+        location: {
+          url: 'https://pan.baidu.com/s/1p3booklet',
+          extractCode: 'bk22',
+          isFolder: false,
+        },
+      },
+    });
+    expect(extraWorkArtRes.ok()).toBe(true);
+    const extraWorkArt = (await extraWorkArtRes.json()) as { id: string };
+
+    await page.reload();
+    await expect(page.getByTestId(`work-banner-${work.id}`)).toBeVisible();
+    const fontCapsule = page
+      .locator(`[data-work-attachment-slots="${work.id}"] [data-testid^="work-capsule-popover-"]`, {
+        hasText: '通用字体包',
+      })
+      .first();
+    const bookletCapsule = page.getByTestId(`work-capsule-popover-${extraWorkArt.id}`);
+    await fontCapsule.click();
+    await expect(page.getByTestId('artifact-quick-popover')).toContainText('f0nt');
+    // 直接点击同一作品的另一个共用资源胶囊 -> 浮层切换后保持稳定打开并显示新资源提取码
+    await bookletCapsule.click();
+    await expect(page.getByTestId('artifact-quick-popover')).toBeVisible();
+    await expect(page.getByTestId('artifact-quick-popover')).toContainText('bk22');
     await page.getByTestId('quick-popover-close-btn').click();
+    await expect(page.getByTestId('artifact-quick-popover')).toHaveCount(0);
 
     // 为作品添加一条分段任务，并让当前用户认领「时轴」为进行中（以便出现在看板与我的任务）
     const taskRes = await request.post(`${ORIGIN}/api/worksheets/${worksheet.id}/tasks`, {
@@ -328,6 +364,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
       data: {
         assignees: [{ type: 'user', userId: userA.userId }],
         status: 'in_progress',
+        note: '先校时间轴',
         baseRevision: 0,
         force: true,
       },
@@ -336,41 +373,49 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await page.reload();
     await expect(page.getByTestId(`work-banner-${work.id}`)).toBeVisible();
 
-    // V1: 点击「时轴」工序格 -> 点击「+ 添加资源」-> 验证资源名默认预填工序名「时轴」
+    // V1: 点击「时轴」工序格 -> 点击「+ 添加资源」-> 验证亮色层级标签与默认资源名「作品名-任务名-工序」
     const stagePt = await waitForCanvasPoint(page, 'getCellPoint', task.id, timingCol.id);
     await page.mouse.click(stagePt.x, stagePt.y);
     await expect(page.getByTestId('stage-cell-popover')).toBeVisible();
     await page.getByTestId('stage-popover-manage-artifacts').click();
     await expect(page.getByTestId('artifact-quick-popover')).toBeVisible();
     await page.getByTestId('quick-popover-add-btn').click();
-    await expect(page.getByTestId('artifact-name-input')).toHaveValue('时轴');
+    await expect(page.getByTestId('artifact-quick-popover')).toHaveCount(0);
+    await expect(page.getByTestId('artifact-scope-tags')).toContainText('阶段3资源表');
+    await expect(page.getByTestId('artifact-scope-tags')).toContainText('5th-BD');
+    await expect(page.getByTestId('artifact-scope-tags')).toContainText('Disc 1 正片');
+    await expect(page.getByTestId('artifact-scope-tags')).toContainText('时轴');
+    await expect(page.getByTestId('artifact-name-input')).toHaveValue('5th-BD-Disc 1 正片-时轴');
     await page
       .getByTestId('share-paste-input')
       .fill('https://pan.quark.cn/s/p3timingv1 提取码：qk88');
     await page.getByTestId('artifact-submit-btn').click();
-    await expect(page.getByTestId('artifact-quick-popover')).toContainText('qk88');
+    await expect(page.getByTestId('artifact-create-form')).toHaveCount(0);
 
-    // 关闭弹层后，直接点击 Canvas 工序格右侧角标热区 -> 弹出轻量快速取用浮层（非大侧栏）
-    await page.getByTestId('quick-popover-close-btn').click();
-    await expect(page.getByTestId('artifact-quick-popover')).toHaveCount(0);
-
+    // 直接点击 Canvas 工序格右侧角标热区 -> 弹出靠左对齐的轻量快速取用浮层（非大侧栏）
     const badgePt = await waitForCanvasPoint(page, 'getStageBadgePoint', task.id, timingCol.id);
     await page.mouse.click(badgePt.x, badgePt.y);
     const quickPop = page.getByTestId('artifact-quick-popover');
     await expect(quickPop).toBeVisible();
-    await expect(quickPop).toContainText('时轴');
+    await expect(quickPop).toContainText('5th-BD-Disc 1 正片-时轴');
     await expect(quickPop).toContainText('qk88');
     await expect(quickPop.getByRole('button', { name: '复制提取码' })).toBeVisible();
     await page.keyboard.press('Escape');
 
-    // 点击固定「文件」列 -> 打开 TaskDetailDrawer，顶部透出作品共用资源，下方按工序与任务分组
+    // 点击固定「文件」列 -> 打开 TaskDetailDrawer，作品共用资源位于最下方，上方按工序与任务分组
     const filesPt = await waitForCanvasPoint(page, 'getCellPoint', task.id, 'files');
     await page.mouse.click(filesPt.x, filesPt.y);
     const drawer = page.getByTestId('task-detail-drawer');
     await expect(drawer).toBeVisible();
     await expect(page.getByTestId('work-shared-attachments-slot')).toContainText('全篇原片');
     await expect(page.getByTestId('work-shared-attachments-slot')).toContainText('通用字体包');
-    await expect(page.getByTestId(`drawer-stage-files-${timingCol.id}`)).toContainText('时轴');
+    await expect(page.getByTestId(`drawer-stage-files-${timingCol.id}`)).toContainText(
+      '5th-BD-Disc 1 正片-时轴',
+    );
+    // 验证作品共用资源卡片位于任务文件区的下方（而非顶部）
+    const taskFilesBox = await page.getByTestId('task-files-section').boundingBox();
+    const workSharedBox = await page.getByTestId('work-shared-attachments-slot').boundingBox();
+    expect(taskFilesBox && workSharedBox && workSharedBox.y > taskFilesBox.y).toBe(true);
 
     // 在详情侧栏新建任务级资源
     await page.getByTestId('drawer-add-task-artifact').click();
@@ -387,11 +432,11 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
       .getByTestId('board-columns')
       .getByTestId(`card-resources-btn-${task.id}`)
       .first();
-    await expect(boardCardResBtn).toContainText('4'); // 2 work shared + 1 stage + 1 task
+    await expect(boardCardResBtn).toContainText('5'); // 3 work shared + 1 stage + 1 task
     await boardCardResBtn.click();
     const resPopover = page.getByTestId(`task-resources-popover-${task.id}`);
     await expect(resPopover).toContainText('全篇原片');
-    await expect(resPopover).toContainText('时轴');
+    await expect(resPopover).toContainText('5th-BD-Disc 1 正片-时轴');
     await expect(resPopover).toContainText('任务校对备注');
     await expect(resPopover.getByRole('button', { name: '复制提取码' }).first()).toBeVisible();
     await page.keyboard.press('Escape');
@@ -419,13 +464,15 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
 
     const filesPt2 = await waitForCanvasPoint(page, 'getCellPoint', task.id, 'files');
     await page.mouse.click(filesPt2.x, filesPt2.y);
-    await expect(page.getByTestId('drawer-task-other-files')).toContainText('时轴');
+    await expect(page.getByTestId('drawer-task-other-files')).toContainText(
+      '5th-BD-Disc 1 正片-时轴',
+    );
     await page.getByRole('button', { name: '关闭侧栏' }).click();
 
     // V8: 解散分组保护（默认保留作品横幅与共用资源；勾选后一并软删并可在修改记录恢复）
     await page.getByRole('button', { name: `作品操作 ${work.name}` }).click();
     await page.getByRole('menuitem', { name: '解散分组（移出任务）' }).click();
-    await expect(page.getByTestId('ungroup-shared-dialog')).toContainText('2 个共用资源');
+    await expect(page.getByTestId('ungroup-shared-dialog')).toContainText('3 个共用资源');
     await expect(page.getByTestId('ungroup-delete-shared-checkbox')).not.toBeChecked();
     await page.getByTestId('ungroup-confirm-btn').click();
     // 默认保留 -> 作品横幅与共用资源仍在

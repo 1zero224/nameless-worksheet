@@ -141,6 +141,7 @@ export function DocsPage() {
         onOpenChange={setCreateOpen}
         scope={{ kind: 'doc' }}
         scopeLabel="通用文档"
+        scopeTags={[{ kind: 'doc', label: '通用文档' }]}
       />
 
       <ChangeLogDrawer mode="docs" open={logsOpen} onOpenChange={setLogsOpen} />

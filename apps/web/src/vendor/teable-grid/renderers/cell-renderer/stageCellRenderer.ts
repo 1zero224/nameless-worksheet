@@ -91,23 +91,6 @@ function drawCheckIcon(ctx: CanvasRenderingContext2D, x: number, y: number, colo
   ctx.restore();
 }
 
-function drawNoteMicroIcon(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.2;
-  ctx.lineJoin = 'round';
-  ctx.beginPath();
-  ctx.roundRect(x, y, 11, 9, 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x + 2.5, y + 3.5);
-  ctx.lineTo(x + 8.5, y + 3.5);
-  ctx.moveTo(x + 2.5, y + 6);
-  ctx.lineTo(x + 6.5, y + 6);
-  ctx.stroke();
-  ctx.restore();
-}
-
 export const stageCellRenderer: IInternalCellRenderer<IStageCell> = {
   type: CellType.Stage,
   needsHover: true,
@@ -195,15 +178,7 @@ export const stageCellRenderer: IInternalCellRenderer<IStageCell> = {
       rightReserved += badgeW + 6;
     }
 
-    if (note) {
-      const iconW = 11;
-      const iconX = x + width - rightReserved - iconW;
-      const iconY = y + (height - 9) / 2;
-      drawNoteMicroIcon(ctx, iconX, iconY, '#A1A1AA');
-      rightReserved += iconW + 6;
-    }
-
-    // 4. Left status indicator + assignee text
+    // 4. Left status indicator + assignee text + inline note right next to the name
     let leftX = x + cellHorizontalPadding + (palette.accent ? 2 : 0);
     const centerY = y + height / 2;
 
@@ -242,15 +217,46 @@ export const stageCellRenderer: IInternalCellRenderer<IStageCell> = {
       labelColor = palette.text;
     }
 
+    const trimmedNote = note?.trim() ?? '';
     if (availableTextW > 4) {
-      drawSingleLineText(ctx, {
-        x: leftX,
-        y: centerY - theme.fontSizeSM / 2,
-        text: label,
-        fill: labelColor,
-        fontSize: theme.fontSizeSM,
-        maxWidth: availableTextW,
-      });
+      if (trimmedNote && availableTextW >= 56) {
+        const measuredLabelW = ctx.measureText(label).width;
+        const labelMaxW = Math.min(measuredLabelW + 1, Math.max(40, availableTextW - 32));
+        drawSingleLineText(ctx, {
+          x: leftX,
+          y: centerY - theme.fontSizeSM / 2,
+          text: label,
+          fill: labelColor,
+          fontSize: theme.fontSizeSM,
+          maxWidth: labelMaxW,
+        });
+
+        const noteX = leftX + Math.min(measuredLabelW, labelMaxW) + 5;
+        const noteMaxW = leftX + availableTextW - noteX;
+        if (noteMaxW > 12) {
+          const noteFontSize = Math.max(10, theme.fontSizeSM - 1);
+          const noteColor =
+            status === 'not_started' && !isMissing ? '#71717A' : palette.mutedText;
+          ctx.font = `400 ${noteFontSize}px ${theme.fontFamily}`;
+          drawSingleLineText(ctx, {
+            x: noteX,
+            y: centerY - noteFontSize / 2,
+            text: `· ${trimmedNote}`,
+            fill: noteColor,
+            fontSize: noteFontSize,
+            maxWidth: noteMaxW,
+          });
+        }
+      } else {
+        drawSingleLineText(ctx, {
+          x: leftX,
+          y: centerY - theme.fontSizeSM / 2,
+          text: label,
+          fill: labelColor,
+          fontSize: theme.fontSizeSM,
+          maxWidth: availableTextW,
+        });
+      }
     }
 
     ctx.restore();

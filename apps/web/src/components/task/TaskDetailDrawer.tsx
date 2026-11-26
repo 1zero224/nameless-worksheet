@@ -35,6 +35,11 @@ import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { ArtifactCardList } from '@/components/artifact/ArtifactCardList.js';
 import { CreateArtifactModal } from '@/components/artifact/ArtifactFormModal.js';
+import {
+  buildDefaultArtifactName,
+  buildScopeTags,
+  type ScopeTagItem,
+} from '@/components/artifact/utils.js';
 import { PRIORITY_DOT_STYLES, STAGE_STATUS_STYLES } from '@/components/ui/colors.js';
 import { Sheet, useToast } from '@/components/ui/overlays.js';
 import { Button, cn, Input, Label } from '@/components/ui/primitives.js';
@@ -62,6 +67,7 @@ export function TaskDetailDrawer({
   const [createArtConfig, setCreateArtConfig] = useState<{
     scope: ArtifactScope;
     scopeLabel: string;
+    scopeTags: ScopeTagItem[];
     defaultName?: string;
   } | null>(null);
   const filesSectionRef = useRef<HTMLDivElement | null>(null);
@@ -260,40 +266,6 @@ export function TaskDetailDrawer({
               删除任务
             </Button>
           </div>
-
-          {/* 所属作品共用资源（位于侧栏顶部，打开分段任务自动透出） */}
-          {currentWork && (
-            <div
-              data-testid="work-shared-attachments-slot"
-              className="rounded-lg border border-indigo-200/80 bg-indigo-50/35 p-3 space-y-2.5"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-indigo-950">
-                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
-                  <span className="truncate">所属作品「{currentWork.name}」共用资源</span>
-                </span>
-                <button
-                  type="button"
-                  data-testid="drawer-add-work-artifact"
-                  onClick={() =>
-                    setCreateArtConfig({
-                      scope: { kind: 'work', workId: currentWork.id },
-                      scopeLabel: `作品「${currentWork.name}」共用`,
-                    })
-                  }
-                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-indigo-200 bg-white px-2 text-[11px] font-medium text-indigo-800 hover:bg-indigo-50 cursor-pointer"
-                >
-                  <Plus className="h-3 w-3" />
-                  添加共用资源
-                </button>
-              </div>
-              <ArtifactCardList
-                artifacts={taskArtifactsData?.workArtifacts ?? []}
-                compact
-                emptyText="暂无作品共用资源，可点击右上角添加整片原片或通用字体包"
-              />
-            </div>
-          )}
 
           {/* 标题 */}
           <div>
@@ -554,8 +526,25 @@ export function TaskDetailDrawer({
                           onClick={() =>
                             setCreateArtConfig({
                               scope: { kind: 'stage', taskId: task.id, stageColumnId: col.id },
-                              scopeLabel: `任务「${task.title}」· ${col.name}`,
-                              defaultName: col.name,
+                              scopeLabel: [
+                                wsData.worksheet.name,
+                                currentWork?.name,
+                                task.title,
+                                col.name,
+                              ]
+                                .filter(Boolean)
+                                .join(' - '),
+                              scopeTags: buildScopeTags({
+                                worksheetName: wsData.worksheet.name,
+                                workName: currentWork?.name,
+                                taskTitle: task.title,
+                                stageColumnName: col.name,
+                              }),
+                              defaultName: buildDefaultArtifactName({
+                                workName: currentWork?.name,
+                                taskTitle: task.title,
+                                stageColumnName: col.name,
+                              }),
                             })
                           }
                           className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
@@ -591,7 +580,18 @@ export function TaskDetailDrawer({
                   onClick={() =>
                     setCreateArtConfig({
                       scope: { kind: 'task', taskId: task.id },
-                      scopeLabel: `任务「${task.title}」`,
+                      scopeLabel: [wsData.worksheet.name, currentWork?.name, task.title]
+                        .filter(Boolean)
+                        .join(' - '),
+                      scopeTags: buildScopeTags({
+                        worksheetName: wsData.worksheet.name,
+                        workName: currentWork?.name,
+                        taskTitle: task.title,
+                      }),
+                      defaultName: buildDefaultArtifactName({
+                        workName: currentWork?.name,
+                        taskTitle: task.title,
+                      }),
                     })
                   }
                   className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
@@ -616,6 +616,7 @@ export function TaskDetailDrawer({
               }}
               scope={createArtConfig.scope}
               scopeLabel={createArtConfig.scopeLabel}
+              scopeTags={createArtConfig.scopeTags}
               defaultName={createArtConfig.defaultName}
               worksheetId={worksheetId}
             />
@@ -661,6 +662,44 @@ export function TaskDetailDrawer({
               </div>
             )}
           </div>
+
+          {/* 所属作品共用资源（置于详情侧栏最下方，不干扰上方任务核心字段与本任务交付） */}
+          {currentWork && (
+            <div
+              data-testid="work-shared-attachments-slot"
+              className="rounded-lg border border-indigo-200/80 bg-indigo-50/35 p-3 space-y-2.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-indigo-950">
+                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                  <span className="truncate">所属作品「{currentWork.name}」共用资源</span>
+                </span>
+                <button
+                  type="button"
+                  data-testid="drawer-add-work-artifact"
+                  onClick={() =>
+                    setCreateArtConfig({
+                      scope: { kind: 'work', workId: currentWork.id },
+                      scopeLabel: `${wsData.worksheet.name} - ${currentWork.name}`,
+                      scopeTags: buildScopeTags({
+                        worksheetName: wsData.worksheet.name,
+                        workName: currentWork.name,
+                      }),
+                    })
+                  }
+                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-indigo-200 bg-white px-2 text-[11px] font-medium text-indigo-800 hover:bg-indigo-50 cursor-pointer"
+                >
+                  <Plus className="h-3 w-3" />
+                  添加共用资源
+                </button>
+              </div>
+              <ArtifactCardList
+                artifacts={taskArtifactsData?.workArtifacts ?? []}
+                compact
+                emptyText="暂无作品共用资源，可点击右上角添加整片原片或通用字体包"
+              />
+            </div>
+          )}
         </div>
       )}
     </Sheet>

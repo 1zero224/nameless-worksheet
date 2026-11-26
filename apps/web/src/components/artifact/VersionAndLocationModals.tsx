@@ -9,13 +9,12 @@ import {
   type ResourceLocation,
 } from '@nw/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { File as FileIcon, Folder } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { SharePasteInput } from '@/components/artifact/SharePasteInput.js';
 import { invalidateArtifactQueries } from '@/components/artifact/utils.js';
 import { ModalDialog, useToast } from '@/components/ui/overlays.js';
-import { Alert, Button, cn, Input, Label } from '@/components/ui/primitives.js';
+import { Alert, Button, Input, Label } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
 
 export function CreateVersionModal({
@@ -37,9 +36,6 @@ export function CreateVersionModal({
   const [provider, setProvider] = useState<CloudProvider>('other');
   const [providerTouched, setProviderTouched] = useState(false);
   const [extractCode, setExtractCode] = useState('');
-  const [isFolder, setIsFolder] = useState(false);
-  const [expiresAt, setExpiresAt] = useState('');
-  const [locationNote, setLocationNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,9 +45,6 @@ export function CreateVersionModal({
       setProvider('other');
       setProviderTouched(false);
       setExtractCode('');
-      setIsFolder(false);
-      setExpiresAt('');
-      setLocationNote('');
       setError(null);
     }
   }, [open]);
@@ -81,9 +74,8 @@ export function CreateVersionModal({
           provider,
           url: trimmedUrl,
           extractCode: extractCode.trim() || null,
-          isFolder,
-          expiresAt: expiresAt.trim() || null,
-          note: locationNote.trim(),
+          isFolder: false,
+          note: '',
         };
       }
       return apiFetch<ArtifactVersionDetail>(`/api/artifacts/${artifact.id}/versions`, {
@@ -121,7 +113,7 @@ export function CreateVersionModal({
     <ModalDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={`登记新版本（v${nextVerHint}）`}
+      title={`更新版本（v${nextVerHint}）`}
       description={
         artifact ? `资源「${artifact.name}」· 登记后立即成为最新展示版本，旧版本保留在历史中` : ''
       }
@@ -131,18 +123,6 @@ export function CreateVersionModal({
         {error && <Alert variant="error">{error}</Alert>}
 
         <SharePasteInput onParsed={handleParsed} />
-
-        <div>
-          <Label htmlFor="ver-note">版本说明（可选）</Label>
-          <Input
-            id="ver-note"
-            data-testid="version-note-input"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="例如：修正第 12 分钟错字 / 替换压制成品"
-            maxLength={200}
-          />
-        </div>
 
         <div>
           <Label htmlFor="ver-url">网盘链接（留空则创建“待补充入口”版本）</Label>
@@ -192,56 +172,14 @@ export function CreateVersionModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <Label>链接指向类型</Label>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setIsFolder(false)}
-                className={cn(
-                  'inline-flex h-9 items-center justify-center gap-1.5 rounded-md border text-xs font-medium cursor-pointer',
-                  !isFolder
-                    ? 'border-zinc-900 bg-zinc-900 text-white'
-                    : 'border-black/[0.12] bg-white text-zinc-700 hover:bg-black/[0.04]',
-                )}
-              >
-                <FileIcon className="h-3.5 w-3.5" />
-                文件
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsFolder(true)}
-                className={cn(
-                  'inline-flex h-9 items-center justify-center gap-1.5 rounded-md border text-xs font-medium cursor-pointer',
-                  isFolder
-                    ? 'border-zinc-900 bg-zinc-900 text-white'
-                    : 'border-black/[0.12] bg-white text-zinc-700 hover:bg-black/[0.04]',
-                )}
-              >
-                <Folder className="h-3.5 w-3.5" />
-                文件夹
-              </button>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="ver-expires">有效期至（可选）</Label>
-            <Input
-              id="ver-expires"
-              type="date"
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
-            />
-          </div>
-        </div>
-
         <div>
-          <Label htmlFor="ver-loc-note">入口备注（可选）</Label>
+          <Label htmlFor="ver-note">备注（可选）</Label>
           <Input
-            id="ver-loc-note"
-            value={locationNote}
-            onChange={(e) => setLocationNote(e.target.value)}
-            placeholder="如：百度主链 / MEGA 备用"
+            id="ver-note"
+            data-testid="version-note-input"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="例如：修正第 12 分钟错字 / 替换压制成品"
             maxLength={200}
           />
         </div>
@@ -251,7 +189,7 @@ export function CreateVersionModal({
             取消
           </Button>
           <Button type="submit" disabled={mutation.isPending} data-testid="version-submit-btn">
-            {mutation.isPending ? '登记中…' : '登记新版本'}
+            {mutation.isPending ? '登记中…' : '确认更新'}
           </Button>
         </div>
       </form>
@@ -290,8 +228,6 @@ export function LocationFormModal({
   const [provider, setProvider] = useState<CloudProvider>('other');
   const [providerTouched, setProviderTouched] = useState(false);
   const [extractCode, setExtractCode] = useState('');
-  const [isFolder, setIsFolder] = useState(false);
-  const [expiresAt, setExpiresAt] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -302,16 +238,12 @@ export function LocationFormModal({
       setProvider(target.location.provider ?? 'other');
       setProviderTouched(true);
       setExtractCode(target.location.extractCode ?? '');
-      setIsFolder(target.location.isFolder);
-      setExpiresAt(target.location.expiresAt ?? '');
       setNote(target.location.note);
     } else {
       setUrl('');
       setProvider('other');
       setProviderTouched(false);
       setExtractCode('');
-      setIsFolder(false);
-      setExpiresAt('');
       setNote('');
     }
     setError(null);
@@ -337,8 +269,7 @@ export function LocationFormModal({
         provider,
         url: url.trim(),
         extractCode: extractCode.trim() || null,
-        isFolder,
-        expiresAt: expiresAt.trim() || null,
+        isFolder: target.mode === 'edit' ? target.location.isFolder : false,
         note: note.trim(),
       };
       if (target.mode === 'create') {
@@ -442,49 +373,6 @@ export function LocationFormModal({
               onChange={(e) => setExtractCode(e.target.value)}
               placeholder="如 ab12"
               maxLength={32}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <Label>链接指向类型</Label>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setIsFolder(false)}
-                className={cn(
-                  'inline-flex h-9 items-center justify-center gap-1.5 rounded-md border text-xs font-medium cursor-pointer',
-                  !isFolder
-                    ? 'border-zinc-900 bg-zinc-900 text-white'
-                    : 'border-black/[0.12] bg-white text-zinc-700 hover:bg-black/[0.04]',
-                )}
-              >
-                <FileIcon className="h-3.5 w-3.5" />
-                文件
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsFolder(true)}
-                className={cn(
-                  'inline-flex h-9 items-center justify-center gap-1.5 rounded-md border text-xs font-medium cursor-pointer',
-                  isFolder
-                    ? 'border-zinc-900 bg-zinc-900 text-white'
-                    : 'border-black/[0.12] bg-white text-zinc-700 hover:bg-black/[0.04]',
-                )}
-              >
-                <Folder className="h-3.5 w-3.5" />
-                文件夹
-              </button>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="loc-expires">有效期至（可选）</Label>
-            <Input
-              id="loc-expires"
-              type="date"
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
             />
           </div>
         </div>

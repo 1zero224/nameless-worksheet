@@ -2,6 +2,40 @@ import { isValidArtifactUrl } from '@nw/shared';
 import type { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/api/keys.js';
 
+export function buildDefaultArtifactName(parts: {
+  workName?: string | null;
+  taskTitle?: string | null;
+  stageColumnName?: string | null;
+}): string {
+  return [parts.workName, parts.taskTitle, parts.stageColumnName]
+    .map((s) => s?.trim())
+    .filter((s): s is string => Boolean(s))
+    .join('-');
+}
+
+export interface ScopeTagItem {
+  kind: 'doc' | 'worksheet' | 'work' | 'task' | 'stage';
+  label: string;
+}
+
+export function buildScopeTags(ctx: {
+  isDoc?: boolean;
+  worksheetName?: string | null;
+  workName?: string | null;
+  taskTitle?: string | null;
+  stageColumnName?: string | null;
+}): ScopeTagItem[] {
+  if (ctx.isDoc) {
+    return [{ kind: 'doc', label: '通用文档' }];
+  }
+  const tags: ScopeTagItem[] = [];
+  if (ctx.worksheetName) tags.push({ kind: 'worksheet', label: ctx.worksheetName });
+  if (ctx.workName) tags.push({ kind: 'work', label: ctx.workName });
+  if (ctx.taskTitle) tags.push({ kind: 'task', label: ctx.taskTitle });
+  if (ctx.stageColumnName) tags.push({ kind: 'stage', label: ctx.stageColumnName });
+  return tags;
+}
+
 export function isSafeExternalUrl(url: string | null | undefined): url is string {
   return typeof url === 'string' && isValidArtifactUrl(url);
 }

@@ -1,4 +1,5 @@
 import {
+  type ArtifactDetail,
   type Assignee,
   type BoardColumn,
   type ColumnConfig,
@@ -47,7 +48,15 @@ import {
   useState,
 } from 'react';
 import { ApiError } from '@/api/client.js';
-import { AnchoredArtifactQuickPopover } from '@/components/artifact/ArtifactQuickPopover.js';
+import { CreateArtifactModal } from '@/components/artifact/ArtifactFormModal.js';
+import {
+  AnchoredArtifactQuickPopover,
+  type QuickCreateRequest,
+} from '@/components/artifact/ArtifactQuickPopover.js';
+import {
+  CreateVersionModal,
+  LocationFormModal,
+} from '@/components/artifact/VersionAndLocationModals.js';
 import { peerColorForUser } from '@/components/ui/colors.js';
 import {
   DropdownMenu,
@@ -132,6 +141,7 @@ function isTaskAllStagesDone(task: TaskDetail, stageCols: ColumnConfig[]): boole
 
 function CanvasWorkBannerOverlay({
   worksheetId,
+  worksheetName,
   work,
   capsules,
   top,
@@ -147,6 +157,7 @@ function CanvasWorkBannerOverlay({
   onUngroup,
 }: {
   worksheetId: string;
+  worksheetName: string;
   work: Work;
   capsules: WorkCapsuleSummary[];
   top: number;
@@ -213,9 +224,9 @@ function CanvasWorkBannerOverlay({
       data-testid={`work-banner-${work.id}`}
       data-work-banner={work.id}
       style={{ top, height }}
-      className="pointer-events-auto absolute inset-x-0 z-10 flex items-center justify-between gap-2 border-y border-indigo-200/80 bg-[#EEF2FF] px-2.5"
+      className="pointer-events-auto absolute inset-x-0 z-10 flex items-center justify-start gap-2 overflow-hidden border-y border-indigo-200/80 bg-[#EEF2FF] px-2.5"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+      <div className="flex min-w-0 shrink items-center gap-1.5">
         <span aria-hidden="true" className="h-4 w-[3px] shrink-0 rounded-full bg-indigo-500" />
 
         <button
@@ -267,7 +278,7 @@ function CanvasWorkBannerOverlay({
             type="button"
             onDoubleClick={() => setRenaming(true)}
             title={`${work.name}（双击重命名）`}
-            className="min-w-0 truncate text-left text-[13px] font-semibold text-indigo-950 hover:text-indigo-700 cursor-text"
+            className="min-w-0 max-w-[240px] truncate text-left text-[13px] font-semibold text-indigo-950 hover:text-indigo-700 cursor-text"
           >
             {work.name}
           </button>
@@ -295,6 +306,7 @@ function CanvasWorkBannerOverlay({
       <div className="flex shrink-0 items-center gap-1.5">
         <WorkAttachmentSlots
           worksheetId={worksheetId}
+          worksheetName={worksheetName}
           workId={work.id}
           workName={work.name}
           capsules={capsules}
@@ -1300,11 +1312,15 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
   const [stageQuickPopover, setStageQuickPopover] = useState<{
     taskId: string;
     taskTitle: string;
+    workName: string | null;
     stageColumnId: string;
     stageColumnName: string;
     colIndex: number;
     rowIndex: number;
   } | null>(null);
+  const [quickCreateReq, setQuickCreateReq] = useState<QuickCreateRequest | null>(null);
+  const [quickVersionTarget, setQuickVersionTarget] = useState<ArtifactDetail | null>(null);
+  const [quickLocationTarget, setQuickLocationTarget] = useState<ArtifactDetail | null>(null);
   const lastAttachmentClickTsRef = useRef(0);
   const [headerMenuTarget, setHeaderMenuTarget] = useState<{
     colDef: CanvasColumnDef;
@@ -1652,6 +1668,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                 setStageQuickPopover({
                   taskId: task.id,
                   taskTitle: task.title,
+                  workName: task.workId ? (workMap.get(task.workId)?.name ?? null) : null,
                   stageColumnId: stageColCfg.id,
                   stageColumnName: stageColCfg.name,
                   colIndex,
@@ -1999,26 +2016,11 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     return map;
   }, [displayBlocks]);
 
-  // 读取当前帧的分组头坐标、作品分段左导轨与表格底部坐标（随滚动实时更新）
+  // 读取当前帧的分组头坐标与表格底部坐标（随滚动实时更新）
   const groupHeadersLayout = useMemo(() => {
     void layoutTick;
     return gridRef.current?.getGroupHeadersLayout() ?? [];
   }, [layoutTick]);
-
-  const workRowRails = useMemo(() => {
-    void layoutTick;
-    const rails: Array<{ key: string; top: number; height: number }> = [];
-    for (let i = 0; i < visualActiveTasks.length; i++) {
-      const t = visualActiveTasks[i];
-      if (!t?.workId) continue;
-      const b = gridRef.current?.getCellBounds([0, i]);
-      if (!b) continue;
-      const relTop = b.y - 34;
-      if (relTop < -b.height || relTop > 2400) continue;
-      rails.push({ key: t.id, top: relTop, height: b.height });
-    }
-    return rails;
-  }, [layoutTick, visualActiveTasks]);
 
   const contentBottomY = useMemo(() => {
     void layoutTick;
@@ -2405,16 +2407,8 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           />
         )}
 
-        {/* 原生 LinearRowType.Group 作品大标题横幅 + 作品分段左导轨精确对齐浮层 */}
+        {/* 原生 LinearRowType.Group 作品大标题横幅精确对齐浮层 */}
         <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 overflow-hidden">
-          {workRowRails.map((rail) => (
-            <span
-              key={rail.key}
-              aria-hidden="true"
-              style={{ top: rail.top, height: rail.height }}
-              className="pointer-events-none absolute left-0 z-[5] w-[3px] bg-indigo-300/80"
-            />
-          ))}
           {groupHeadersLayout.map((hdr) => {
             const block = workBlockById.get(hdr.id);
             if (!block) return null;
@@ -2425,6 +2419,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
               <CanvasWorkBannerOverlay
                 key={block.work.id}
                 worksheetId={worksheet.id}
+                worksheetName={worksheet.name}
                 work={block.work}
                 capsules={artifactSummary.workCapsules[block.work.id] ?? []}
                 top={relativeTop}
@@ -2567,6 +2562,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                   setStageQuickPopover({
                     taskId: taskSnap.id,
                     taskTitle: taskSnap.title,
+                    workName: taskSnap.workId ? (workMap.get(taskSnap.workId)?.name ?? null) : null,
                     stageColumnId: stageColCfg.id,
                     stageColumnName: stageColCfg.name,
                     colIndex: snap.colIndex,
@@ -2589,13 +2585,58 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             target={{
               kind: 'stage',
               worksheetId: worksheet.id,
+              worksheetName: worksheet.name,
+              workName: stageQuickPopover.workName,
               taskId: stageQuickPopover.taskId,
               taskTitle: stageQuickPopover.taskTitle,
               stageColumnId: stageQuickPopover.stageColumnId,
               stageColumnName: stageQuickPopover.stageColumnName,
             }}
             onClose={() => setStageQuickPopover(null)}
+            onRequestCreate={(req) => setQuickCreateReq(req)}
+            onRequestCreateVersion={(art) => setQuickVersionTarget(art)}
+            onRequestAddLocation={(art) => setQuickLocationTarget(art)}
             onOpenTaskDetail={(tid) => onOpenDetail(tid, { focusFiles: true })}
+          />
+        )}
+
+        {/* 从工序格资源浮层发起的独立弹窗（弹出前已关闭背后浮层，确保单窗口聚焦） */}
+        {quickCreateReq && (
+          <CreateArtifactModal
+            open
+            onOpenChange={(o) => {
+              if (!o) setQuickCreateReq(null);
+            }}
+            scope={quickCreateReq.scope}
+            scopeLabel={quickCreateReq.scopeLabel}
+            scopeTags={quickCreateReq.scopeTags}
+            defaultName={quickCreateReq.defaultName}
+            worksheetId={quickCreateReq.worksheetId}
+          />
+        )}
+
+        {quickVersionTarget && (
+          <CreateVersionModal
+            open
+            onOpenChange={(o) => {
+              if (!o) setQuickVersionTarget(null);
+            }}
+            artifact={quickVersionTarget}
+          />
+        )}
+
+        {quickLocationTarget?.latestVersion && (
+          <LocationFormModal
+            open
+            onOpenChange={(o) => {
+              if (!o) setQuickLocationTarget(null);
+            }}
+            target={{
+              mode: 'create',
+              artifact: quickLocationTarget,
+              versionId: quickLocationTarget.latestVersion.id,
+              versionNumber: quickLocationTarget.latestVersion.versionNumber,
+            }}
           />
         )}
 
