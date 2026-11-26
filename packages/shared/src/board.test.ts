@@ -394,6 +394,8 @@ describe('board.ts 看板与我的任务推导（A22/A23/A28）', () => {
     const board = computeBoardData({ ...baseInput(), tasks });
     expect(board.myInProgress).toHaveLength(1);
     expect(board.myInProgress[0]?.stageColumnName).toBe('时轴');
+    expect(board.myPending).toHaveLength(1);
+    expect(board.myPending[0]?.stageColumnName).toBe('翻译');
     expect(board.myPendingCount).toBe(1);
 
     const mine = computeMyTasks({ ...baseInput(), tasks });

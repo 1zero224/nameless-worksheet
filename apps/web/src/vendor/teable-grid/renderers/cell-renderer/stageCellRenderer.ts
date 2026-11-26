@@ -35,12 +35,12 @@ const STAGE_PALETTE: Record<
     mutedText: '#A1A1AA',
   },
   in_progress: {
-    bg: '#EFF6FF',
-    bgHover: '#E0EEFF',
-    accent: '#3B82F6',
-    dot: '#3B82F6',
-    text: '#1E3A8A',
-    mutedText: '#3B82F6',
+    bg: '#FEFCE8',
+    bgHover: '#FEF9C3',
+    accent: '#EAB308',
+    dot: '#EAB308',
+    text: '#854D0E',
+    mutedText: '#CA8A04',
   },
   done: {
     bg: '#ECFDF5',
@@ -58,6 +58,15 @@ const STAGE_PALETTE: Record<
     text: '#A1A1AA',
     mutedText: '#A1A1AA',
   },
+};
+
+const STAGE_MISSING_PALETTE = {
+  bg: '#FEF2F2',
+  bgHover: '#FEE2E2',
+  accent: '#F87171',
+  dot: '#EF4444',
+  text: '#991B1B',
+  mutedText: '#DC2626',
 };
 
 // Cache attachment hotspot bounds relative to cell top-left so click hit-testing stays O(1)
@@ -109,7 +118,8 @@ export const stageCellRenderer: IInternalCellRenderer<IStageCell> = {
     const { ctx, rect, theme, hoverCellPosition } = props;
     const { x, y, width, height } = rect;
     const { status, assigneesText, note, attachment } = cell.data;
-    const palette = STAGE_PALETTE[status];
+    const isMissing = status === 'not_started' && !assigneesText;
+    const palette = isMissing ? STAGE_MISSING_PALETTE : STAGE_PALETTE[status];
     const isHovered = hoverCellPosition != null;
 
     ctx.save();

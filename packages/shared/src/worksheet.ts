@@ -600,6 +600,7 @@ export interface BoardResponse {
   works: Work[];
   cards: BoardCard[];
   myInProgress: MyTaskItem[];
+  myPending: MyTaskItem[];
   myPendingCount: number;
 }
 

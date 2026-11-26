@@ -42,6 +42,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
         works: [],
         cards: [],
         myInProgress: [],
+        myPending: [],
         myPendingCount: 0,
       };
       return empty;
@@ -139,6 +140,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
       works: visibleWorks,
       cards: computed.cards,
       myInProgress: computed.myInProgress,
+      myPending: computed.myPending,
       myPendingCount: computed.myPendingCount,
     };
     return res;

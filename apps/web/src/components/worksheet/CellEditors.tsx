@@ -31,6 +31,7 @@ import {
   PRIORITY_DOT_STYLES,
   PRIORITY_STYLES,
   peerColorForUser,
+  STAGE_MISSING_STYLE,
   STAGE_STATUS_STYLES,
 } from '@/components/ui/colors.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays.js';
@@ -1008,7 +1009,10 @@ export function StageCellEditor({
   const displayNames = cell.assignees.map((a) =>
     a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name,
   );
-  const statusStyle = STAGE_STATUS_STYLES[cell.status];
+  const statusStyle =
+    cell.status === 'not_started' && displayNames.length === 0
+      ? STAGE_MISSING_STYLE
+      : STAGE_STATUS_STYLES[cell.status];
   const fullNamesText = displayNames.join('、');
   const compactNamesText =
     displayNames.length <= 2

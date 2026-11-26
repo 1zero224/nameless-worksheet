@@ -485,6 +485,14 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
       },
     });
 
+    // 任务 1B：同作品第二段（仅落在时轴列且缺人），用于验证时轴列 >=2 条默认展开作品父容器，翻译列仅 1 条不折叠
+    const tParallel2 = await (
+      await request.post(`${ORIGIN}/api/worksheets/${ws1.worksheet.id}/tasks`, {
+        headers: { cookie: userA.cookie, origin: ORIGIN },
+        data: { title: '并行直播后半段', workName: '周年庆特辑' },
+      })
+    ).json();
+
     // 任务 2：无作品独立任务，用于双端抢认领（翻译缺人）
     const tClaim = await (
       await request.post(`${ORIGIN}/api/worksheets/${wsNoProof.worksheet.id}/tasks`, {
@@ -515,53 +523,98 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await colTypesetEl.getByRole('button', { name: '展开列 嵌字' }).click();
     await expect(colTypesetEl).toHaveAttribute('data-collapsed', 'false');
 
-    // 验证作品大标题聚合卡在「时轴」与「翻译」两列并行显示且默认折叠，点击平滑展开内部各分段
-    const timingWorkCard = colTimingEl.locator('[data-work-name="周年庆特辑"]');
-    const transWorkCard = colTransEl.locator('[data-work-name="周年庆特辑"]');
-    await expect(timingWorkCard).toBeVisible();
-    await expect(transWorkCard).toBeVisible();
-    await expect(timingWorkCard).toContainText('1 段');
-    await expect(timingWorkCard).not.toContainText('并行直播剪辑');
+    // 验证作品父子关系：
+    // 1) 「时轴」列同作品 >=2 条 -> 默认展开的作品父容器，内部子卡按状态着浅黄/浅红底色并显示「工序 · 负责人 · 状态」
+    const timingWorkGroup = colTimingEl.locator('[data-work-name="周年庆特辑"]');
+    await expect(timingWorkGroup).toBeVisible();
+    await expect(timingWorkGroup).toHaveAttribute('data-expanded', 'true');
+    await expect(timingWorkGroup).toContainText('2 段');
+    const timingChild1 = timingWorkGroup.locator(`[data-testid^="board-card-${tParallel.id}-"]`);
+    const timingChild2 = timingWorkGroup.locator(`[data-testid^="board-card-${tParallel2.id}-"]`);
+    await expect(timingChild1).toHaveAttribute('data-card-state', 'in_progress');
+    await expect(timingChild1).toContainText(`时轴 · ${USER_A_NAME} · 进行中`);
+    await expect(timingChild1).toContainText('还缺');
+    await expect(timingChild1).toContainText('压制');
+    await expect(timingChild2).toHaveAttribute('data-card-state', 'missing');
+    await expect(timingChild2).toContainText('时轴 · 缺人');
 
-    await timingWorkCard.getByRole('button', { name: '展开作品 周年庆特辑 分段' }).click();
-    await expect(timingWorkCard).toContainText('并行直播剪辑');
-    await expect(timingWorkCard).toContainText('缺 压制');
+    // 父容器支持平滑收起与再展开
+    await timingWorkGroup.getByRole('button', { name: '收起作品 周年庆特辑 分段' }).click();
+    await expect(timingWorkGroup).toHaveAttribute('data-expanded', 'false');
+    await expect(timingChild1).toHaveCount(0);
+    await timingWorkGroup.getByRole('button', { name: '展开作品 周年庆特辑 分段' }).click();
+    await expect(timingWorkGroup).toHaveAttribute('data-expanded', 'true');
+    await expect(timingChild1).toBeVisible();
 
-    await transWorkCard.getByRole('button', { name: '展开作品 周年庆特辑 分段' }).click();
-    await expect(transWorkCard).toContainText('并行直播剪辑');
+    // 2) 「翻译」列同作品只有 1 条 -> 不套折叠父容器，直接平铺为带作品眉标的独立卡片
+    await expect(colTransEl.locator('[data-testid^="board-work-group-"]')).toHaveCount(0);
+    const transSingleWorkCard = colTransEl.locator(`[data-testid^="board-card-${tParallel.id}-"]`);
+    await expect(transSingleWorkCard).toBeVisible();
+    await expect(transSingleWorkCard).toHaveAttribute('data-card-state', 'in_progress');
+    await expect(transSingleWorkCard).toContainText('周年庆特辑');
+    await expect(transSingleWorkCard).toContainText('翻译 · 官中字幕 · 进行中');
 
-    // 无作品独立任务保持极简卡片且不出「缺 校对」
+    // 开启「仅看缺人」时，其他缺人工序（如不上看板的「压制」）展开为可点击认领按钮
+    await pageA.getByRole('button', { name: '仅看缺人' }).click();
+    await expect(timingChild1.getByRole('button', { name: '缺 压制' })).toBeVisible();
+    await pageA.getByRole('button', { name: '仅看缺人' }).click();
+
+    // 无作品独立任务保持极简卡片、浅红缺人底色且不出「还缺 / 缺 校对」
     const claimCardA = colTransEl.locator(`[data-testid^="board-card-${tClaim.id}-"]`);
     await expect(claimCardA).toBeVisible();
+    await expect(claimCardA).toHaveAttribute('data-card-state', 'missing');
+    await expect(claimCardA).toContainText('翻译 · 缺人');
+    await expect(claimCardA).not.toContainText('还缺');
     await expect(claimCardA).not.toContainText('缺 校对');
+    await expect(colProofEl.locator(`[data-testid^="board-card-${tClaim.id}-"]`)).toHaveCount(0);
 
-    // 点击作品卡上的「仅看此作品」筛选 -> 只显示该作品，清除后恢复
-    await timingWorkCard.getByRole('button', { name: '筛选作品 周年庆特辑' }).click();
+    // 点击作品筛选按钮 -> 只显示该作品，清除后恢复
+    await timingWorkGroup.getByRole('button', { name: '筛选作品 周年庆特辑' }).click();
     await expect(pageA.getByTestId('active-work-filter-chip')).toContainText('周年庆特辑');
     await expect(claimCardA).toHaveCount(0);
     await pageA.getByRole('button', { name: '清除作品筛选' }).click();
     await expect(claimCardA).toBeVisible();
 
-    // V6: 甲在看板点击「缺 翻译」认领 -> 标签消失且乙实时看到负责人变为小爱且状态保持未开始
+    // V6: 甲在看板点击本列「认领」-> 卡片由缺人浅红变为已认领未开始白底，乙实时同步看到「翻译 · 小爱 · 未开始」
     const claimCardB = pageB
       .locator('[data-board-column-name="翻译"]')
       .locator(`[data-testid^="board-card-${tClaim.id}-"]`);
-    await expect(claimCardB).toContainText('缺 翻译');
+    await expect(claimCardB).toContainText('翻译 · 缺人');
 
-    await claimCardA.getByRole('button', { name: '缺 翻译' }).click();
-    await expect(claimCardA).toContainText(`${USER_A_NAME} · 未开始`);
-    await expect(claimCardA).not.toContainText('缺 翻译');
-    await expect(claimCardB).toContainText(`${USER_A_NAME} · 未开始`, { timeout: 3_000 });
+    await claimCardA.getByRole('button', { name: '认领 翻译' }).click();
+    await expect(claimCardA).toHaveAttribute('data-card-state', 'waiting');
+    await expect(claimCardA).toContainText(`翻译 · ${USER_A_NAME} · 未开始`);
+    await expect(claimCardA.getByRole('button', { name: '认领 翻译' })).toHaveCount(0);
+    await expect(claimCardB).toContainText(`翻译 · ${USER_A_NAME} · 未开始`, { timeout: 3_000 });
 
-    // V7: 顶部“我进行中的任务”仅显示小爱进行中的时轴，点击完成从进行中条消失
-    const myBar = pageA.getByTestId('my-in-progress-bar');
-    await expect(myBar).toContainText('并行直播剪辑');
-    await expect(myBar).not.toContainText('待认领短片');
-    await myBar
+    // V7: 左侧可折叠「我的任务」竖栏包含「进行中（黄）」与「待开始（白）」，支持一键完成与一键开始
+    const myRail = pageA.getByTestId('my-in-progress-bar');
+    await expect(myRail).toBeVisible();
+    await expect(myRail).toHaveAttribute('data-collapsed', 'false');
+    await expect(myRail.getByTestId('my-tasks-in-progress-list')).toContainText('并行直播剪辑');
+    await expect(myRail.getByTestId('my-tasks-pending-list')).toContainText('待认领短片');
+
+    // 一键完成进行中的「并行直播剪辑」
+    await myRail
       .getByTestId(`my-in-progress-item-${tParallel.id}-${colTiming.id}`)
       .getByRole('button', { name: '完成' })
       .click();
-    await expect(myBar).not.toContainText('并行直播剪辑');
+    await expect(myRail).not.toContainText('并行直播剪辑');
+
+    // 一键开始待开始的「待认领短片」-> 移入「进行中」并切为浅黄底色
+    await myRail
+      .locator(`[data-testid^="my-pending-item-${tClaim.id}-"]`)
+      .getByRole('button', { name: '开始' })
+      .click();
+    await expect(myRail.getByTestId('my-tasks-in-progress-list')).toContainText('待认领短片');
+    await expect(claimCardA).toHaveAttribute('data-card-state', 'in_progress');
+    await expect(claimCardA).toContainText(`翻译 · ${USER_A_NAME} · 进行中`);
+
+    // 左侧「我的任务」竖栏支持一键折叠与展开
+    await myRail.getByRole('button', { name: '折叠我的任务' }).click();
+    await expect(myRail).toHaveAttribute('data-collapsed', 'true');
+    await myRail.getByRole('button', { name: '展开我的任务' }).click();
+    await expect(myRail).toHaveAttribute('data-collapsed', 'false');
 
     // V12: 融合在「筛选关键词」中的跨表资源检索（支持自定义文本列 & 纯文本负责人），点击直达工作表并打开详情侧栏
     const homeKeywordInput = pageA.getByLabel('筛选关键词');

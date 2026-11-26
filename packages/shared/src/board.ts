@@ -83,6 +83,7 @@ function cmpOrder(aOrder: string, aId: string, bOrder: string, bId: string): num
 export function computeBoardData(input: BoardComputeInput): {
   cards: BoardCard[];
   myInProgress: MyTaskItem[];
+  myPending: MyTaskItem[];
   myPendingCount: number;
 } {
   const sortedBoardCols = [...input.boardColumns].sort((a, b) =>
@@ -135,7 +136,7 @@ export function computeBoardData(input: BoardComputeInput): {
 
   const cards: BoardCard[] = [];
   const myInProgress: MyTaskItem[] = [];
-  let myPendingCount = 0;
+  const myPending: MyTaskItem[] = [];
 
   for (const task of sortedTasks) {
     const ws = wsMap.get(task.worksheetId);
@@ -152,10 +153,10 @@ export function computeBoardData(input: BoardComputeInput): {
       if (cell.status === 'na') continue;
       applicable.push({ col, cell });
 
-      // 顺便统计首页“我进行中的任务”与“待开始数”
+      // 顺便统计首页“我的任务”进行中与已认领待开始
       if (isUserAssigned(cell.assignees, input.currentUserId)) {
-        if (cell.status === 'in_progress') {
-          myInProgress.push({
+        if (cell.status === 'in_progress' || cell.status === 'not_started') {
+          const item: MyTaskItem = {
             taskId: task.id,
             taskTitle: task.title,
             divisionNote: task.divisionNote,
@@ -172,9 +173,12 @@ export function computeBoardData(input: BoardComputeInput): {
             stageAssignees: cell.assignees,
             stageNote: cell.note,
             stageRevision: cell.revision,
-          });
-        } else if (cell.status === 'not_started') {
-          myPendingCount += 1;
+          };
+          if (cell.status === 'in_progress') {
+            myInProgress.push(item);
+          } else {
+            myPending.push(item);
+          }
         }
       }
     }
@@ -233,7 +237,7 @@ export function computeBoardData(input: BoardComputeInput): {
     }
   }
 
-  return { cards, myInProgress, myPendingCount };
+  return { cards, myInProgress, myPending, myPendingCount: myPending.length };
 }
 
 /**

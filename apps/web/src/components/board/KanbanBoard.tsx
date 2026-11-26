@@ -2,20 +2,23 @@ import { type BoardCard, type BoardColumn, PRIORITY_LABELS, STAGE_STATUS_LABELS 
 import {
   ChevronDown,
   ChevronRight,
-  CircleDot,
-  Flag,
+  Filter,
   Folder,
   Hand,
   PanelLeftClose,
   PanelLeftOpen,
-  UserRound,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useMemo, useState } from 'react';
-import { PRIORITY_STYLES, WORKSHEET_COLOR_STYLES } from '@/components/ui/colors.js';
+import {
+  BOARD_CARD_STATE_STYLES,
+  type BoardCardVisualState,
+  PRIORITY_STYLES,
+  WORKSHEET_COLOR_STYLES,
+} from '@/components/ui/colors.js';
 import { cn } from '@/components/ui/primitives.js';
 
-// 参考 Teable 看板列头浅彩胶囊配色（低饱和、通透、高可读）
+// 看板列头浅彩胶囊配色（低饱和、通透、高可读）
 const COLUMN_PILL_STYLES = [
   'bg-sky-100/90 text-sky-900',
   'bg-amber-100/90 text-amber-900',
@@ -28,6 +31,7 @@ const COLUMN_PILL_STYLES = [
 interface WorkGroupItem {
   kind: 'work-group';
   key: string;
+  workKey: string;
   worksheetId: string;
   worksheetName: string;
   worksheetColor: BoardCard['worksheetColor'];
@@ -39,41 +43,64 @@ interface WorkGroupItem {
 interface StandaloneItem {
   kind: 'standalone';
   key: string;
+  workKey: string | null;
   card: BoardCard;
 }
 
 type ColumnDisplayItem = WorkGroupItem | StandaloneItem;
 
+function getBoardCardState(card: BoardCard): BoardCardVisualState {
+  if (card.stageStatus === 'in_progress') return 'in_progress';
+  if (card.stageStatus === 'not_started' && card.stageAssignees.length === 0) return 'missing';
+  return 'waiting';
+}
+
+/**
+ * 构建单列内的展示条目：
+ * - 无作品任务 → 独立任务卡
+ * - 同列内同一作品只有 1 条任务 → 不套折叠壳，直接平铺为带作品眉标的独立卡片
+ * - 同列内同一作品 >= 2 条任务 → 聚合为默认展开的作品父容器
+ */
 function buildColumnDisplayItems(colCards: BoardCard[]): ColumnDisplayItem[] {
+  const workCounts = new Map<string, number>();
+  for (const card of colCards) {
+    if (card.workId && card.workName) {
+      const wk = `${card.worksheetId}:${card.workId}`;
+      workCounts.set(wk, (workCounts.get(wk) ?? 0) + 1);
+    }
+  }
+
   const items: ColumnDisplayItem[] = [];
   const workGroupMap = new Map<string, WorkGroupItem>();
 
   for (const card of colCards) {
-    if (!card.workId || !card.workName) {
+    const workKey = card.workId && card.workName ? `${card.worksheetId}:${card.workId}` : null;
+    if (!workKey || (workCounts.get(workKey) ?? 0) < 2) {
       items.push({
         kind: 'standalone',
         key: `${card.taskId}:${card.boardColumnId}`,
+        workKey,
         card,
       });
       continue;
     }
 
-    const groupKey = `${card.worksheetId}:${card.workId}`;
-    const existing = workGroupMap.get(groupKey);
+    const existing = workGroupMap.get(workKey);
     if (existing) {
       existing.cards.push(card);
     } else {
       const group: WorkGroupItem = {
         kind: 'work-group',
-        key: groupKey,
+        key: workKey,
+        workKey,
         worksheetId: card.worksheetId,
         worksheetName: card.worksheetName,
         worksheetColor: card.worksheetColor,
-        workId: card.workId,
-        workName: card.workName,
+        workId: card.workId!,
+        workName: card.workName!,
         cards: [card],
       };
-      workGroupMap.set(groupKey, group);
+      workGroupMap.set(workKey, group);
       items.push(group);
     }
   }
@@ -86,6 +113,8 @@ export interface KanbanBoardProps {
   cards: BoardCard[];
   userMap: Map<string, string>;
   claimingKeys: Set<string>;
+  currentUserId?: string | null;
+  onlyMissing?: boolean;
   showWorksheetSource?: boolean;
   onClaim: (taskId: string, columnId: string, stageName: string) => void | Promise<void>;
   onOpenDetail: (target: { worksheetId: string; taskId: string }) => void;
@@ -97,14 +126,18 @@ export function KanbanBoard({
   cards,
   userMap,
   claimingKeys,
+  currentUserId = null,
+  onlyMissing = false,
   showWorksheetSource = true,
   onClaim,
   onOpenDetail,
   onSelectWorkFilter,
 }: KanbanBoardProps) {
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
-  // 列内作品聚合卡默认折叠，点击展开（key = `${boardColumnId}:${worksheetId}:${workId}`）
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  // 作品父容器（>=2条）默认展开，收起项记入 collapsedGroups
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // 跨列悬停同作品联动高亮
+  const [hoveredWorkKey, setHoveredWorkKey] = useState<string | null>(null);
 
   const cardsByBoardCol = useMemo(() => {
     const map = new Map<string, BoardCard[]>();
@@ -127,8 +160,8 @@ export function KanbanBoard({
     });
   };
 
-  const toggleGroupExpanded = (groupKey: string) => {
-    setExpandedGroups((prev) => {
+  const toggleGroupCollapsed = (groupKey: string) => {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(groupKey)) next.delete(groupKey);
       else next.add(groupKey);
@@ -140,6 +173,70 @@ export function KanbanBoard({
     assignees
       .map((a) => (a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name))
       .join('、');
+
+  const formatStageStatusLine = (card: BoardCard) => {
+    const assigneesText = formatAssignees(card.stageAssignees);
+    if (assigneesText) {
+      return `${card.stageColumnName} · ${assigneesText} · ${STAGE_STATUS_LABELS[card.stageStatus]}`;
+    }
+    if (card.stageStatus === 'in_progress') {
+      return `${card.stageColumnName} · 缺人 · ${STAGE_STATUS_LABELS.in_progress}`;
+    }
+    return `${card.stageColumnName} · 缺人`;
+  };
+
+  const isAssignedToMe = (card: BoardCard) =>
+    Boolean(
+      currentUserId &&
+        card.stageAssignees.some((a) => a.type === 'user' && a.userId === currentUserId),
+    );
+
+  const renderOtherMissing = (card: BoardCard, compact = false) => {
+    const otherMissing = card.missingStages.filter((ms) => ms.columnId !== card.stageColumnId);
+    if (otherMissing.length === 0) return null;
+
+    if (onlyMissing) {
+      return (
+        <div
+          className={cn(
+            'flex flex-wrap gap-1 border-t border-black/[0.06] pt-1.5',
+            compact ? 'mt-1.5' : 'mt-2',
+          )}
+        >
+          {otherMissing.map((ms) => {
+            const claimKey = `${card.taskId}:${ms.columnId}`;
+            const claiming = claimingKeys.has(claimKey);
+            return (
+              <button
+                key={ms.columnId}
+                type="button"
+                disabled={claiming}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onClaim(card.taskId, ms.columnId, ms.name);
+                }}
+                className="inline-flex items-center gap-0.5 rounded border border-red-200/90 bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-red-700 transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
+              >
+                <Hand className="h-2.5 w-2.5" />
+                {claiming ? '认领中…' : `缺 ${ms.name}`}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={cn(
+          'truncate text-[10px] text-zinc-400',
+          compact ? 'mt-1' : 'mt-1.5 border-t border-black/[0.05] pt-1.5',
+        )}
+      >
+        还缺 {otherMissing.map((m) => m.name).join(' · ')}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -198,9 +295,9 @@ export function KanbanBoard({
             data-testid={`board-col-${bc.id}`}
             data-board-column-name={bc.name}
             data-collapsed="false"
-            className="flex h-full min-h-0 w-[276px] shrink-0 flex-col rounded-xl border border-black/[0.06] bg-[#f8f8fa] transition-[width] duration-200 sm:w-[288px]"
+            className="flex h-full min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-black/[0.06] bg-[#f8f8fa] transition-[width] duration-200 sm:w-[292px]"
           >
-            {/* Teable 风格浅彩胶囊列头 */}
+            {/* 列头 */}
             <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2.5">
               <div className="flex min-w-0 items-center gap-2">
                 <h2
@@ -226,7 +323,7 @@ export function KanbanBoard({
               </button>
             </div>
 
-            {/* 卡片列表（隐藏系统滚动条，保留顺滑纵向滚轮与触控滚动） */}
+            {/* 卡片列表 */}
             <div className="no-scrollbar min-h-0 flex-1 space-y-2.5 overflow-y-auto px-2.5 pb-3">
               {displayItems.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-black/[0.08] bg-white/50 py-8 text-center text-xs text-zinc-400">
@@ -235,152 +332,223 @@ export function KanbanBoard({
               ) : (
                 displayItems.map((item) => {
                   if (item.kind === 'standalone') {
-                    const { card } = item;
+                    const { card, workKey } = item;
+                    const cardState = getBoardCardState(card);
+                    const stateStyle = BOARD_CARD_STATE_STYLES[cardState];
                     const wsColor =
                       WORKSHEET_COLOR_STYLES[card.worksheetColor] ?? WORKSHEET_COLOR_STYLES.sky;
-                    const assigneesText = formatAssignees(card.stageAssignees);
+                    const currentStageMissing = card.missingStages.find(
+                      (ms) => ms.columnId === card.stageColumnId,
+                    );
+                    const currentClaimKey = `${card.taskId}:${card.stageColumnId}`;
+                    const claimingCurrent = claimingKeys.has(currentClaimKey);
+                    const isWorkHighlighted = Boolean(workKey && hoveredWorkKey === workKey);
+                    const mine = isAssignedToMe(card);
 
                     return (
                       <div
                         key={item.key}
                         data-testid={`board-card-${card.taskId}-${card.boardColumnId}`}
-                        className="rounded-lg border border-black/[0.07] bg-white p-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all hover:border-black/[0.15] hover:shadow-[0_2px_8px_rgba(0,0,0,0.05)]"
+                        data-card-state={cardState}
+                        data-work-name={card.workName ?? undefined}
+                        onPointerEnter={workKey ? () => setHoveredWorkKey(workKey) : undefined}
+                        onPointerLeave={
+                          workKey
+                            ? () => setHoveredWorkKey((prev) => (prev === workKey ? null : prev))
+                            : undefined
+                        }
+                        className={cn(
+                          'rounded-lg border p-3 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all hover:shadow-[0_2px_8px_rgba(0,0,0,0.05)]',
+                          stateStyle.card,
+                          isWorkHighlighted && 'ring-2 ring-indigo-400/75',
+                        )}
                       >
-                        {/* 标题 */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onOpenDetail({
-                              worksheetId: card.worksheetId,
-                              taskId: card.taskId,
-                            })
-                          }
-                          className="block w-full text-left cursor-pointer"
-                        >
-                          <div className="text-[13px] font-semibold leading-snug text-zinc-950 hover:text-blue-600">
-                            {card.taskTitle}
-                          </div>
-                          {card.divisionNote && (
-                            <div className="mt-0.5 truncate text-[11px] text-zinc-400">
-                              {card.divisionNote}
-                            </div>
-                          )}
-                        </button>
-
-                        {/* Teable 风格结构化字段行 */}
-                        <div className="mt-2.5 space-y-2">
-                          {card.priority !== 'normal' && (
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
-                                <Flag className="h-3 w-3" strokeWidth={1.75} />
-                                优先级
-                              </span>
-                              <span
-                                className={cn(
-                                  'rounded px-1.5 py-0.25 text-[11px] font-medium border',
-                                  PRIORITY_STYLES[card.priority],
-                                )}
+                        {/* 同列仅 1 条任务的作品：不折叠，顶部展示可点击作品眉标 */}
+                        {card.workId && card.workName && (
+                          <div className="mb-1.5 flex items-center justify-between gap-1.5">
+                            {onSelectWorkFilter ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectWorkFilter({
+                                    worksheetId: card.worksheetId,
+                                    workId: card.workId!,
+                                  });
+                                }}
+                                title={`仅看作品「${card.workName}」`}
+                                aria-label={`筛选作品 ${card.workName}`}
+                                className="inline-flex min-w-0 items-center gap-1 rounded bg-indigo-50/90 px-1.5 py-0.5 text-[11px] font-medium text-indigo-800 transition-colors hover:bg-indigo-100/80 cursor-pointer"
                               >
-                                {PRIORITY_LABELS[card.priority]}
+                                <Folder
+                                  className="h-3 w-3 shrink-0 text-indigo-500"
+                                  strokeWidth={1.75}
+                                />
+                                <span className="truncate">{card.workName}</span>
+                              </button>
+                            ) : (
+                              <span className="inline-flex min-w-0 items-center gap-1 rounded bg-indigo-50/90 px-1.5 py-0.5 text-[11px] font-medium text-indigo-800">
+                                <Folder
+                                  className="h-3 w-3 shrink-0 text-indigo-500"
+                                  strokeWidth={1.75}
+                                />
+                                <span className="truncate">{card.workName}</span>
                               </span>
-                            </div>
-                          )}
+                            )}
+                          </div>
+                        )}
 
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
-                              <UserRound className="h-3 w-3" strokeWidth={1.75} />
-                              负责人
-                            </span>
+                        {/* 第 1 层：标题 + 仅高/紧急优先级角标 */}
+                        <div className="flex items-start justify-between gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onOpenDetail({
+                                worksheetId: card.worksheetId,
+                                taskId: card.taskId,
+                              })
+                            }
+                            title={
+                              card.divisionNote
+                                ? `${card.taskTitle} — ${card.divisionNote}`
+                                : card.taskTitle
+                            }
+                            className="min-w-0 flex-1 text-left text-[13px] font-semibold leading-snug text-zinc-950 hover:text-blue-600 cursor-pointer"
+                          >
+                            {card.taskTitle}
+                          </button>
+
+                          {card.priority !== 'normal' && (
                             <span
                               className={cn(
-                                'rounded-md px-2 py-0.5 text-[11px] font-medium',
-                                card.stageStatus === 'in_progress'
-                                  ? 'bg-[#EFF6FF] text-blue-700'
-                                  : 'bg-zinc-100 text-zinc-700',
+                                'shrink-0 rounded border px-1.5 py-0 text-[10px] font-medium leading-4',
+                                PRIORITY_STYLES[card.priority],
                               )}
                             >
-                              {assigneesText
-                                ? `${assigneesText} · ${STAGE_STATUS_LABELS[card.stageStatus]}`
-                                : `${STAGE_STATUS_LABELS[card.stageStatus]} · 缺人`}
+                              {PRIORITY_LABELS[card.priority]}
                             </span>
-                          </div>
-
-                          {showWorksheetSource && (
-                            <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
-                              <CircleDot className="h-3 w-3 shrink-0" strokeWidth={1.75} />
-                              <span
-                                className={cn('h-1.5 w-1.5 shrink-0 rounded-full', wsColor.dot)}
-                              />
-                              <span className="truncate text-zinc-500">{card.worksheetName}</span>
-                            </div>
                           )}
                         </div>
 
-                        {/* 缺人工序一键认领 */}
-                        {card.missingStages.length > 0 && (
-                          <div className="mt-2.5 flex flex-wrap gap-1 border-t border-black/[0.05] pt-2">
-                            {card.missingStages.map((ms) => {
-                              const claimKey = `${card.taskId}:${ms.columnId}`;
-                              const claiming = claimingKeys.has(claimKey);
-                              return (
-                                <button
-                                  key={ms.columnId}
-                                  type="button"
-                                  disabled={claiming}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void onClaim(card.taskId, ms.columnId, ms.name);
-                                  }}
-                                  className="inline-flex items-center gap-0.5 rounded-md border border-black/[0.1] bg-[#fafafa] px-2 py-0.5 text-[11px] font-medium text-zinc-700 transition-colors hover:border-blue-300 hover:bg-blue-50/70 hover:text-blue-700 disabled:opacity-50 cursor-pointer"
-                                >
-                                  <Hand className="h-2.5 w-2.5" />
-                                  {claiming ? '认领中…' : `缺 ${ms.name}`}
-                                </button>
-                              );
-                            })}
+                        {/* 第 2 层：本列「工序 · 负责人 · 状态」+ 缺人直接认领 */}
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-1.5 text-[11px]">
+                            <span
+                              className={cn('h-1.5 w-1.5 shrink-0 rounded-full', stateStyle.dot)}
+                            />
+                            <span className={cn('truncate', stateStyle.statusText)}>
+                              {formatStageStatusLine(card)}
+                            </span>
+                            {mine && (
+                              <span className="shrink-0 rounded bg-black/[0.06] px-1 py-0 text-[10px] font-medium text-zinc-700">
+                                我
+                              </span>
+                            )}
+                          </div>
+
+                          {currentStageMissing && (
+                            <button
+                              type="button"
+                              disabled={claimingCurrent}
+                              aria-label={`认领 ${currentStageMissing.name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void onClaim(
+                                  card.taskId,
+                                  currentStageMissing.columnId,
+                                  currentStageMissing.name,
+                                );
+                              }}
+                              className="inline-flex h-5 shrink-0 items-center gap-0.5 rounded border border-red-300/90 bg-white/95 px-1.5 text-[11px] font-medium text-red-700 transition-colors hover:border-red-400 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
+                            >
+                              <Hand className="h-2.5 w-2.5" />
+                              {claimingCurrent ? '认领中…' : '认领'}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* 极简来源 */}
+                        {showWorksheetSource && (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-400">
+                            <span
+                              className={cn('h-1.5 w-1.5 shrink-0 rounded-full', wsColor.dot)}
+                            />
+                            <span className="truncate">{card.worksheetName}</span>
                           </div>
                         )}
+
+                        {/* 其他未轮到工序缺人提示 */}
+                        {renderOtherMissing(card, false)}
                       </div>
                     );
                   }
 
-                  // 作品大标题聚合卡（默认折叠，柔和靛蓝左侧强调边呼应表格作品横幅）
-                  const expandKey = `${bc.id}:${item.key}`;
-                  const expanded = expandedGroups.has(expandKey);
+                  // 作品父容器（同列 >= 2 条任务，默认展开，支持收起与跨列同作品高亮）
+                  const collapseKey = `${bc.id}:${item.key}`;
+                  const isExpanded = !collapsedGroups.has(collapseKey);
                   const wsColor =
                     WORKSHEET_COLOR_STYLES[item.worksheetColor] ?? WORKSHEET_COLOR_STYLES.sky;
                   const inProgressCount = item.cards.filter(
-                    (c) => c.stageStatus === 'in_progress',
+                    (c) => getBoardCardState(c) === 'in_progress',
                   ).length;
-                  const missingCount = item.cards.filter((c) => c.missingStages.length > 0).length;
-                  const activeRatio =
-                    item.cards.length > 0
-                      ? Math.round((inProgressCount / item.cards.length) * 100)
-                      : 0;
+                  const missingCount = item.cards.filter(
+                    (c) => getBoardCardState(c) === 'missing',
+                  ).length;
+                  const waitingCount = item.cards.length - inProgressCount - missingCount;
+                  const isWorkHighlighted = hoveredWorkKey === item.workKey;
 
                   return (
-                    <div
-                      key={expandKey}
+                    <section
+                      key={collapseKey}
+                      aria-label={`作品 ${item.workName}`}
                       data-testid={`board-work-group-${item.workId}-${bc.id}`}
                       data-work-name={item.workName}
-                      className="overflow-hidden rounded-lg border border-indigo-200/75 border-l-[3px] border-l-indigo-500 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all hover:border-indigo-300/90 hover:shadow-[0_2px_8px_rgba(79,70,229,0.07)]"
+                      data-expanded={isExpanded ? 'true' : 'false'}
+                      onPointerEnter={() => setHoveredWorkKey(item.workKey)}
+                      onPointerLeave={() =>
+                        setHoveredWorkKey((prev) => (prev === item.workKey ? null : prev))
+                      }
+                      className={cn(
+                        'overflow-hidden rounded-lg border border-indigo-200/80 border-l-[3px] border-l-indigo-500 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all hover:border-indigo-300',
+                        isWorkHighlighted &&
+                          'ring-2 ring-indigo-400/75 shadow-[0_2px_10px_rgba(79,70,229,0.12)]',
+                      )}
                     >
-                      {/* 作品卡头部 */}
-                      <div className="bg-[#EEF2FF]/45 p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-1.5">
-                            <Folder
-                              className="h-3.5 w-3.5 shrink-0 text-indigo-500"
-                              strokeWidth={1.75}
-                            />
-                            {showWorksheetSource && (
-                              <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-zinc-500">
-                                <span
-                                  className={cn('h-1.5 w-1.5 shrink-0 rounded-full', wsColor.dot)}
+                      {/* 作品父容器极简头部 */}
+                      <div className="bg-[#EEF2FF]/65 px-2.5 py-2">
+                        <div className="flex items-start justify-between gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupCollapsed(collapseKey)}
+                            aria-expanded={isExpanded}
+                            aria-label={
+                              isExpanded
+                                ? `收起作品 ${item.workName} 分段`
+                                : `展开作品 ${item.workName} 分段`
+                            }
+                            className="flex min-w-0 flex-1 items-start gap-1.5 text-left cursor-pointer"
+                          >
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-indigo-600">
+                              {isExpanded ? (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              )}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1">
+                                <Folder
+                                  className="h-3.5 w-3.5 shrink-0 text-indigo-500"
+                                  strokeWidth={1.75}
                                 />
-                                <span className="truncate">{item.worksheetName}</span>
-                              </span>
-                            )}
+                                <span className="truncate text-[13px] font-semibold leading-snug text-indigo-950">
+                                  {item.workName}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+
+                          <div className="flex shrink-0 items-center gap-1">
                             {onSelectWorkFilter && (
                               <button
                                 type="button"
@@ -391,137 +559,168 @@ export function KanbanBoard({
                                     workId: item.workId,
                                   });
                                 }}
-                                title={`按作品「${item.workName}」筛选`}
+                                title={`仅看作品「${item.workName}」`}
                                 aria-label={`筛选作品 ${item.workName}`}
-                                className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 ring-1 ring-indigo-200/70 transition-colors hover:bg-indigo-100/70 cursor-pointer"
+                                className="flex h-5 w-5 items-center justify-center rounded text-indigo-500/80 transition-colors hover:bg-indigo-200/60 hover:text-indigo-900 cursor-pointer"
                               >
-                                仅看此作品
+                                <Filter className="h-3 w-3" strokeWidth={1.75} />
                               </button>
                             )}
+                            <span className="rounded-full bg-white/90 px-1.5 py-0 text-[10px] font-medium tabular-nums text-indigo-800 ring-1 ring-indigo-200/70">
+                              {item.cards.length} 段
+                            </span>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => toggleGroupExpanded(expandKey)}
-                            aria-expanded={expanded}
-                            aria-label={
-                              expanded
-                                ? `收起作品 ${item.workName} 分段`
-                                : `展开作品 ${item.workName} 分段`
-                            }
-                            className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white/90 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200/60 transition-colors hover:bg-indigo-100/60 cursor-pointer"
-                          >
-                            <span className="tabular-nums">{item.cards.length} 段</span>
-                            {expanded ? (
-                              <ChevronDown className="h-3 w-3" />
-                            ) : (
-                              <ChevronRight className="h-3 w-3" />
-                            )}
-                          </button>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => toggleGroupExpanded(expandKey)}
-                          className="mt-1.5 block w-full text-left cursor-pointer"
-                        >
-                          <div className="text-[13px] font-semibold leading-snug text-indigo-950">
-                            {item.workName}
-                          </div>
-
-                          <div className="mt-2 flex items-center gap-2">
-                            <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-indigo-100">
+                        {/* 第二行：来源 + 黄/红/白三色状态分布微条 */}
+                        <div className="mt-1.5 flex items-center justify-between gap-2 pl-5">
+                          {showWorksheetSource ? (
+                            <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-indigo-900/65">
                               <span
-                                className="block h-full rounded-full bg-indigo-500 transition-all"
-                                style={{ width: `${activeRatio}%` }}
+                                className={cn('h-1.5 w-1.5 shrink-0 rounded-full', wsColor.dot)}
                               />
+                              <span className="truncate">{item.worksheetName}</span>
                             </span>
-                            <span className="truncate text-[11px] text-indigo-900/70 tabular-nums">
-                              进行中 {inProgressCount}
-                              {missingCount > 0 ? ` · 缺人 ${missingCount}` : ''}
-                            </span>
+                          ) : (
+                            <span />
+                          )}
+
+                          <div className="flex shrink-0 items-center gap-1.5 text-[10px] tabular-nums">
+                            {inProgressCount > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-amber-800 font-medium">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                                {inProgressCount}
+                              </span>
+                            )}
+                            {missingCount > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-red-700 font-medium">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                                {missingCount}
+                              </span>
+                            )}
+                            {waitingCount > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-zinc-500">
+                                <span className="h-1.5 w-1.5 rounded-full bg-zinc-300" />
+                                {waitingCount}
+                              </span>
+                            )}
                           </div>
-                        </button>
+                        </div>
                       </div>
 
-                      {/* motion 平滑展开内部各分段 */}
+                      {/* 展开区：带左侧靛蓝导轨 + 独立状态底色迷你子卡 */}
                       <AnimatePresence initial={false}>
-                        {expanded && (
+                        {isExpanded && (
                           <motion.div
                             key="segments"
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-                            className="overflow-hidden border-t border-indigo-200/60 bg-white"
+                            className="overflow-hidden border-t border-indigo-200/60 bg-[#EEF2FF]/30"
                           >
-                            <div className="divide-y divide-black/[0.05]">
-                              {item.cards.map((card) => {
-                                const assigneesText = formatAssignees(card.stageAssignees);
-                                return (
-                                  <div
-                                    key={`${card.taskId}:${card.boardColumnId}`}
-                                    data-testid={`board-card-${card.taskId}-${card.boardColumnId}`}
-                                    className="px-3 py-2 transition-colors hover:bg-black/[0.02]"
-                                  >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          onOpenDetail({
-                                            worksheetId: card.worksheetId,
-                                            taskId: card.taskId,
-                                          })
-                                        }
-                                        className="min-w-0 flex-1 truncate text-left text-xs font-medium text-zinc-900 hover:text-blue-600 cursor-pointer"
-                                      >
-                                        {card.taskTitle}
-                                      </button>
-                                      <span
-                                        className={cn(
-                                          'shrink-0 rounded px-1.5 py-0.25 text-[11px]',
-                                          card.stageStatus === 'in_progress'
-                                            ? 'bg-[#EFF6FF] font-medium text-blue-700'
-                                            : 'bg-zinc-100 text-zinc-600',
-                                        )}
-                                      >
-                                        {assigneesText
-                                          ? `${assigneesText} · ${STAGE_STATUS_LABELS[card.stageStatus]}`
-                                          : STAGE_STATUS_LABELS[card.stageStatus]}
-                                      </span>
-                                    </div>
+                            <div className="p-2">
+                              <div className="space-y-1.5 border-l-2 border-indigo-300/75 pl-2">
+                                {item.cards.map((card) => {
+                                  const cardState = getBoardCardState(card);
+                                  const stateStyle = BOARD_CARD_STATE_STYLES[cardState];
+                                  const currentStageMissing = card.missingStages.find(
+                                    (ms) => ms.columnId === card.stageColumnId,
+                                  );
+                                  const currentClaimKey = `${card.taskId}:${card.stageColumnId}`;
+                                  const claimingCurrent = claimingKeys.has(currentClaimKey);
+                                  const mine = isAssignedToMe(card);
 
-                                    {card.missingStages.length > 0 && (
-                                      <div className="mt-1.5 flex flex-wrap gap-1">
-                                        {card.missingStages.map((ms) => {
-                                          const claimKey = `${card.taskId}:${ms.columnId}`;
-                                          const claiming = claimingKeys.has(claimKey);
-                                          return (
-                                            <button
-                                              key={ms.columnId}
-                                              type="button"
-                                              disabled={claiming}
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                void onClaim(card.taskId, ms.columnId, ms.name);
-                                              }}
-                                              className="inline-flex items-center gap-0.5 rounded border border-black/[0.1] bg-[#fafafa] px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 transition-colors hover:border-blue-300 hover:bg-blue-50/70 hover:text-blue-700 disabled:opacity-50 cursor-pointer"
-                                            >
-                                              <Hand className="h-2.5 w-2.5" />
-                                              {claiming ? '认领中…' : `缺 ${ms.name}`}
-                                            </button>
-                                          );
-                                        })}
+                                  return (
+                                    <div
+                                      key={`${card.taskId}:${card.boardColumnId}`}
+                                      data-testid={`board-card-${card.taskId}-${card.boardColumnId}`}
+                                      data-card-state={cardState}
+                                      className={cn(
+                                        'rounded-md border px-2.5 py-2 shadow-[0_1px_1px_rgba(0,0,0,0.02)] transition-colors',
+                                        stateStyle.subCard,
+                                      )}
+                                    >
+                                      <div className="flex items-start justify-between gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            onOpenDetail({
+                                              worksheetId: card.worksheetId,
+                                              taskId: card.taskId,
+                                            })
+                                          }
+                                          title={
+                                            card.divisionNote
+                                              ? `${card.taskTitle} — ${card.divisionNote}`
+                                              : card.taskTitle
+                                          }
+                                          className="min-w-0 flex-1 text-left text-xs font-semibold leading-snug text-zinc-900 hover:text-blue-600 cursor-pointer"
+                                        >
+                                          {card.taskTitle}
+                                        </button>
+
+                                        {card.priority !== 'normal' && (
+                                          <span
+                                            className={cn(
+                                              'shrink-0 rounded border px-1 py-0 text-[10px] font-medium leading-4',
+                                              PRIORITY_STYLES[card.priority],
+                                            )}
+                                          >
+                                            {PRIORITY_LABELS[card.priority]}
+                                          </span>
+                                        )}
                                       </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
+
+                                      <div className="mt-1.5 flex items-center justify-between gap-1.5">
+                                        <div className="flex min-w-0 items-center gap-1 text-[11px]">
+                                          <span
+                                            className={cn(
+                                              'h-1.5 w-1.5 shrink-0 rounded-full',
+                                              stateStyle.dot,
+                                            )}
+                                          />
+                                          <span className={cn('truncate', stateStyle.statusText)}>
+                                            {formatStageStatusLine(card)}
+                                          </span>
+                                          {mine && (
+                                            <span className="shrink-0 rounded bg-black/[0.06] px-1 py-0 text-[10px] font-medium text-zinc-700">
+                                              我
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {currentStageMissing && (
+                                          <button
+                                            type="button"
+                                            disabled={claimingCurrent}
+                                            aria-label={`认领 ${currentStageMissing.name}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              void onClaim(
+                                                card.taskId,
+                                                currentStageMissing.columnId,
+                                                currentStageMissing.name,
+                                              );
+                                            }}
+                                            className="inline-flex h-5 shrink-0 items-center gap-0.5 rounded border border-red-300/90 bg-white/95 px-1.5 text-[10px] font-medium text-red-700 transition-colors hover:border-red-400 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
+                                          >
+                                            <Hand className="h-2.5 w-2.5" />
+                                            {claimingCurrent ? '认领中…' : '认领'}
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      {renderOtherMissing(card, true)}
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </div>
+                    </section>
                   );
                 })
               )}

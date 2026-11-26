@@ -91,12 +91,12 @@ export const STAGE_STATUS_STYLES: Record<
     text: 'text-zinc-700',
   },
   in_progress: {
-    cell: 'bg-[#EFF6FF] text-[#1E40AF] border-blue-200/70',
-    fill: 'bg-[#EFF6FF] hover:bg-[#DBEAFE]/70',
-    accent: 'bg-[#3B82F6]',
-    dot: 'bg-[#3B82F6]',
-    badge: 'bg-[#EFF6FF] text-[#1D4ED8]',
-    text: 'text-[#1E3A8A] font-medium',
+    cell: 'bg-[#FEFCE8] text-[#854D0E] border-amber-200/90',
+    fill: 'bg-[#FEFCE8] hover:bg-[#FEF9C3]/80',
+    accent: 'bg-[#EAB308]',
+    dot: 'bg-[#EAB308]',
+    badge: 'bg-[#FEF9C3] text-[#854D0E]',
+    text: 'text-[#854D0E] font-medium',
   },
   done: {
     cell: 'bg-[#ECFDF5] text-[#065F46] border-emerald-200/70',
@@ -113,6 +113,43 @@ export const STAGE_STATUS_STYLES: Record<
     dot: 'bg-zinc-300',
     badge: 'bg-zinc-100 text-zinc-400',
     text: 'text-zinc-400',
+  },
+};
+
+export const STAGE_MISSING_STYLE = {
+  cell: 'bg-[#FEF2F2] text-[#991B1B] border-red-200/85',
+  fill: 'bg-[#FEF2F2] hover:bg-[#FEE2E2]/80',
+  accent: 'bg-[#EF4444]',
+  dot: 'bg-[#EF4444]',
+  badge: 'bg-[#FEE2E2] text-[#991B1B]',
+  text: 'text-[#991B1B] font-medium',
+} as const;
+
+export type BoardCardVisualState = 'in_progress' | 'missing' | 'waiting';
+
+export const BOARD_CARD_STATE_STYLES: Record<
+  BoardCardVisualState,
+  { card: string; subCard: string; statusText: string; dot: string }
+> = {
+  in_progress: {
+    card: 'border-amber-200/90 border-l-[3px] border-l-amber-400 bg-[#FEFCE8] hover:border-amber-300 hover:bg-[#FEF9C3]/65',
+    subCard:
+      'border-amber-200/85 border-l-[3px] border-l-amber-400 bg-[#FEFCE8] hover:border-amber-300 hover:bg-[#FEF9C3]/70',
+    statusText: 'text-amber-900 font-medium',
+    dot: 'bg-amber-400',
+  },
+  missing: {
+    card: 'border-red-200/85 border-l-[3px] border-l-red-400 bg-[#FEF2F2] hover:border-red-300 hover:bg-[#FEE2E2]/60',
+    subCard:
+      'border-red-200/80 border-l-[3px] border-l-red-400 bg-[#FEF2F2] hover:border-red-300 hover:bg-[#FEE2E2]/65',
+    statusText: 'text-red-800 font-medium',
+    dot: 'bg-red-400',
+  },
+  waiting: {
+    card: 'border-black/[0.08] bg-white hover:border-black/[0.16] hover:bg-[#fcfcfd]',
+    subCard: 'border-black/[0.08] bg-white hover:border-black/[0.15] hover:bg-[#fcfcfd]',
+    statusText: 'text-zinc-700',
+    dot: 'bg-zinc-300',
   },
 };
 
@@ -136,12 +173,12 @@ export const STAGE_STATUS_CANVAS_COLORS: Record<
     mutedText: '#A1A1AA',
   },
   in_progress: {
-    bg: '#EFF6FF',
-    bgHover: '#E0EEFF',
-    accent: '#3B82F6',
-    dot: '#3B82F6',
-    text: '#1E3A8A',
-    mutedText: '#3B82F6',
+    bg: '#FEFCE8',
+    bgHover: '#FEF9C3',
+    accent: '#EAB308',
+    dot: '#EAB308',
+    text: '#854D0E',
+    mutedText: '#CA8A04',
   },
   done: {
     bg: '#ECFDF5',
