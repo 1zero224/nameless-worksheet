@@ -119,8 +119,9 @@ export function FieldVisibilityPopover({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  const hiddenSystemCount = SYSTEM_TOGGLEABLE.filter((item) =>
-    isSystemColumnHidden(worksheet.systemColumns, item.key),
+  // 作品列默认隐藏，不计入「已隐藏列」红点角标，避免每次打开工作表都高亮提示
+  const hiddenSystemCount = SYSTEM_TOGGLEABLE.filter(
+    (item) => item.key !== 'work' && isSystemColumnHidden(worksheet.systemColumns, item.key),
   ).length;
   const hiddenCustomCount = columns.filter((c) => c.hidden).length;
   const hiddenTotal = hiddenSystemCount + hiddenCustomCount;

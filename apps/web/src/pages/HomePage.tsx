@@ -1,6 +1,7 @@
 import type { BoardResponse, MyTaskItem, StageStatus, UserListItem } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Columns3, ListTodo, X } from 'lucide-react';
+import { LayoutGroup } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
@@ -333,37 +334,32 @@ export function HomePage() {
           正在加载看板…
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <MyTasksRail
-            myInProgress={myInProgress}
-            myPending={myPending}
-            updatingKey={updatingMyTaskKey}
-            collapsed={myTasksCollapsed}
-            onToggleCollapsed={() => setMyTasksCollapsed((v) => !v)}
-            onStart={(item) => updateMyTaskStatusMutation.mutate({ item, status: 'in_progress' })}
-            onComplete={(item) => updateMyTaskStatusMutation.mutate({ item, status: 'done' })}
-            onOpenDetail={setDetailTarget}
-          />
+        <LayoutGroup id="home-board-layout">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <MyTasksRail
+              myInProgress={myInProgress}
+              myPending={myPending}
+              updatingKey={updatingMyTaskKey}
+              collapsed={myTasksCollapsed}
+              onToggleCollapsed={() => setMyTasksCollapsed((v) => !v)}
+              onStart={(item) => updateMyTaskStatusMutation.mutate({ item, status: 'in_progress' })}
+              onComplete={(item) => updateMyTaskStatusMutation.mutate({ item, status: 'done' })}
+              onOpenDetail={setDetailTarget}
+            />
 
-          <KanbanBoard
-            boardColumns={board.boardColumns}
-            cards={filteredCards}
-            userMap={userMap}
-            claimingKeys={claimingKeys}
-            currentUserId={me?.user.id ?? null}
-            onlyMissing={onlyMissing}
-            showWorksheetSource
-            onClaim={handleClaim}
-            onOpenDetail={setDetailTarget}
-            onSelectWorkFilter={(target) =>
-              setWorkFilter((prev) =>
-                prev?.workId === target.workId && prev.worksheetId === target.worksheetId
-                  ? null
-                  : target,
-              )
-            }
-          />
-        </div>
+            <KanbanBoard
+              boardColumns={board.boardColumns}
+              cards={filteredCards}
+              userMap={userMap}
+              claimingKeys={claimingKeys}
+              currentUserId={me?.user.id ?? null}
+              onlyMissing={onlyMissing}
+              showWorksheetSource
+              onClaim={handleClaim}
+              onOpenDetail={setDetailTarget}
+            />
+          </div>
+        </LayoutGroup>
       )}
 
       {/* 移动端「我的任务」抽屉 */}
