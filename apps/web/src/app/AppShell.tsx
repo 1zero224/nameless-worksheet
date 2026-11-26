@@ -149,7 +149,7 @@ function SortableTopWorksheetTab({
       <NavLink
         to={`/worksheets/${ws.id}`}
         className={cn(
-          'relative z-10 flex h-full items-center gap-1.5 pl-2.5 pr-6 text-[13px] transition-colors duration-150',
+          'relative z-10 flex h-full items-center gap-1.5 pl-2.5 pr-6 text-sm transition-colors duration-150',
           isActive ? 'font-medium text-zinc-950' : 'text-zinc-600 group-hover:text-zinc-950',
         )}
       >
@@ -304,9 +304,9 @@ export function AppShell() {
         <header className="flex h-11 shrink-0 items-center gap-2 border-b border-black/[0.08] bg-[#f8f8f9] px-2.5 sm:px-3">
           <NavLink
             to="/"
-            className="hidden shrink-0 items-center gap-1.5 pr-0.5 text-[13px] font-semibold tracking-tight text-zinc-950 lg:flex"
+            className="hidden shrink-0 items-center gap-1.5 pr-0.5 text-sm font-semibold tracking-tight text-zinc-950 lg:flex"
           >
-            <span className="max-w-[116px] truncate">{me.project.name}</span>
+            <span className="max-w-[128px] truncate">{me.project.name}</span>
           </NavLink>
 
           <span className="hidden h-4 w-px shrink-0 bg-black/[0.08] lg:inline-block" />
@@ -322,7 +322,7 @@ export function AppShell() {
                 to="/"
                 end
                 className={cn(
-                  'relative flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] transition-colors duration-150 select-none',
+                  'relative flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors duration-150 select-none',
                   isBoardActive
                     ? 'font-medium text-zinc-950'
                     : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',

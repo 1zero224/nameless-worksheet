@@ -1343,19 +1343,6 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       },
     ];
 
-    // 冗余「作品」列默认隐藏，若用户在字段显隐中显式开启则插入在标题之后
-    if (!isSystemColumnHidden(sys, 'work')) {
-      defs.push({
-        id: 'work',
-        name: '作品',
-        width: previewWidths.work ?? sys.work?.width ?? 148,
-        isSystem: true,
-        systemKey: 'work',
-        kind: 'work',
-        isTextCell: false,
-      });
-    }
-
     for (const col of columns) {
       if (col.hidden) continue;
       defs.push({

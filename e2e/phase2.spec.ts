@@ -348,12 +348,10 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     );
     await pageA.getByRole('button', { name: '关闭侧栏' }).click();
 
-    // 验证「作品」列默认隐藏但可在「字段显隐」中找回再隐藏，以及「分工说明」可显隐切换
+    // 验证「作品」列已从工作表与「字段显隐」中彻底移除，以及「分工说明」可显隐切换
     await pageA.getByTestId('field-visibility-trigger').click();
     const fieldPopover = pageA.locator('[data-radix-popper-content-wrapper]');
-    await fieldPopover.getByRole('button', { name: '作品', exact: true }).click();
-    await expect(pageA.getByTestId('col-header-work')).toHaveCount(1);
-    await fieldPopover.getByRole('button', { name: '作品', exact: true }).click();
+    await expect(fieldPopover.getByRole('button', { name: '作品', exact: true })).toHaveCount(0);
     await expect(pageA.getByTestId('col-header-work')).toHaveCount(0);
 
     await fieldPopover.getByRole('button', { name: '分工说明', exact: true }).click();
@@ -602,6 +600,16 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await pageA.getByRole('button', { name: '清除作品筛选' }).click();
     await expect(claimCardA).toBeVisible();
 
+    // 验证看板卡片上的「快速查看可下载资源」与「查看任务详情」按钮可用
+    await claimCardA.getByTestId(`card-resources-btn-${tClaim.id}`).click();
+    await expect(pageA.getByTestId(`task-resources-popover-${tClaim.id}`)).toContainText(
+      '可下载资源',
+    );
+    await pageA.keyboard.press('Escape');
+    await claimCardA.getByTestId(`card-detail-btn-${tClaim.id}`).click();
+    await expect(pageA.getByTestId('task-detail-drawer')).toBeVisible();
+    await pageA.getByRole('button', { name: '关闭侧栏' }).click();
+
     // V6: 甲在看板点击本列「认领」-> 卡片由缺人浅红变为已认领未开始白底，乙实时同步看到「翻译 · 小爱 · 未开始」
     const claimCardB = pageB
       .locator('[data-board-column-name="翻译"]')
@@ -621,11 +629,19 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await expect(myRail.getByTestId('my-tasks-in-progress-list')).toContainText('并行直播剪辑');
     await expect(myRail.getByTestId('my-tasks-pending-list')).toContainText('待认领短片');
 
+    // 验证「我的任务」卡片上的「快速查看可下载资源」与「查看任务详情」按钮可用
+    const myInProgItem = myRail.getByTestId(`my-in-progress-item-${tParallel.id}-${colTiming.id}`);
+    await myInProgItem.getByTestId(`card-resources-btn-${tParallel.id}`).click();
+    await expect(pageA.getByTestId(`task-resources-popover-${tParallel.id}`)).toContainText(
+      '作品共用：周年庆特辑',
+    );
+    await pageA.keyboard.press('Escape');
+    await myInProgItem.getByTestId(`my-task-detail-btn-${tParallel.id}-${colTiming.id}`).click();
+    await expect(pageA.getByTestId('task-detail-drawer')).toBeVisible();
+    await pageA.getByRole('button', { name: '关闭侧栏' }).click();
+
     // 一键完成进行中的「并行直播剪辑」
-    await myRail
-      .getByTestId(`my-in-progress-item-${tParallel.id}-${colTiming.id}`)
-      .getByRole('button', { name: '完成' })
-      .click();
+    await myInProgItem.getByRole('button', { name: '完成' }).click();
     await expect(myRail).not.toContainText('并行直播剪辑');
 
     // 一键开始待开始的「待认领短片」-> 移入「进行中」并切为浅黄底色

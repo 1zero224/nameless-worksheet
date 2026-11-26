@@ -28,10 +28,9 @@ import { Popover, PopoverContent, PopoverTrigger, useToast } from '@/components/
 import { cn } from '@/components/ui/primitives.js';
 
 const SYSTEM_TOGGLEABLE: Array<{
-  key: Exclude<keyof SystemColumnsConfig, 'title'>;
+  key: Exclude<keyof SystemColumnsConfig, 'title' | 'work'>;
   label: string;
 }> = [
-  { key: 'work', label: '作品' },
   { key: 'priority', label: '优先级' },
   { key: 'publish', label: '发布信息' },
   { key: 'files', label: '文件' },
@@ -42,9 +41,9 @@ export function isSystemColumnHidden(
   sys: SystemColumnsConfig | undefined,
   key: Exclude<keyof SystemColumnsConfig, 'title'>,
 ): boolean {
-  // 作品列默认隐藏（因工作表采用作品大标题横幅分组，仍可在字段显隐中找回）
+  // 工作表采用作品大标题横幅表达归属，不再显示冗余的「作品」列
   if (key === 'work') {
-    return sys?.work?.hidden !== false;
+    return true;
   }
   return Boolean(sys?.[key]?.hidden);
 }
@@ -119,9 +118,8 @@ export function FieldVisibilityPopover({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  // 作品列默认隐藏，不计入「已隐藏列」红点角标，避免每次打开工作表都高亮提示
-  const hiddenSystemCount = SYSTEM_TOGGLEABLE.filter(
-    (item) => item.key !== 'work' && isSystemColumnHidden(worksheet.systemColumns, item.key),
+  const hiddenSystemCount = SYSTEM_TOGGLEABLE.filter((item) =>
+    isSystemColumnHidden(worksheet.systemColumns, item.key),
   ).length;
   const hiddenCustomCount = columns.filter((c) => c.hidden).length;
   const hiddenTotal = hiddenSystemCount + hiddenCustomCount;

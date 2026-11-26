@@ -75,11 +75,11 @@ export const gridTheme: IGridTheme = {
   iconSizeSM: 20,
   iconSizeMD: 24,
   iconSizeLG: 32,
-  fontSizeXXS: 10,
-  fontSizeXS: 12,
-  fontSizeSM: 13,
-  fontSizeMD: 14,
-  fontSizeLG: 16,
+  fontSizeXXS: 11,
+  fontSizeXS: 13,
+  fontSizeSM: 14,
+  fontSizeMD: 15,
+  fontSizeLG: 17,
   fontFamily:
     'Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif',
 

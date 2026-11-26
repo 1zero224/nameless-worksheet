@@ -1,7 +1,8 @@
 import { type BoardCard, type BoardColumn, PRIORITY_LABELS, STAGE_STATUS_LABELS } from '@nw/shared';
-import { ChevronDown, Folder, Hand, Minimize2, PanelLeftOpen } from 'lucide-react';
+import { ChevronDown, Folder, Hand, Minimize2, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { useMemo, useState } from 'react';
+import { TaskResourcesPopover } from '@/components/task/TaskResourcesPopover.js';
 import {
   BOARD_CARD_STATE_STYLES,
   type BoardCardVisualState,
@@ -124,12 +125,10 @@ function buildColumnDisplayItems(colCards: BoardCard[]): ColumnDisplayItem[] {
     }
   }
 
-  // 作品内部子任务按「缺人 → 进行中 → 已认领未开始」稳定排序
   for (const group of workGroupMap.values()) {
     group.cards.sort((a, b) => getCardSortRank(a) - getCardSortRank(b));
   }
 
-  // 列内顶层卡片/作品按最高优先级状态稳定排序（缺人优先，再进行中，最后已认领未开始）
   items.sort((a, b) => getDisplayItemSortRank(a) - getDisplayItemSortRank(b));
 
   return items;
@@ -159,9 +158,7 @@ export function KanbanBoard({
   onOpenDetail,
 }: KanbanBoardProps) {
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
-  // 作品父容器（>=2条）默认展开，收起项记入 collapsedGroups
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  // 跨列悬停同作品联动高亮
   const [hoveredWorkKey, setHoveredWorkKey] = useState<string | null>(null);
 
   const cardsByBoardCol = useMemo(() => {
@@ -224,8 +221,8 @@ export function KanbanBoard({
       return (
         <div
           className={cn(
-            'flex flex-wrap gap-1 border-t border-black/[0.06] pt-1.5',
-            compact ? 'mt-1.5' : 'mt-2',
+            'flex flex-wrap gap-1 border-t border-black/[0.06] pt-1',
+            compact ? 'mt-1' : 'mt-1.5',
           )}
         >
           {otherMissing.map((ms) => {
@@ -240,9 +237,9 @@ export function KanbanBoard({
                   e.stopPropagation();
                   void onClaim(card.taskId, ms.columnId, ms.name);
                 }}
-                className="inline-flex items-center gap-0.5 rounded border border-red-200/90 bg-white/95 px-1.5 py-0.5 text-[10px] font-medium text-red-700 transition-all duration-150 hover:border-red-300 hover:bg-red-50 active:scale-95 disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-0.5 rounded border border-red-200/90 bg-white/95 px-1.5 py-0.5 text-xs font-medium text-red-700 transition-all duration-150 hover:border-red-300 hover:bg-red-50 active:scale-95 disabled:opacity-50 cursor-pointer"
               >
-                <Hand className="h-2.5 w-2.5" />
+                <Hand className="h-3 w-3" />
                 {claiming ? '认领中…' : `缺 ${ms.name}`}
               </button>
             );
@@ -254,8 +251,8 @@ export function KanbanBoard({
     return (
       <div
         className={cn(
-          'truncate text-[10px] text-zinc-400',
-          compact ? 'mt-1' : 'mt-2 border-t border-black/[0.05] pt-1.5',
+          'truncate text-xs text-zinc-400',
+          compact ? 'mt-0.5' : 'mt-1 border-t border-black/[0.05] pt-1',
         )}
       >
         还缺 {otherMissing.map((m) => m.name).join(' · ')}
@@ -267,7 +264,7 @@ export function KanbanBoard({
     <LayoutGroup id="kanban-board">
       <div
         data-testid="board-columns"
-        className="no-scrollbar flex min-h-0 flex-1 gap-4 overflow-x-auto bg-white p-3.5"
+        className="no-scrollbar flex min-h-0 flex-1 gap-3.5 overflow-x-auto bg-white p-3"
       >
         {boardColumns.map((bc, colIdx) => {
           const colCards = cardsByBoardCol.get(bc.id) ?? [];
@@ -281,7 +278,7 @@ export function KanbanBoard({
               key={bc.id}
               layout
               initial={false}
-              animate={{ width: isCollapsed ? 52 : 292 }}
+              animate={{ width: isCollapsed ? 52 : 308 }}
               transition={COLUMN_SPRING}
               data-testid={`board-col-${bc.id}`}
               data-board-column-name={bc.name}
@@ -297,7 +294,7 @@ export function KanbanBoard({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.16 }}
-                  className="flex h-full flex-col items-center py-3"
+                  className="flex h-full flex-col items-center py-2.5"
                 >
                   <button
                     type="button"
@@ -306,15 +303,15 @@ export function KanbanBoard({
                     title={`展开「${bc.name}」列`}
                     className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
                   >
-                    <PanelLeftOpen className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    <PanelLeftOpen className="h-4 w-4" strokeWidth={1.75} />
                   </button>
-                  <span className="mt-2.5 rounded-full border border-black/[0.08] bg-white px-2 py-0.25 text-[11px] font-medium tabular-nums text-zinc-500">
+                  <span className="mt-2 rounded-full border border-black/[0.08] bg-white px-2 py-0.25 text-xs font-medium tabular-nums text-zinc-500">
                     {colCards.length}
                   </span>
                   <button
                     type="button"
                     onClick={() => toggleColumnCollapsed(bc.id)}
-                    className="mt-3 flex flex-1 items-start justify-center cursor-pointer"
+                    className="mt-2.5 flex flex-1 items-start justify-center cursor-pointer"
                   >
                     <span
                       className={cn(
@@ -332,20 +329,20 @@ export function KanbanBoard({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.16 }}
-                  className="flex h-full min-h-0 w-[292px] flex-col"
+                  className="flex h-full min-h-0 w-[308px] flex-col"
                 >
-                  {/* Teable 标志性双层看板列：纯白顶栏（h-11 border-b bg-white px-3.5）+ 浅灰卡片槽 */}
-                  <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-black/[0.07] bg-white px-3.5">
+                  {/* Teable 双层列顶栏（紧凑 h-10 纯白底 + 细底边） */}
+                  <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-black/[0.07] bg-white px-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <h2
                         className={cn(
-                          'truncate rounded-md px-2 py-0.5 text-xs font-semibold leading-5',
+                          'truncate rounded-md px-2 py-0.5 text-sm font-semibold leading-5',
                           pillStyle,
                         )}
                       >
                         {bc.name}
                       </h2>
-                      <span className="shrink-0 rounded-full border border-black/[0.08] bg-white px-2 py-0 text-[11px] font-medium tabular-nums text-zinc-500">
+                      <span className="shrink-0 rounded-full border border-black/[0.08] bg-white px-2 py-0 text-xs font-medium tabular-nums text-zinc-500">
                         {colCards.length}
                       </span>
                     </div>
@@ -360,10 +357,10 @@ export function KanbanBoard({
                     </button>
                   </div>
 
-                  {/* 卡片列表（AnimatePresence + layout="position" 顺滑重排） */}
-                  <div className="no-scrollbar min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
+                  {/* 紧凑卡片列表 */}
+                  <div className="no-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
                     {displayItems.length === 0 ? (
-                      <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-black/[0.08] bg-white/60 text-xs text-zinc-400">
+                      <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-black/[0.08] bg-white/60 text-xs text-zinc-400">
                         暂无任务
                       </div>
                     ) : (
@@ -409,14 +406,13 @@ export function KanbanBoard({
                                     : undefined
                                 }
                                 className={cn(
-                                  'rounded-lg border p-3 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-[border-color,background-color,box-shadow] duration-150 hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]',
+                                  'rounded-lg border px-2.5 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-[border-color,background-color,box-shadow] duration-150 hover:shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)]',
                                   stateStyle.card,
                                   isWorkHighlighted && 'ring-2 ring-zinc-400/75',
                                 )}
                               >
-                                {/* 同列仅 1 条任务的作品：不折叠，中性极简作品眉标 */}
                                 {card.workId && card.workName && (
-                                  <div className="mb-1 flex items-center gap-1 text-[11px] text-zinc-500">
+                                  <div className="mb-0.5 flex items-center gap-1 text-xs text-zinc-500">
                                     <Folder
                                       className="h-3 w-3 shrink-0 text-zinc-400"
                                       strokeWidth={1.75}
@@ -441,7 +437,7 @@ export function KanbanBoard({
                                           ? `${card.taskTitle} — ${card.divisionNote}`
                                           : card.taskTitle
                                       }
-                                      className="min-w-0 text-left text-[13px] font-semibold leading-snug text-zinc-950 transition-colors hover:text-blue-600 cursor-pointer"
+                                      className="min-w-0 text-left text-sm font-semibold leading-snug text-zinc-950 transition-colors hover:text-blue-600 cursor-pointer"
                                     >
                                       {card.taskTitle}
                                     </button>
@@ -449,7 +445,7 @@ export function KanbanBoard({
                                     {card.priority !== 'normal' && (
                                       <span
                                         className={cn(
-                                          'mt-0.5 shrink-0 rounded border px-1 py-0 text-[10px] font-medium leading-4',
+                                          'mt-0.5 shrink-0 rounded border px-1 py-0 text-[11px] font-medium leading-4',
                                           PRIORITY_STYLES[card.priority],
                                         )}
                                       >
@@ -461,7 +457,7 @@ export function KanbanBoard({
                                   {showWorksheetSource && (
                                     <span
                                       title={card.worksheetName}
-                                      className="mt-0.5 inline-flex max-w-[42%] shrink-0 items-center gap-1 text-[11px] text-zinc-400"
+                                      className="mt-0.5 inline-flex max-w-[40%] shrink-0 items-center gap-1 text-xs text-zinc-400"
                                     >
                                       <span
                                         className={cn(
@@ -474,9 +470,9 @@ export function KanbanBoard({
                                   )}
                                 </div>
 
-                                {/* 第 2 层：本列「工序 · 负责人 · 状态」+ 缺人直接认领 */}
-                                <div className="mt-2.5 flex items-center justify-between gap-2">
-                                  <div className="flex min-w-0 items-center gap-1.5 text-[11px]">
+                                {/* 第 2 层：本列「工序 · 负责人 · 状态」+ 认领 / 可下载资源 / 任务详情 */}
+                                <div className="mt-1.5 flex items-center justify-between gap-1.5">
+                                  <div className="flex min-w-0 items-center gap-1.5 text-xs">
                                     <span
                                       className={cn(
                                         'h-1.5 w-1.5 shrink-0 rounded-full',
@@ -487,40 +483,67 @@ export function KanbanBoard({
                                       {formatStageStatusLine(card)}
                                     </span>
                                     {mine && (
-                                      <span className="shrink-0 rounded bg-black/[0.06] px-1 py-0 text-[10px] font-medium text-zinc-700">
+                                      <span className="shrink-0 rounded bg-black/[0.06] px-1 py-0 text-[11px] font-medium text-zinc-700">
                                         我
                                       </span>
                                     )}
                                   </div>
 
-                                  {currentStageMissing && (
+                                  <div className="flex shrink-0 items-center gap-0.5">
+                                    {currentStageMissing && (
+                                      <button
+                                        type="button"
+                                        disabled={claimingCurrent}
+                                        aria-label={`认领 ${currentStageMissing.name}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          void onClaim(
+                                            card.taskId,
+                                            currentStageMissing.columnId,
+                                            currentStageMissing.name,
+                                          );
+                                        }}
+                                        className="mr-0.5 inline-flex h-6 shrink-0 items-center gap-0.5 rounded border border-red-300/90 bg-white/95 px-1.5 text-xs font-medium text-red-700 transition-all duration-150 hover:border-red-400 hover:bg-red-50 active:scale-95 disabled:opacity-50 cursor-pointer"
+                                      >
+                                        <Hand className="h-3 w-3" />
+                                        {claimingCurrent ? '认领中…' : '认领'}
+                                      </button>
+                                    )}
+
+                                    <TaskResourcesPopover
+                                      taskId={card.taskId}
+                                      taskTitle={card.taskTitle}
+                                      worksheetId={card.worksheetId}
+                                      workName={card.workName}
+                                      stageColumnName={card.stageColumnName}
+                                      onOpenDetail={onOpenDetail}
+                                    />
+
                                     <button
                                       type="button"
-                                      disabled={claimingCurrent}
-                                      aria-label={`认领 ${currentStageMissing.name}`}
+                                      data-testid={`card-detail-btn-${card.taskId}`}
+                                      aria-label={`查看任务详情 ${card.taskTitle}`}
+                                      title="查看任务详情"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        void onClaim(
-                                          card.taskId,
-                                          currentStageMissing.columnId,
-                                          currentStageMissing.name,
-                                        );
+                                        onOpenDetail({
+                                          worksheetId: card.worksheetId,
+                                          taskId: card.taskId,
+                                        });
                                       }}
-                                      className="inline-flex h-5 shrink-0 items-center gap-0.5 rounded border border-red-300/90 bg-white/95 px-1.5 text-[11px] font-medium text-red-700 transition-all duration-150 hover:border-red-400 hover:bg-red-50 active:scale-95 disabled:opacity-50 cursor-pointer"
+                                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
                                     >
-                                      <Hand className="h-2.5 w-2.5" />
-                                      {claimingCurrent ? '认领中…' : '认领'}
+                                      <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={1.85} />
                                     </button>
-                                  )}
+                                  </div>
                                 </div>
 
-                                {/* 其他未轮到工序缺人提示 */}
                                 {renderOtherMissing(card, false)}
                               </motion.div>
                             );
                           }
 
-                          // 作品父容器（同列 >= 2 条任务，默认展开，中性白底 + 丝滑旋转箭头 + 树形引导线）
+                          // 作品父容器（紧凑头部 + 树形引导线）
                           const collapseKey = `${bc.id}:${item.key}`;
                           const isExpanded = !collapsedGroups.has(collapseKey);
                           const wsColor =
@@ -556,7 +579,6 @@ export function KanbanBoard({
                                 isWorkHighlighted && 'ring-2 ring-zinc-400/75',
                               )}
                             >
-                              {/* 作品父容器单行极简头部：左「▾ 作品名」| 右「所属工作表」 */}
                               <button
                                 type="button"
                                 onClick={() => toggleGroupCollapsed(collapseKey)}
@@ -566,9 +588,9 @@ export function KanbanBoard({
                                     ? `收起作品 ${item.workName} 分段`
                                     : `展开作品 ${item.workName} 分段`
                                 }
-                                className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-black/[0.02] cursor-pointer"
+                                className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left transition-colors hover:bg-black/[0.02] cursor-pointer"
                               >
-                                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                                <span className="flex min-w-0 flex-1 items-center gap-1">
                                   <motion.span
                                     initial={false}
                                     animate={{ rotate: isExpanded ? 0 : -90 }}
@@ -577,7 +599,7 @@ export function KanbanBoard({
                                   >
                                     <ChevronDown className="h-3.5 w-3.5" />
                                   </motion.span>
-                                  <span className="truncate text-[13px] font-semibold leading-snug text-zinc-950">
+                                  <span className="truncate text-sm font-semibold leading-snug text-zinc-950">
                                     {item.workName}
                                   </span>
                                 </span>
@@ -585,7 +607,7 @@ export function KanbanBoard({
                                 {showWorksheetSource && (
                                   <span
                                     title={item.worksheetName}
-                                    className="inline-flex max-w-[40%] shrink-0 items-center gap-1 text-[11px] text-zinc-400"
+                                    className="inline-flex max-w-[40%] shrink-0 items-center gap-1 text-xs text-zinc-400"
                                   >
                                     <span
                                       className={cn(
@@ -598,7 +620,7 @@ export function KanbanBoard({
                                 )}
                               </button>
 
-                              {/* 折叠态摘要：紧凑展示分段数与红/黄/白计数 */}
+                              {/* 折叠态摘要 */}
                               <AnimatePresence initial={false}>
                                 {!isExpanded && (
                                   <motion.div
@@ -609,9 +631,9 @@ export function KanbanBoard({
                                     transition={{ duration: 0.16, ease: [0.2, 0, 0, 1] }}
                                     className="overflow-hidden border-t border-black/[0.05]"
                                   >
-                                    <div className="flex items-center justify-between gap-2 px-3 py-1.5 pl-8 text-[11px] text-zinc-500">
+                                    <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 pl-7 text-xs text-zinc-500">
                                       <span className="tabular-nums">{item.cards.length} 段</span>
-                                      <div className="flex items-center gap-2 text-[10px] tabular-nums">
+                                      <div className="flex items-center gap-2 text-xs tabular-nums">
                                         {missingCount > 0 && (
                                           <span className="inline-flex items-center gap-1 font-medium text-red-700">
                                             <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
@@ -636,7 +658,7 @@ export function KanbanBoard({
                                 )}
                               </AnimatePresence>
 
-                              {/* 展开态：简洁树形引导线 ├─ / └─ + 状态底色子任务卡 */}
+                              {/* 展开态：简洁树形引导线 ├─ / └─ + 紧凑状态底色子任务卡 */}
                               <AnimatePresence initial={false}>
                                 {isExpanded && (
                                   <motion.div
@@ -647,7 +669,7 @@ export function KanbanBoard({
                                     transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
                                     className="overflow-hidden"
                                   >
-                                    <div className="px-3 pb-3 pt-0.5">
+                                    <div className="px-2.5 pb-2 pt-0.5">
                                       {item.cards.map((card, idx) => {
                                         const isLast = idx === item.cards.length - 1;
                                         const cardState = getBoardCardState(card);
@@ -665,21 +687,19 @@ export function KanbanBoard({
                                             layout="position"
                                             transition={CARD_TRANSITION}
                                             data-tree-branch={isLast ? 'last' : 'middle'}
-                                            className={cn('relative pl-5', !isLast && 'pb-2')}
+                                            className={cn('relative pl-5', !isLast && 'pb-1.5')}
                                           >
-                                            {/* 树形竖向主干（最后一项止于拐角） */}
                                             {!isLast && (
                                               <span
                                                 aria-hidden="true"
                                                 className="pointer-events-none absolute top-0 bottom-0 left-[7px] w-[1.5px] bg-zinc-300/80"
                                               />
                                             )}
-                                            {/* 树形拐角分支 ├─ / └─ */}
                                             <span
                                               aria-hidden="true"
                                               className={cn(
                                                 'pointer-events-none absolute left-[7px] w-[11px] rounded-bl-[5px] border-b-[1.5px] border-l-[1.5px] border-zinc-300/80',
-                                                isLast ? 'top-0 h-[19px]' : 'top-[10px] h-[9px]',
+                                                isLast ? 'top-0 h-[17px]' : 'top-[9px] h-[8px]',
                                               )}
                                             />
 
@@ -687,7 +707,7 @@ export function KanbanBoard({
                                               data-testid={`board-card-${card.taskId}-${card.boardColumnId}`}
                                               data-card-state={cardState}
                                               className={cn(
-                                                'rounded-md border px-2.5 py-2 transition-[border-color,background-color] duration-150',
+                                                'rounded-md border px-2 py-1.5 transition-[border-color,background-color] duration-150',
                                                 stateStyle.subCard,
                                               )}
                                             >
@@ -705,7 +725,7 @@ export function KanbanBoard({
                                                       ? `${card.taskTitle} — ${card.divisionNote}`
                                                       : card.taskTitle
                                                   }
-                                                  className="min-w-0 flex-1 text-left text-xs font-semibold leading-snug text-zinc-900 transition-colors hover:text-blue-600 cursor-pointer"
+                                                  className="min-w-0 flex-1 text-left text-[13.5px] font-semibold leading-snug text-zinc-900 transition-colors hover:text-blue-600 cursor-pointer"
                                                 >
                                                   {card.taskTitle}
                                                 </button>
@@ -713,7 +733,7 @@ export function KanbanBoard({
                                                 {card.priority !== 'normal' && (
                                                   <span
                                                     className={cn(
-                                                      'shrink-0 rounded border px-1 py-0 text-[10px] font-medium leading-4',
+                                                      'shrink-0 rounded border px-1 py-0 text-[11px] font-medium leading-4',
                                                       PRIORITY_STYLES[card.priority],
                                                     )}
                                                   >
@@ -722,8 +742,8 @@ export function KanbanBoard({
                                                 )}
                                               </div>
 
-                                              <div className="mt-1.5 flex items-center justify-between gap-1.5">
-                                                <div className="flex min-w-0 items-center gap-1 text-[11px]">
+                                              <div className="mt-1 flex items-center justify-between gap-1">
+                                                <div className="flex min-w-0 items-center gap-1 text-xs">
                                                   <span
                                                     className={cn(
                                                       'h-1.5 w-1.5 shrink-0 rounded-full',
@@ -739,31 +759,63 @@ export function KanbanBoard({
                                                     {formatStageStatusLine(card)}
                                                   </span>
                                                   {mine && (
-                                                    <span className="shrink-0 rounded bg-black/[0.06] px-1 py-0 text-[10px] font-medium text-zinc-700">
+                                                    <span className="shrink-0 rounded bg-black/[0.06] px-1 py-0 text-[11px] font-medium text-zinc-700">
                                                       我
                                                     </span>
                                                   )}
                                                 </div>
 
-                                                {currentStageMissing && (
+                                                <div className="flex shrink-0 items-center gap-0.5">
+                                                  {currentStageMissing && (
+                                                    <button
+                                                      type="button"
+                                                      disabled={claimingCurrent}
+                                                      aria-label={`认领 ${currentStageMissing.name}`}
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        void onClaim(
+                                                          card.taskId,
+                                                          currentStageMissing.columnId,
+                                                          currentStageMissing.name,
+                                                        );
+                                                      }}
+                                                      className="mr-0.5 inline-flex h-5 shrink-0 items-center gap-0.5 rounded border border-red-300/90 bg-white/95 px-1.5 text-xs font-medium text-red-700 transition-all duration-150 hover:border-red-400 hover:bg-red-50 active:scale-95 disabled:opacity-50 cursor-pointer"
+                                                    >
+                                                      <Hand className="h-2.5 w-2.5" />
+                                                      {claimingCurrent ? '认领中…' : '认领'}
+                                                    </button>
+                                                  )}
+
+                                                  <TaskResourcesPopover
+                                                    taskId={card.taskId}
+                                                    taskTitle={card.taskTitle}
+                                                    worksheetId={card.worksheetId}
+                                                    workName={card.workName}
+                                                    stageColumnName={card.stageColumnName}
+                                                    onOpenDetail={onOpenDetail}
+                                                    className="h-5 w-5"
+                                                  />
+
                                                   <button
                                                     type="button"
-                                                    disabled={claimingCurrent}
-                                                    aria-label={`认领 ${currentStageMissing.name}`}
+                                                    data-testid={`card-detail-btn-${card.taskId}`}
+                                                    aria-label={`查看任务详情 ${card.taskTitle}`}
+                                                    title="查看任务详情"
                                                     onClick={(e) => {
                                                       e.stopPropagation();
-                                                      void onClaim(
-                                                        card.taskId,
-                                                        currentStageMissing.columnId,
-                                                        currentStageMissing.name,
-                                                      );
+                                                      onOpenDetail({
+                                                        worksheetId: card.worksheetId,
+                                                        taskId: card.taskId,
+                                                      });
                                                     }}
-                                                    className="inline-flex h-5 shrink-0 items-center gap-0.5 rounded border border-red-300/90 bg-white/95 px-1.5 text-[10px] font-medium text-red-700 transition-all duration-150 hover:border-red-400 hover:bg-red-50 active:scale-95 disabled:opacity-50 cursor-pointer"
+                                                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
                                                   >
-                                                    <Hand className="h-2.5 w-2.5" />
-                                                    {claimingCurrent ? '认领中…' : '认领'}
+                                                    <PanelRightOpen
+                                                      className="h-3.5 w-3.5"
+                                                      strokeWidth={1.85}
+                                                    />
                                                   </button>
-                                                )}
+                                                </div>
                                               </div>
 
                                               {renderOtherMissing(card, true)}
