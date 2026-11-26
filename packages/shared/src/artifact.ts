@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { PreviewKind } from './upload.js';
 import type { Work } from './worksheet.js';
 import { isValidCalendarDate, normalizeText } from './worksheet.js';
 
@@ -221,6 +222,11 @@ export interface ResourceLocation {
   isFolder: boolean;
   expiresAt: string | null;
   note: string;
+  blobId: string | null;
+  originalFilename: string | null;
+  sizeBytes: number | null;
+  mimeType: string | null;
+  previewKind: PreviewKind | null;
   createdBy: ArtifactActor;
   createdAt: string;
   updatedAt: string;
@@ -260,7 +266,8 @@ export interface WorkCapsuleSummary {
   name: string;
   latestVersionNumber: number | null;
   locationCount: number;
-  /** 仅当最新版恰好有 1 个无提取码的网盘入口时有值，用于胶囊点击一键直跳 */
+  hasR2File: boolean;
+  /** 仅当最新版恰好有 1 个无提取码的网盘入口且无 R2 文件时有值，用于胶囊点击一键直跳 */
   directUrl: string | null;
   directProvider: CloudProvider | null;
   directIsFolder: boolean;
@@ -273,6 +280,7 @@ export interface StageBadgeSummary {
   latestArtifactId: string;
   latestArtifactName: string;
   latestVersionNumber: number | null;
+  kind: 'r2' | 'link';
   label: string;
 }
 

@@ -5,10 +5,10 @@ import type {
   WorkArtifactsResponse,
 } from '@nw/shared';
 import { useQuery } from '@tanstack/react-query';
-import { MoreHorizontal, PanelRightOpen, Plus, X } from 'lucide-react';
+import { MoreHorizontal, PanelRightOpen, Plus, Upload, X } from 'lucide-react';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
-import { LocationActionRow } from '@/components/artifact/ArtifactCardList.js';
+import { LocationActionRow, sortVersionLocations } from '@/components/artifact/ArtifactCardList.js';
 import {
   buildDefaultArtifactName,
   buildScopeTags,
@@ -23,6 +23,7 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from '@/components/ui/overlays.js';
+import type { FilePreviewTarget } from '@/components/upload/FilePreviewModal.js';
 
 export type QuickPopoverTarget =
   | {
@@ -58,6 +59,8 @@ export function ArtifactQuickPopoverContent({
   onRequestCreate,
   onRequestCreateVersion,
   onRequestAddLocation,
+  onRequestAttachFile,
+  onRequestPreview,
   onOpenTaskDetail,
 }: {
   target: QuickPopoverTarget;
@@ -65,6 +68,8 @@ export function ArtifactQuickPopoverContent({
   onRequestCreate: (req: QuickCreateRequest) => void;
   onRequestCreateVersion: (artifact: ArtifactDetail) => void;
   onRequestAddLocation: (artifact: ArtifactDetail) => void;
+  onRequestAttachFile?: (artifact: ArtifactDetail) => void;
+  onRequestPreview?: (preview: FilePreviewTarget) => void;
   onOpenTaskDetail?: (taskId: string) => void;
 }) {
   const workQuery = useQuery<WorkArtifactsResponse>({
@@ -181,7 +186,7 @@ export function ArtifactQuickPopoverContent({
         <div className="py-5 text-center text-xs text-zinc-400">正在加载资源…</div>
       ) : artifacts.length === 0 ? (
         <div className="rounded-lg border border-dashed border-black/[0.1] bg-[#fafafa] px-3 py-4 text-center text-xs text-zinc-400">
-          暂无资源，点击右上角「添加」粘贴网盘链接
+          暂无资源，点击右上角「添加」上传文件或粘贴网盘链接
         </div>
       ) : (
         <div className="no-scrollbar max-h-[300px] divide-y divide-black/[0.06] overflow-y-auto">
@@ -236,6 +241,17 @@ export function ArtifactQuickPopoverContent({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="min-w-[132px]">
+                        {onRequestAttachFile && !latest.locations.some((l) => l.type === 'r2') && (
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              onClose();
+                              onRequestAttachFile(art);
+                            }}
+                          >
+                            <Upload className="h-3.5 w-3.5 text-zinc-400" />
+                            上传文件
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
                           onSelect={() => {
                             onClose();
@@ -254,19 +270,27 @@ export function ArtifactQuickPopoverContent({
 
                 {latest && latest.locations.length > 0 ? (
                   <div className="ml-1.5 space-y-0.5 border-l-2 border-zinc-200/85 pl-2.5">
-                    {latest.locations.map((loc) => (
+                    {sortVersionLocations(latest.locations).map((loc) => (
                       <LocationActionRow
                         key={loc.id}
                         artifact={art}
                         versionNumber={latest.versionNumber}
                         location={loc}
                         compact
+                        onPreview={
+                          onRequestPreview
+                            ? (p) => {
+                                onClose();
+                                onRequestPreview(p);
+                              }
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
                 ) : (
                   <div className="ml-1.5 border-l-2 border-zinc-200/75 pl-2.5 text-[11px] text-zinc-400">
-                    待补充多网盘
+                    暂无文件或网盘链接
                   </div>
                 )}
               </div>
@@ -304,6 +328,8 @@ export function AnchoredArtifactQuickPopover({
   onRequestCreate,
   onRequestCreateVersion,
   onRequestAddLocation,
+  onRequestAttachFile,
+  onRequestPreview,
   onOpenTaskDetail,
 }: {
   anchorRect: { x: number; y: number; width: number; height: number };
@@ -312,6 +338,8 @@ export function AnchoredArtifactQuickPopover({
   onRequestCreate: (req: QuickCreateRequest) => void;
   onRequestCreateVersion: (artifact: ArtifactDetail) => void;
   onRequestAddLocation: (artifact: ArtifactDetail) => void;
+  onRequestAttachFile?: (artifact: ArtifactDetail) => void;
+  onRequestPreview?: (preview: FilePreviewTarget) => void;
   onOpenTaskDetail?: (taskId: string) => void;
 }) {
   return (
@@ -344,6 +372,8 @@ export function AnchoredArtifactQuickPopover({
           onRequestCreate={onRequestCreate}
           onRequestCreateVersion={onRequestCreateVersion}
           onRequestAddLocation={onRequestAddLocation}
+          onRequestAttachFile={onRequestAttachFile}
+          onRequestPreview={onRequestPreview}
           onOpenTaskDetail={onOpenTaskDetail}
         />
       </PopoverContent>

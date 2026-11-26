@@ -6,4 +6,5 @@ export * from './fields.js';
 export * from './permissions.js';
 export * from './realtime.js';
 export * from './share-parser.js';
+export * from './upload.js';
 export * from './worksheet.js';

@@ -19,17 +19,20 @@ import { registerBoardColumnRoutes } from './modules/board-columns.js';
 import { registerChangeLogRoutes } from './modules/change-logs.js';
 import { registerColumnRoutes } from './modules/columns.js';
 import { registerDiagRoutes } from './modules/diag.js';
+import { registerFileAccessRoutes } from './modules/file-access.js';
 import { registerHealthRoutes } from './modules/health.js';
 import { registerInviteRoutes } from './modules/invites.js';
 import { registerSearchRoutes } from './modules/search.js';
 import { registerStageRoutes } from './modules/stages.js';
 import { registerTaskRoutes } from './modules/tasks.js';
+import { registerUploadRoutes } from './modules/uploads.js';
 import { registerUserRoutes } from './modules/users.js';
 import { registerWorksheetRoutes } from './modules/worksheets.js';
 import { type EventBus, InProcessEventBus } from './realtime/bus.js';
 import { RealtimeHub } from './realtime/hub.js';
 import { registerRealtimeRoute } from './realtime/route.js';
 import { createDefaultScopeRegistry } from './realtime/scopes.js';
+import { createStorageDriver, type StorageDriver } from './storage/index.js';
 
 export function scrubTokenUrl(url: string): string {
   return url
@@ -42,6 +45,7 @@ export function scrubTokenUrl(url: string): string {
 export interface BuildAppOptions {
   config: Config;
   pool?: pg.Pool;
+  storage?: StorageDriver;
   enableJobs?: boolean;
   enableRateLimit?: boolean;
   heartbeatIntervalMs?: number;
@@ -54,6 +58,7 @@ export interface AppContext {
   db: Db;
   bus: EventBus;
   realtime: RealtimeHub;
+  storage: StorageDriver;
   getRegisteredRoutes: () => RegisteredApiRoute[];
 }
 
@@ -67,6 +72,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   const { config } = opts;
   const ownsPool = !opts.pool;
   const pool = opts.pool ?? createPool(config.databaseUrl);
+  const ownsStorage = !opts.storage;
+  const storage = opts.storage ?? (await createStorageDriver(config));
   const db = createDb(pool);
   const bus = new InProcessEventBus();
   const scopeRegistry = createDefaultScopeRegistry(db);
@@ -89,6 +96,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
                 'req.headers.cookie',
                 'req.headers.authorization',
                 'res.headers["set-cookie"]',
+                'res.headers.location',
               ],
               censor: '[REDACTED]',
             },
@@ -165,6 +173,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   registerTaskRoutes(app, { db, bus });
   registerStageRoutes(app, { db, bus });
   registerArtifactRoutes(app, { db, bus });
+  registerUploadRoutes(app, { db, bus, config, storage });
+  registerFileAccessRoutes(app, { db, config, storage });
   registerChangeLogRoutes(app, { db });
   registerBoardRoutes(app, { db });
   registerSearchRoutes(app, { db });
@@ -196,13 +206,16 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
 
   let jobsHandle: { stop: () => Promise<void> } | null = null;
   if (opts.enableJobs) {
-    jobsHandle = await startJobs(db, config, app.log);
+    jobsHandle = await startJobs(db, storage, config, app.log);
   }
 
   app.addHook('onClose', async () => {
     realtime.closeAll();
     if (jobsHandle) {
       await jobsHandle.stop();
+    }
+    if (ownsStorage && storage.close) {
+      await storage.close();
     }
     if (ownsPool) {
       await pool.end();
@@ -215,6 +228,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     db,
     bus,
     realtime,
+    storage,
     getRegisteredRoutes,
   });
 

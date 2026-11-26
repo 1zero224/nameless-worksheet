@@ -26,6 +26,17 @@ export const priorityEnum = pgEnum('priority', ['normal', 'high', 'urgent']);
 export const publishStatusEnum = pgEnum('publish_status', ['unpublished', 'published']);
 export const stageStatusEnum = pgEnum('stage_status', ['not_started', 'in_progress', 'done', 'na']);
 export const locationTypeEnum = pgEnum('location_type', ['cloud_link', 'r2']);
+export const uploadSessionModeEnum = pgEnum('upload_session_mode', [
+  'create_artifact',
+  'create_version',
+  'attach_version',
+]);
+export const uploadSessionStatusEnum = pgEnum('upload_session_status', [
+  'uploading',
+  'completed',
+  'aborted',
+  'expired',
+]);
 export const cloudProviderEnum = pgEnum('cloud_provider', [
   'baidu',
   'aliyun',
@@ -439,6 +450,28 @@ export const artifactVersions = pgTable(
   ],
 );
 
+export const blobs = pgTable(
+  'blobs',
+  {
+    id: id(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
+    r2Key: text('r2_key').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    mimeType: text('mime_type').notNull(),
+    sha256: text('sha256'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('blobs_r2_key_key').on(t.r2Key),
+    index('blobs_project_created_idx').on(t.projectId, t.createdAt.desc()),
+  ],
+);
+
 export const resourceLocations = pgTable(
   'resource_locations',
   {
@@ -453,6 +486,7 @@ export const resourceLocations = pgTable(
       .notNull()
       .references(() => artifactVersions.id),
     type: locationTypeEnum('type').notNull().default('cloud_link'),
+    blobId: uuid('blob_id').references(() => blobs.id),
     provider: cloudProviderEnum('provider'),
     url: text('url'),
     extractCode: text('extract_code'),
@@ -467,11 +501,75 @@ export const resourceLocations = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
   (t) => [
+    check(
+      'resource_locations_type_check',
+      sql`(
+        (${t.type} = 'cloud_link' AND ${t.provider} IS NOT NULL AND ${t.url} IS NOT NULL AND ${t.blobId} IS NULL)
+        OR
+        (${t.type} = 'r2' AND ${t.blobId} IS NOT NULL AND ${t.url} IS NULL AND ${t.extractCode} IS NULL)
+      )`,
+    ),
+    uniqueIndex('resource_locations_version_r2_active_key')
+      .on(t.versionId)
+      .where(sql`${t.type} = 'r2' AND ${isNull(t.deletedAt)}`),
     index('resource_locations_project_version_active_idx')
       .on(t.projectId, t.versionId, t.createdAt.asc())
       .where(isNull(t.deletedAt)),
     index('resource_locations_project_artifact_active_idx')
       .on(t.projectId, t.artifactId)
       .where(isNull(t.deletedAt)),
+  ],
+);
+
+// ---- 阶段 4 新增表（上传会话） ----
+
+export const uploadSessions = pgTable(
+  'upload_sessions',
+  {
+    id: id(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
+    mode: uploadSessionModeEnum('mode').notNull(),
+    scopeKind: text('scope_kind'),
+    worksheetId: uuid('worksheet_id').references(() => worksheets.id),
+    workId: uuid('work_id').references(() => works.id),
+    taskId: uuid('task_id').references(() => tasks.id),
+    stageColumnId: uuid('stage_column_id').references(() => columnConfigs.id),
+    artifactId: uuid('artifact_id').references(() => artifacts.id),
+    versionId: uuid('version_id').references(() => artifactVersions.id),
+    artifactName: text('artifact_name'),
+    versionNote: text('version_note').notNull().default(''),
+    originalFilename: text('original_filename').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    mimeType: text('mime_type').notNull(),
+    isMultipart: boolean('is_multipart').notNull(),
+    partSizeBytes: integer('part_size_bytes'),
+    r2Key: text('r2_key').notNull(),
+    r2UploadId: text('r2_upload_id'),
+    fingerprintSha256: text('fingerprint_sha256'),
+    idempotencyKey: text('idempotency_key').notNull(),
+    status: uploadSessionStatusEnum('status').notNull().default('uploading'),
+    resultBlobId: uuid('result_blob_id').references(() => blobs.id),
+    resultArtifactId: uuid('result_artifact_id').references(() => artifacts.id),
+    resultVersionId: uuid('result_version_id').references(() => artifactVersions.id),
+    resultLocationId: uuid('result_location_id').references(() => resourceLocations.id),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    expiresAt: ts('expires_at').notNull(),
+    completedAt: ts('completed_at'),
+    abortedAt: ts('aborted_at'),
+    cleanedUpAt: ts('cleaned_up_at'),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('upload_sessions_project_idempotency_key').on(t.projectId, t.idempotencyKey),
+    uniqueIndex('upload_sessions_r2_key_key').on(t.r2Key),
+    index('upload_sessions_resume_lookup_idx')
+      .on(t.projectId, t.createdBy, t.fingerprintSha256, t.sizeBytes)
+      .where(sql`${t.status} = 'uploading' AND ${isNotNull(t.fingerprintSha256)}`),
+    index('upload_sessions_cleanup_idx').on(t.status, t.expiresAt).where(isNull(t.cleanedUpAt)),
   ],
 );

@@ -84,9 +84,42 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
           : Promise.resolve([]),
       ]);
 
-      // 通用文档按名称匹配（严禁匹配提取码/URL）
+      // 通用文档按名称或未删版本原文件名匹配（严禁匹配提取码/URL/签名）
+      const docFilenamesByArtifact = new Map<string, string[]>();
+      if (needle && docRows.length > 0) {
+        const docIds = docRows.map((d) => d.id);
+        const docVerRows = await db
+          .select({
+            artifactId: schema.artifactVersions.artifactId,
+            originalFilename: schema.artifactVersions.originalFilename,
+          })
+          .from(schema.artifactVersions)
+          .where(
+            and(
+              eq(schema.artifactVersions.projectId, auth.projectId),
+              inArray(schema.artifactVersions.artifactId, docIds),
+              isNull(schema.artifactVersions.deletedAt),
+            ),
+          );
+        for (const v of docVerRows) {
+          if (!v.originalFilename) continue;
+          let arr = docFilenamesByArtifact.get(v.artifactId);
+          if (!arr) {
+            arr = [];
+            docFilenamesByArtifact.set(v.artifactId, arr);
+          }
+          arr.push(v.originalFilename);
+        }
+      }
+
       const matchedDocRows = needle
-        ? docRows.filter((d) => d.name.toLowerCase().includes(needle))
+        ? docRows.filter(
+            (d) =>
+              d.name.toLowerCase().includes(needle) ||
+              (docFilenamesByArtifact.get(d.id) ?? []).some((fn) =>
+                fn.toLowerCase().includes(needle),
+              ),
+          )
         : docRows;
       const topDocRows = matchedDocRows.slice(0, 20);
 
@@ -200,6 +233,7 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
             .where(eq(schema.memberships.projectId, auth.projectId)),
           db
             .select({
+              id: schema.artifacts.id,
               workId: schema.artifacts.workId,
               taskId: schema.artifacts.taskId,
               name: schema.artifacts.name,
@@ -218,23 +252,52 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
       const userNameMap = new Map(memberRows.map((m) => [m.id, m.displayName]));
       const workNameMap = new Map(workRows.map((w) => [w.id, w.name]));
 
-      const artifactNamesByWork = new Map<string, string[]>();
-      const artifactNamesByTask = new Map<string, string[]>();
+      // 阶段 4：补充匹配未删版本原文件名（严禁查询或返回 r2_key / 签名 URL / 提取码 / 网盘 URL）
+      const wsVerFilenamesByArtifact = new Map<string, string[]>();
+      if (needle && wsArtifactRows.length > 0) {
+        const wsArtIds = wsArtifactRows.map((a) => a.id);
+        const wsVerRows = await db
+          .select({
+            artifactId: schema.artifactVersions.artifactId,
+            originalFilename: schema.artifactVersions.originalFilename,
+          })
+          .from(schema.artifactVersions)
+          .where(
+            and(
+              eq(schema.artifactVersions.projectId, auth.projectId),
+              inArray(schema.artifactVersions.artifactId, wsArtIds),
+              isNull(schema.artifactVersions.deletedAt),
+            ),
+          );
+        for (const v of wsVerRows) {
+          if (!v.originalFilename) continue;
+          let arr = wsVerFilenamesByArtifact.get(v.artifactId);
+          if (!arr) {
+            arr = [];
+            wsVerFilenamesByArtifact.set(v.artifactId, arr);
+          }
+          arr.push(v.originalFilename);
+        }
+      }
+
+      const artifactSearchByWork = new Map<string, Array<{ name: string; filenames: string[] }>>();
+      const artifactSearchByTask = new Map<string, Array<{ name: string; filenames: string[] }>>();
       for (const a of wsArtifactRows) {
+        const entry = { name: a.name, filenames: wsVerFilenamesByArtifact.get(a.id) ?? [] };
         if (a.workId !== null && a.taskId === null) {
-          let arr = artifactNamesByWork.get(a.workId);
+          let arr = artifactSearchByWork.get(a.workId);
           if (!arr) {
             arr = [];
-            artifactNamesByWork.set(a.workId, arr);
+            artifactSearchByWork.set(a.workId, arr);
           }
-          arr.push(a.name);
+          arr.push(entry);
         } else if (a.taskId !== null) {
-          let arr = artifactNamesByTask.get(a.taskId);
+          let arr = artifactSearchByTask.get(a.taskId);
           if (!arr) {
             arr = [];
-            artifactNamesByTask.set(a.taskId, arr);
+            artifactSearchByTask.set(a.taskId, arr);
           }
-          arr.push(a.name);
+          arr.push(entry);
         }
       }
 
@@ -323,11 +386,19 @@ export function registerSearchRoutes(app: FastifyInstance, deps: { db: Db }): vo
           ];
 
           const candidateArtifacts = [
-            ...(artifactNamesByTask.get(task.id) ?? []),
-            ...(task.workId ? (artifactNamesByWork.get(task.workId) ?? []) : []),
+            ...(artifactSearchByTask.get(task.id) ?? []),
+            ...(task.workId ? (artifactSearchByWork.get(task.workId) ?? []) : []),
           ];
           const artHits = [
-            ...new Set(candidateArtifacts.filter((n) => n.toLowerCase().includes(needle))),
+            ...new Set(
+              candidateArtifacts
+                .filter(
+                  (a) =>
+                    a.name.toLowerCase().includes(needle) ||
+                    a.filenames.some((fn) => fn.toLowerCase().includes(needle)),
+                )
+                .map((a) => a.name),
+            ),
           ];
           if (artHits.length > 0) {
             matchedArtifactNames = artHits;

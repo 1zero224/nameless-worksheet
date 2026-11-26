@@ -96,7 +96,8 @@ function formatVal(v: unknown): string {
 type RestoreTarget =
   | { kind: 'task'; id: string }
   | { kind: 'artifact'; id: string }
-  | { kind: 'version'; id: string };
+  | { kind: 'version'; id: string }
+  | { kind: 'location'; id: string };
 
 function getRestoreTarget(item: ChangeLogItem): RestoreTarget | null {
   if (item.action === 'task.deleted' && item.taskId) {
@@ -111,6 +112,10 @@ function getRestoreTarget(item: ChangeLogItem): RestoreTarget | null {
   if (item.action === 'artifact_version.deleted') {
     const id = typeof item.changes?.versionId === 'string' ? item.changes.versionId : null;
     if (id) return { kind: 'version', id };
+  }
+  if (item.action === 'location.deleted') {
+    const id = typeof item.changes?.locationId === 'string' ? item.changes.locationId : null;
+    if (id) return { kind: 'location', id };
   }
   return null;
 }
@@ -167,6 +172,9 @@ export function ChangeLogDrawer({
       if (target.kind === 'artifact') {
         return apiFetch(`/api/artifacts/${target.id}/restore`, { method: 'POST' });
       }
+      if (target.kind === 'location') {
+        return apiFetch(`/api/resource-locations/${target.id}/restore`, { method: 'POST' });
+      }
       return apiFetch(`/api/artifact-versions/${target.id}/restore`, { method: 'POST' });
     },
     onSuccess: (_res, target) => {
@@ -175,7 +183,9 @@ export function ChangeLogDrawer({
           ? '任务已从修改记录恢复'
           : target.kind === 'artifact'
             ? '资源已从修改记录恢复'
-            : '版本已从修改记录恢复';
+            : target.kind === 'location'
+              ? '文件或网盘入口已从修改记录恢复'
+              : '版本已从修改记录恢复';
       pushToast({ message: label, variant: 'success' });
       if (worksheetId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.worksheet(worksheetId) });

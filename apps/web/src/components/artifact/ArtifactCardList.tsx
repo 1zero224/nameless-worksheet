@@ -2,7 +2,9 @@ import {
   type ArtifactDetail,
   type ArtifactVersionDetail,
   CLOUD_PROVIDER_LABELS,
+  formatFileSize,
   formatShareInfo,
+  type PreviewKind,
   type ResourceLocation,
 } from '@nw/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +13,14 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Download,
   ExternalLink,
+  Eye,
+  File,
+  FileAudio,
+  FileImage,
+  FileText,
+  FileVideo,
   Folder,
   History,
   KeyRound,
@@ -21,6 +30,7 @@ import {
   Plus,
   Share2,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
@@ -31,6 +41,7 @@ import {
   isSafeExternalUrl,
 } from '@/components/artifact/utils.js';
 import {
+  AttachFileToVersionModal,
   CreateVersionModal,
   LocationFormModal,
 } from '@/components/artifact/VersionAndLocationModals.js';
@@ -44,12 +55,36 @@ import {
   useToast,
 } from '@/components/ui/overlays.js';
 import { cn } from '@/components/ui/primitives.js';
+import { FilePreviewModal, type FilePreviewTarget } from '@/components/upload/FilePreviewModal.js';
+
+function renderFileTypeIcon(kind: PreviewKind | null) {
+  switch (kind) {
+    case 'text':
+      return <FileText className="h-3.5 w-3.5 shrink-0 text-sky-600" strokeWidth={1.75} />;
+    case 'image':
+      return <FileImage className="h-3.5 w-3.5 shrink-0 text-emerald-600" strokeWidth={1.75} />;
+    case 'video':
+      return <FileVideo className="h-3.5 w-3.5 shrink-0 text-indigo-600" strokeWidth={1.75} />;
+    case 'audio':
+      return <FileAudio className="h-3.5 w-3.5 shrink-0 text-amber-600" strokeWidth={1.75} />;
+    default:
+      return <File className="h-3.5 w-3.5 shrink-0 text-zinc-500" strokeWidth={1.75} />;
+  }
+}
+
+export function sortVersionLocations(locations: ResourceLocation[]): ResourceLocation[] {
+  return [...locations].sort((a, b) => {
+    if (a.type === b.type) return 0;
+    return a.type === 'r2' ? -1 : 1;
+  });
+}
 
 export function LocationActionRow({
   artifact,
   versionNumber,
   location,
   compact = false,
+  onPreview,
   onEdit,
   onDelete,
 }: {
@@ -57,11 +92,109 @@ export function LocationActionRow({
   versionNumber: number;
   location: ResourceLocation;
   compact?: boolean;
+  onPreview?: (target: FilePreviewTarget) => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
   const { pushToast } = useToast();
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // R2 文件行：原文件名·大小 + 直接下载 + 预览 + 悬浮移除（无提取码与分享按钮）
+  if (location.type === 'r2') {
+    const filename = location.originalFilename ?? artifact.name;
+    const sizeText = location.sizeBytes !== null ? formatFileSize(location.sizeBytes) : '';
+    const downloadUrl = `/api/resource-locations/${location.id}/download`;
+    const canInlinePreview = Boolean(
+      location.previewKind && location.previewKind !== 'unsupported',
+    );
+
+    return (
+      <div
+        data-testid={`location-row-${location.id}`}
+        data-location-type="r2"
+        className={cn(
+          'group/loc flex items-center justify-between gap-2 rounded-md transition-colors hover:bg-black/[0.035]',
+          compact ? 'px-1 py-0.5' : 'bg-[#fafafa] px-2 py-1.5 hover:bg-zinc-100/80',
+        )}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreview?.({ artifactName: artifact.name, versionNumber, location });
+            }}
+            title={`${filename}${sizeText ? ` (${sizeText})` : ''}`}
+            className="inline-flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-xs font-medium text-zinc-900 transition-colors hover:bg-black/[0.04] cursor-pointer"
+          >
+            {renderFileTypeIcon(location.previewKind)}
+            <span className="truncate">{filename}</span>
+          </button>
+
+          {sizeText && (
+            <span className="shrink-0 text-[11px] text-zinc-400 tabular-nums">{sizeText}</span>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1">
+          <a
+            href={downloadUrl}
+            data-testid={`location-download-${location.id}`}
+            aria-label="下载文件"
+            title={`下载 ${filename}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-zinc-900 px-2 text-[11px] font-medium text-white transition-colors hover:bg-zinc-800"
+          >
+            <Download className="h-3 w-3" />
+            <span>下载</span>
+          </a>
+
+          {onPreview && (
+            <button
+              type="button"
+              data-testid={`location-preview-${location.id}`}
+              aria-label={canInlinePreview ? '在线预览' : '查看文件详情'}
+              title={canInlinePreview ? '在线预览' : '查看文件信息与下载'}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview({ artifactName: artifact.name, versionNumber, location });
+              }}
+              className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950 cursor-pointer"
+            >
+              <Eye className="h-3 w-3" />
+              <span>{canInlinePreview ? '预览' : '详情'}</span>
+            </button>
+          )}
+
+          {onDelete && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="文件操作"
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    'flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-opacity hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer',
+                    compact &&
+                      'sm:opacity-0 sm:group-hover/loc:opacity-100 sm:focus-visible:opacity-100 data-[state=open]:opacity-100',
+                  )}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[124px]">
+                <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  移除文件
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const providerLabel = location.provider ? CLOUD_PROVIDER_LABELS[location.provider] : '链接';
   const safeUrl = isSafeExternalUrl(location.url) ? location.url : null;
 
@@ -231,6 +364,12 @@ export function ArtifactCardList({
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set());
   const [editingArtifact, setEditingArtifact] = useState<ArtifactDetail | null>(null);
   const [versionArtifact, setVersionArtifact] = useState<ArtifactDetail | null>(null);
+  const [attachFileTarget, setAttachFileTarget] = useState<{
+    artifact: ArtifactDetail;
+    versionId: string;
+    versionNumber: number;
+  } | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<FilePreviewTarget | null>(null);
   const [locationTarget, setLocationTarget] = useState<
     | { mode: 'create'; artifact: ArtifactDetail; versionId: string; versionNumber: number }
     | {
@@ -324,8 +463,11 @@ export function ArtifactCardList({
         workId: artifact.workId,
         taskId: artifact.taskId,
       });
+      const isR2 = location.type === 'r2';
       pushToast({
-        message: `已移除「${artifact.name}」的一个网盘链接`,
+        message: isR2
+          ? `已移除「${artifact.name}」的文件`
+          : `已移除「${artifact.name}」的一个网盘链接`,
         variant: 'info',
         actionLabel: '撤销',
         onAction: async () => {
@@ -335,7 +477,7 @@ export function ArtifactCardList({
             workId: artifact.workId,
             taskId: artifact.taskId,
           });
-          pushToast({ message: '网盘链接已恢复', variant: 'success' });
+          pushToast({ message: isR2 ? '文件已恢复' : '网盘链接已恢复', variant: 'success' });
         },
       });
     },
@@ -497,6 +639,21 @@ export function ArtifactCardList({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[144px]">
+                    {latest && !latest.locations.some((l) => l.type === 'r2') && (
+                      <DropdownMenuItem
+                        data-testid={`artifact-attach-file-${art.id}`}
+                        onSelect={() =>
+                          setAttachFileTarget({
+                            artifact: art,
+                            versionId: latest.id,
+                            versionNumber: latest.versionNumber,
+                          })
+                        }
+                      >
+                        <Upload className="h-3.5 w-3.5 text-zinc-400" />
+                        上传文件
+                      </DropdownMenuItem>
+                    )}
                     {latest && (
                       <DropdownMenuItem
                         data-testid={`artifact-add-location-${art.id}`}
@@ -532,7 +689,7 @@ export function ArtifactCardList({
 
             {latest?.note && <p className="mt-1 text-xs text-zinc-500">{latest.note}</p>}
 
-            {/* 最新版本的多网盘列表（左侧树形引导线明确从属层级） */}
+            {/* 最新版本的文件与多网盘列表（并列展示，左侧树形引导线明确从属层级） */}
             {latest && (
               <div
                 className={cn(
@@ -541,39 +698,60 @@ export function ArtifactCardList({
                 )}
               >
                 {latest.locations.length === 0 ? (
-                  <div className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-zinc-400">
-                    <span>待补充多网盘</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocationTarget({
-                          mode: 'create',
-                          artifact: art,
-                          versionId: latest.id,
-                          versionNumber: latest.versionNumber,
-                        })
-                      }
-                      className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.05] cursor-pointer"
-                    >
-                      <Plus className="h-3 w-3" />
-                      添加网盘
-                    </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-zinc-400">
+                    <span>暂无文件或网盘链接</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        data-testid={`artifact-empty-upload-${art.id}`}
+                        onClick={() =>
+                          setAttachFileTarget({
+                            artifact: art,
+                            versionId: latest.id,
+                            versionNumber: latest.versionNumber,
+                          })
+                        }
+                        className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.05] cursor-pointer"
+                      >
+                        <Upload className="h-3 w-3" />
+                        上传文件
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocationTarget({
+                            mode: 'create',
+                            artifact: art,
+                            versionId: latest.id,
+                            versionNumber: latest.versionNumber,
+                          })
+                        }
+                        className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.05] cursor-pointer"
+                      >
+                        <Plus className="h-3 w-3" />
+                        添加网盘
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  latest.locations.map((loc) => (
+                  sortVersionLocations(latest.locations).map((loc) => (
                     <LocationActionRow
                       key={loc.id}
                       artifact={art}
                       versionNumber={latest.versionNumber}
                       location={loc}
                       compact={compact}
-                      onEdit={() =>
-                        setLocationTarget({
-                          mode: 'edit',
-                          artifact: art,
-                          versionNumber: latest.versionNumber,
-                          location: loc,
-                        })
+                      onPreview={setPreviewTarget}
+                      onEdit={
+                        loc.type === 'cloud_link'
+                          ? () =>
+                              setLocationTarget({
+                                mode: 'edit',
+                                artifact: art,
+                                versionNumber: latest.versionNumber,
+                                location: loc,
+                              })
+                          : undefined
                       }
                       onDelete={() =>
                         deleteLocationMutation.mutate({ artifact: art, location: loc })
@@ -625,6 +803,23 @@ export function ArtifactCardList({
                               </span>
                             </div>
                             <div className="flex items-center gap-1">
+                              {!ver.locations.some((l) => l.type === 'r2') && (
+                                <button
+                                  type="button"
+                                  data-testid={`version-attach-file-${ver.id}`}
+                                  onClick={() =>
+                                    setAttachFileTarget({
+                                      artifact: art,
+                                      versionId: ver.id,
+                                      versionNumber: ver.versionNumber,
+                                    })
+                                  }
+                                  className="inline-flex h-5 items-center gap-0.5 rounded px-1.5 text-[11px] text-zinc-500 hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
+                                >
+                                  <Upload className="h-2.5 w-2.5" />
+                                  上传文件
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() =>
@@ -665,24 +860,28 @@ export function ArtifactCardList({
                           {ver.note && <div className="text-xs text-zinc-500">{ver.note}</div>}
                           {ver.locations.length === 0 ? (
                             <div className="ml-1.5 border-l-2 border-zinc-200/75 pl-2 text-[11px] text-zinc-400">
-                              待补充多网盘
+                              暂无文件或网盘链接
                             </div>
                           ) : (
                             <div className="ml-1.5 space-y-0.5 border-l-2 border-zinc-200/75 pl-2">
-                              {ver.locations.map((loc) => (
+                              {sortVersionLocations(ver.locations).map((loc) => (
                                 <LocationActionRow
                                   key={loc.id}
                                   artifact={art}
                                   versionNumber={ver.versionNumber}
                                   location={loc}
                                   compact
-                                  onEdit={() =>
-                                    setLocationTarget({
-                                      mode: 'edit',
-                                      artifact: art,
-                                      versionNumber: ver.versionNumber,
-                                      location: loc,
-                                    })
+                                  onPreview={setPreviewTarget}
+                                  onEdit={
+                                    loc.type === 'cloud_link'
+                                      ? () =>
+                                          setLocationTarget({
+                                            mode: 'edit',
+                                            artifact: art,
+                                            versionNumber: ver.versionNumber,
+                                            location: loc,
+                                          })
+                                      : undefined
                                   }
                                   onDelete={() =>
                                     deleteLocationMutation.mutate({ artifact: art, location: loc })
@@ -727,6 +926,24 @@ export function ArtifactCardList({
           if (!o) setLocationTarget(null);
         }}
         target={locationTarget}
+      />
+
+      {/* 补传文件到已有版本弹窗 */}
+      <AttachFileToVersionModal
+        open={Boolean(attachFileTarget)}
+        onOpenChange={(o) => {
+          if (!o) setAttachFileTarget(null);
+        }}
+        target={attachFileTarget}
+      />
+
+      {/* 安全在线预览弹窗 */}
+      <FilePreviewModal
+        open={Boolean(previewTarget)}
+        onOpenChange={(o) => {
+          if (!o) setPreviewTarget(null);
+        }}
+        target={previewTarget}
       />
 
       {/* 删除最新版二次确认弹窗 */}

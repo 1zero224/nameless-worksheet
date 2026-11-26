@@ -9,13 +9,16 @@ import {
   type ResourceLocation,
 } from '@nw/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link2, Upload } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { SharePasteInput } from '@/components/artifact/SharePasteInput.js';
 import { invalidateArtifactQueries } from '@/components/artifact/utils.js';
 import { ModalDialog, useToast } from '@/components/ui/overlays.js';
-import { Alert, Button, Input, Label } from '@/components/ui/primitives.js';
+import { Alert, Button, cn, Input, Label } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
+import { FileDropzone } from '@/components/upload/FileDropzone.js';
+import { useUploadManager } from '@/uploads/UploadManagerContext.js';
 
 export function CreateVersionModal({
   open,
@@ -30,7 +33,10 @@ export function CreateVersionModal({
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
+  const { config: uploadConfig, enqueueUpload } = useUploadManager();
 
+  const [mode, setMode] = useState<'file' | 'link'>('file');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [note, setNote] = useState('');
   const [url, setUrl] = useState('');
   const [provider, setProvider] = useState<CloudProvider>('other');
@@ -40,6 +46,8 @@ export function CreateVersionModal({
 
   useEffect(() => {
     if (open) {
+      setMode('file');
+      setSelectedFile(null);
       setNote('');
       setUrl('');
       setProvider('other');
@@ -104,6 +112,27 @@ export function CreateVersionModal({
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (mode === 'file') {
+      if (!artifact) return;
+      if (!selectedFile) {
+        setError('请选择要上传的文件，或切换至「网盘链接」更新版本');
+        return;
+      }
+      enqueueUpload({
+        file: selectedFile,
+        target: {
+          mode: 'create_version',
+          artifactId: artifact.id,
+          versionNote: note.trim() || undefined,
+          worksheetId: artifact.worksheetId,
+          workId: artifact.workId,
+          taskId: artifact.taskId,
+          targetLabel: `${artifact.name} · v${nextVerHint}`,
+        },
+      });
+      onOpenChange(false);
+      return;
+    }
     mutation.mutate();
   };
 
@@ -115,81 +144,238 @@ export function CreateVersionModal({
       onOpenChange={onOpenChange}
       title={`更新版本（v${nextVerHint}）`}
       description={
-        artifact ? `资源「${artifact.name}」· 登记后立即成为最新展示版本，旧版本保留在历史中` : ''
+        artifact
+          ? `资源「${artifact.name}」· 上传保存成功后立即成为最新展示版本（v${nextVerHint}），旧版本文件完整保留`
+          : ''
       }
       maxWidthClass="max-w-lg"
     >
       <form onSubmit={handleSubmit} className="space-y-3" data-testid="version-create-form">
+        <div className="grid grid-cols-2 gap-1 rounded-lg border border-black/[0.08] bg-[#fafafa] p-1">
+          <button
+            type="button"
+            data-testid="version-mode-file"
+            onClick={() => {
+              setMode('file');
+              setError(null);
+            }}
+            className={cn(
+              'inline-flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer',
+              mode === 'file'
+                ? 'bg-zinc-900 text-white shadow-xs'
+                : 'text-zinc-600 hover:text-zinc-950',
+            )}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            上传文件
+          </button>
+          <button
+            type="button"
+            data-testid="version-mode-link"
+            onClick={() => {
+              setMode('link');
+              setError(null);
+            }}
+            className={cn(
+              'inline-flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer',
+              mode === 'link'
+                ? 'bg-zinc-900 text-white shadow-xs'
+                : 'text-zinc-600 hover:text-zinc-950',
+            )}
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            网盘链接
+          </button>
+        </div>
+
         {error && <Alert variant="error">{error}</Alert>}
 
-        <SharePasteInput onParsed={handleParsed} />
-
-        <div>
-          <Label htmlFor="ver-url">网盘链接（留空则创建“待补充多网盘”版本）</Label>
-          <Input
-            id="ver-url"
-            data-testid="version-url-input"
-            type="text"
-            value={url}
-            onChange={(e) => {
-              const next = e.target.value;
-              setUrl(next);
-              if (!providerTouched && next.trim()) {
-                setProvider(detectCloudProvider(next));
-              }
-            }}
-            placeholder="https://..."
-            maxLength={2000}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="ver-provider">网盘服务商</Label>
-            <SelectField
-              id="ver-provider"
-              value={provider}
-              onValueChange={(val) => {
-                setProvider(val as CloudProvider);
-                setProviderTouched(true);
-              }}
-              options={CLOUD_PROVIDERS.map((p) => ({
-                value: p,
-                label: CLOUD_PROVIDER_LABELS[p],
-              }))}
+        {mode === 'file' ? (
+          <>
+            <FileDropzone
+              file={selectedFile}
+              maxFileBytes={uploadConfig.maxFileBytes}
+              error={error}
+              onSelectFile={setSelectedFile}
+              onError={setError}
+              testId="version-file-input"
             />
-          </div>
-          <div>
-            <Label htmlFor="ver-code">提取码（可选）</Label>
-            <Input
-              id="ver-code"
-              data-testid="version-code-input"
-              value={extractCode}
-              onChange={(e) => setExtractCode(e.target.value)}
-              placeholder="如 ab12"
-              maxLength={32}
-            />
-          </div>
-        </div>
 
-        <div>
-          <Label htmlFor="ver-note">备注（可选）</Label>
-          <Input
-            id="ver-note"
-            data-testid="version-note-input"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="例如：修正第 12 分钟错字 / 替换压制成品"
-            maxLength={200}
-          />
-        </div>
+            <div>
+              <Label htmlFor="ver-note">备注（可选）</Label>
+              <Input
+                id="ver-note"
+                data-testid="version-note-input"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="例如：修正第 12 分钟错字 / 替换压制成品"
+                maxLength={200}
+              />
+            </div>
 
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                取消
+              </Button>
+              <Button type="submit" disabled={!selectedFile} data-testid="version-submit-btn">
+                开始上传
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <SharePasteInput onParsed={handleParsed} />
+
+            <div>
+              <Label htmlFor="ver-url">网盘链接（留空则创建“暂无文件或网盘链接”版本）</Label>
+              <Input
+                id="ver-url"
+                data-testid="version-url-input"
+                type="text"
+                value={url}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setUrl(next);
+                  if (!providerTouched && next.trim()) {
+                    setProvider(detectCloudProvider(next));
+                  }
+                }}
+                placeholder="https://..."
+                maxLength={2000}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="ver-provider">网盘服务商</Label>
+                <SelectField
+                  id="ver-provider"
+                  value={provider}
+                  onValueChange={(val) => {
+                    setProvider(val as CloudProvider);
+                    setProviderTouched(true);
+                  }}
+                  options={CLOUD_PROVIDERS.map((p) => ({
+                    value: p,
+                    label: CLOUD_PROVIDER_LABELS[p],
+                  }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="ver-code">提取码（可选）</Label>
+                <Input
+                  id="ver-code"
+                  data-testid="version-code-input"
+                  value={extractCode}
+                  onChange={(e) => setExtractCode(e.target.value)}
+                  placeholder="如 ab12"
+                  maxLength={32}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="ver-note">备注（可选）</Label>
+              <Input
+                id="ver-note"
+                data-testid="version-note-input"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="例如：修正第 12 分钟错字 / 替换压制成品"
+                maxLength={200}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                取消
+              </Button>
+              <Button type="submit" disabled={mutation.isPending} data-testid="version-submit-btn">
+                {mutation.isPending ? '登记中…' : '确认更新'}
+              </Button>
+            </div>
+          </>
+        )}
+      </form>
+    </ModalDialog>
+  );
+}
+
+export function AttachFileToVersionModal({
+  open,
+  onOpenChange,
+  target,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  target: {
+    artifact: ArtifactDetail;
+    versionId: string;
+    versionNumber: number;
+  } | null;
+}) {
+  const { config: uploadConfig, enqueueUpload } = useUploadManager();
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedFile(null);
+      setError(null);
+    }
+  }, [open]);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!target) return;
+    if (!selectedFile) {
+      setError('请选择要补传的文件');
+      return;
+    }
+    enqueueUpload({
+      file: selectedFile,
+      target: {
+        mode: 'attach_version',
+        artifactId: target.artifact.id,
+        versionId: target.versionId,
+        worksheetId: target.artifact.worksheetId,
+        workId: target.artifact.workId,
+        taskId: target.artifact.taskId,
+        targetLabel: `${target.artifact.name} · v${target.versionNumber}`,
+      },
+    });
+    onOpenChange(false);
+  };
+
+  return (
+    <ModalDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="上传文件到当前版本"
+      description={
+        target
+          ? `资源「${target.artifact.name}」(v${target.versionNumber}) · 补传文件直接挂载至本版本，不升版本号`
+          : ''
+      }
+      maxWidthClass="max-w-lg"
+    >
+      <form onSubmit={handleSubmit} className="space-y-3" data-testid="attach-file-form">
+        {error && <Alert variant="error">{error}</Alert>}
+        <FileDropzone
+          file={selectedFile}
+          maxFileBytes={uploadConfig.maxFileBytes}
+          error={error}
+          onSelectFile={setSelectedFile}
+          onError={setError}
+          testId="attach-file-input"
+        />
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button type="submit" disabled={mutation.isPending} data-testid="version-submit-btn">
-            {mutation.isPending ? '登记中…' : '确认更新'}
+          <Button type="submit" disabled={!selectedFile} data-testid="attach-file-submit-btn">
+            开始上传
           </Button>
         </div>
       </form>

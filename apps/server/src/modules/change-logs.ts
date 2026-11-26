@@ -68,7 +68,9 @@ async function enrichChangeLogItems(
       pageRows
         .filter(
           (r) =>
-            (r.action === 'artifact.deleted' || r.action === 'artifact_version.deleted') &&
+            (r.action === 'artifact.deleted' ||
+              r.action === 'artifact_version.deleted' ||
+              r.action === 'location.deleted') &&
             (r.artifactId || typeof r.changes.artifactId === 'string'),
         )
         .map((r) => r.artifactId ?? (r.changes.artifactId as string)),
@@ -79,13 +81,23 @@ async function enrichChangeLogItems(
     ...new Set(
       pageRows
         .filter(
-          (r) => r.action === 'artifact_version.deleted' && typeof r.changes.versionId === 'string',
+          (r) =>
+            (r.action === 'artifact_version.deleted' || r.action === 'location.deleted') &&
+            typeof r.changes.versionId === 'string',
         )
         .map((r) => r.changes.versionId as string),
     ),
   ];
 
-  const [taskRows, artifactRows, versionRows] = await Promise.all([
+  const deletedLocationIds = [
+    ...new Set(
+      pageRows
+        .filter((r) => r.action === 'location.deleted' && typeof r.changes.locationId === 'string')
+        .map((r) => r.changes.locationId as string),
+    ),
+  ];
+
+  const [taskRows, artifactRows, versionRows, locationRows] = await Promise.all([
     deletedTaskIds.length > 0
       ? db
           .select({ id: schema.tasks.id, deletedAt: schema.tasks.deletedAt })
@@ -124,11 +136,29 @@ async function enrichChangeLogItems(
             ),
           )
       : Promise.resolve([]),
+    deletedLocationIds.length > 0
+      ? db
+          .select({
+            id: schema.resourceLocations.id,
+            versionId: schema.resourceLocations.versionId,
+            artifactId: schema.resourceLocations.artifactId,
+            type: schema.resourceLocations.type,
+            deletedAt: schema.resourceLocations.deletedAt,
+          })
+          .from(schema.resourceLocations)
+          .where(
+            and(
+              eq(schema.resourceLocations.projectId, projectId),
+              inArray(schema.resourceLocations.id, deletedLocationIds),
+            ),
+          )
+      : Promise.resolve([]),
   ]);
 
   const taskDeletedMap = new Map(taskRows.map((tr) => [tr.id, tr.deletedAt !== null]));
   const artifactMap = new Map(artifactRows.map((ar) => [ar.id, ar]));
   const versionMap = new Map(versionRows.map((vr) => [vr.id, vr]));
+  const locationMap = new Map(locationRows.map((lr) => [lr.id, lr]));
 
   // 检查被删资源所属任务是否处于未删状态（以计算 canRestore）
   const parentTaskIds = [
@@ -188,6 +218,22 @@ async function enrichChangeLogItems(
           const parentTaskActive =
             art === undefined || art.taskId === null || !(taskDeletedMap.get(art.taskId) ?? true);
           base.canRestore = wsActive && isDeleted && artActive && parentTaskActive;
+          base.wasRestored = !isDeleted;
+        }
+      }
+    } else if (r.action === 'location.deleted') {
+      const lid = typeof r.changes.locationId === 'string' ? r.changes.locationId : null;
+      if (lid) {
+        const loc = locationMap.get(lid);
+        if (loc) {
+          const ver = versionMap.get(loc.versionId);
+          const art = artifactMap.get(loc.artifactId);
+          const isDeleted = loc.deletedAt !== null;
+          const verActive = ver !== undefined && ver.deletedAt === null;
+          const artActive = art !== undefined && art.deletedAt === null;
+          const parentTaskActive =
+            art === undefined || art.taskId === null || !(taskDeletedMap.get(art.taskId) ?? true);
+          base.canRestore = wsActive && isDeleted && verActive && artActive && parentTaskActive;
           base.wasRestored = !isDeleted;
         }
       }

@@ -11,7 +11,7 @@ import {
   type WorksheetSummary,
 } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Link2, Upload } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
@@ -20,6 +20,8 @@ import { invalidateArtifactQueries, type ScopeTagItem } from '@/components/artif
 import { ModalDialog, useToast } from '@/components/ui/overlays.js';
 import { Alert, Button, cn, Input, Label } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
+import { FileDropzone } from '@/components/upload/FileDropzone.js';
+import { useUploadManager } from '@/uploads/UploadManagerContext.js';
 
 const SCOPE_TAG_STYLES: Record<ScopeTagItem['kind'], string> = {
   doc: 'bg-sky-50 text-sky-700 ring-sky-200/90',
@@ -50,7 +52,10 @@ export function CreateArtifactModal({
 }) {
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
+  const { config: uploadConfig, enqueueUpload } = useUploadManager();
 
+  const [createMode, setCreateMode] = useState<'file' | 'link'>('file');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [name, setName] = useState(defaultName);
   const [url, setUrl] = useState('');
   const [provider, setProvider] = useState<CloudProvider>('other');
@@ -61,6 +66,8 @@ export function CreateArtifactModal({
 
   useEffect(() => {
     if (open) {
+      setCreateMode('file');
+      setSelectedFile(null);
       setName(defaultName);
       setUrl('');
       setProvider('other');
@@ -70,6 +77,13 @@ export function CreateArtifactModal({
       setError(null);
     }
   }, [open, defaultName]);
+
+  const handleSelectFile = (file: File | null) => {
+    setSelectedFile(file);
+    if (file && !name.trim()) {
+      setName(file.name.slice(0, 120));
+    }
+  };
 
   const handleParsed = (parsed: ParsedShareText) => {
     if (parsed.url) {
@@ -128,8 +142,30 @@ export function CreateArtifactModal({
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setError('请填写资源名');
+      return;
+    }
+    if (createMode === 'file') {
+      if (!selectedFile) {
+        setError('请选择要上传的文件，或切换至「网盘链接」创建');
+        return;
+      }
+      enqueueUpload({
+        file: selectedFile,
+        target: {
+          mode: 'create_artifact',
+          scope,
+          name: trimmedName,
+          versionNote: note.trim() || undefined,
+          worksheetId: worksheetId ?? null,
+          workId: scope.kind === 'work' ? scope.workId : null,
+          taskId: scope.kind === 'task' || scope.kind === 'stage' ? scope.taskId : null,
+          targetLabel: `${scopeLabel} · ${trimmedName}`,
+        },
+      });
+      onOpenChange(false);
       return;
     }
     mutation.mutate();
@@ -162,91 +198,178 @@ export function CreateArtifactModal({
           ))}
         </div>
 
+        {/* 两段式模式切换：上传文件（默认） | 网盘链接 */}
+        <div className="grid grid-cols-2 gap-1 rounded-lg border border-black/[0.08] bg-[#fafafa] p-1">
+          <button
+            type="button"
+            data-testid="create-mode-file"
+            onClick={() => {
+              setCreateMode('file');
+              setError(null);
+            }}
+            className={cn(
+              'inline-flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer',
+              createMode === 'file'
+                ? 'bg-zinc-900 text-white shadow-xs'
+                : 'text-zinc-600 hover:text-zinc-950',
+            )}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            上传文件
+          </button>
+          <button
+            type="button"
+            data-testid="create-mode-link"
+            onClick={() => {
+              setCreateMode('link');
+              setError(null);
+            }}
+            className={cn(
+              'inline-flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer',
+              createMode === 'link'
+                ? 'bg-zinc-900 text-white shadow-xs'
+                : 'text-zinc-600 hover:text-zinc-950',
+            )}
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            网盘链接
+          </button>
+        </div>
+
         {error && <Alert variant="error">{error}</Alert>}
 
-        <SharePasteInput onParsed={handleParsed} />
-
-        <div>
-          <Label htmlFor="art-name">资源名称 *</Label>
-          <Input
-            id="art-name"
-            data-testid="artifact-name-input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="例如：全篇原片、翻译初稿、通用字体包"
-            maxLength={120}
-            required
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="art-url">网盘链接（留空则创建“待补充多网盘”资源）</Label>
-          <Input
-            id="art-url"
-            data-testid="artifact-url-input"
-            type="text"
-            value={url}
-            onChange={(e) => {
-              const next = e.target.value;
-              setUrl(next);
-              if (!providerTouched && next.trim()) {
-                setProvider(detectCloudProvider(next));
-              }
-            }}
-            placeholder="https://pan.baidu.com/s/..."
-            maxLength={2000}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="art-provider">网盘服务商</Label>
-            <SelectField
-              id="art-provider"
-              value={provider}
-              onValueChange={(val) => {
-                setProvider(val as CloudProvider);
-                setProviderTouched(true);
-              }}
-              options={CLOUD_PROVIDERS.map((p) => ({
-                value: p,
-                label: CLOUD_PROVIDER_LABELS[p],
-              }))}
+        {createMode === 'file' ? (
+          <>
+            <FileDropzone
+              file={selectedFile}
+              maxFileBytes={uploadConfig.maxFileBytes}
+              error={error}
+              onSelectFile={handleSelectFile}
+              onError={setError}
+              testId="artifact-file-input"
             />
-          </div>
-          <div>
-            <Label htmlFor="art-code">提取码（可选）</Label>
-            <Input
-              id="art-code"
-              data-testid="artifact-code-input"
-              value={extractCode}
-              onChange={(e) => setExtractCode(e.target.value)}
-              placeholder="如 ab12"
-              maxLength={32}
-            />
-          </div>
-        </div>
 
-        <div>
-          <Label htmlFor="art-note">备注（可选）</Label>
-          <Input
-            id="art-note"
-            data-testid="artifact-note-input"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="补充说明（如版本特点、镜像来源等）"
-            maxLength={200}
-          />
-        </div>
+            <div>
+              <Label htmlFor="art-name">资源名称 *</Label>
+              <Input
+                id="art-name"
+                data-testid="artifact-name-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="例如：全篇原片、翻译初稿、通用字体包"
+                maxLength={120}
+                required
+              />
+            </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
-          <Button type="submit" disabled={mutation.isPending} data-testid="artifact-submit-btn">
-            {mutation.isPending ? '保存中…' : '创建资源'}
-          </Button>
-        </div>
+            <div>
+              <Label htmlFor="art-note">备注（可选）</Label>
+              <Input
+                id="art-note"
+                data-testid="artifact-note-input"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="补充说明（如版本特点、修改要点等）"
+                maxLength={200}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                取消
+              </Button>
+              <Button type="submit" disabled={!selectedFile} data-testid="artifact-submit-btn">
+                开始上传
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <SharePasteInput onParsed={handleParsed} />
+
+            <div>
+              <Label htmlFor="art-name">资源名称 *</Label>
+              <Input
+                id="art-name"
+                data-testid="artifact-name-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="例如：全篇原片、翻译初稿、通用字体包"
+                maxLength={120}
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="art-url">网盘链接（留空则创建“暂无文件或网盘链接”资源）</Label>
+              <Input
+                id="art-url"
+                data-testid="artifact-url-input"
+                type="text"
+                value={url}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setUrl(next);
+                  if (!providerTouched && next.trim()) {
+                    setProvider(detectCloudProvider(next));
+                  }
+                }}
+                placeholder="https://pan.baidu.com/s/..."
+                maxLength={2000}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="art-provider">网盘服务商</Label>
+                <SelectField
+                  id="art-provider"
+                  value={provider}
+                  onValueChange={(val) => {
+                    setProvider(val as CloudProvider);
+                    setProviderTouched(true);
+                  }}
+                  options={CLOUD_PROVIDERS.map((p) => ({
+                    value: p,
+                    label: CLOUD_PROVIDER_LABELS[p],
+                  }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="art-code">提取码（可选）</Label>
+                <Input
+                  id="art-code"
+                  data-testid="artifact-code-input"
+                  value={extractCode}
+                  onChange={(e) => setExtractCode(e.target.value)}
+                  placeholder="如 ab12"
+                  maxLength={32}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="art-note">备注（可选）</Label>
+              <Input
+                id="art-note"
+                data-testid="artifact-note-input"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="补充说明（如版本特点、镜像来源等）"
+                maxLength={200}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+                取消
+              </Button>
+              <Button type="submit" disabled={mutation.isPending} data-testid="artifact-submit-btn">
+                {mutation.isPending ? '保存中…' : '创建资源'}
+              </Button>
+            </div>
+          </>
+        )}
       </form>
     </ModalDialog>
   );

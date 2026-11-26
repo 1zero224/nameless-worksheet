@@ -38,6 +38,9 @@ const env = {
   APP_ORIGIN: appOrigin,
   WEB_DIST_DIR: path.join(root, 'apps', 'web', 'dist'),
   LOG_LEVEL: 'info',
+  STORAGE_DRIVER: 'local',
+  R2_MULTIPART_THRESHOLD_BYTES: String(5 * 1024 * 1024),
+  R2_PART_SIZE_BYTES: String(5 * 1024 * 1024),
 };
 
 const cliPath = path.join(root, 'apps', 'server', 'dist', 'cli.js');

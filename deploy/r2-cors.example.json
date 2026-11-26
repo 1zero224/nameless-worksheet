@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedOrigins": ["https://worksheet.45.207.215.102.sslip.io"],
+    "AllowedMethods": ["GET", "HEAD", "PUT"],
+    "AllowedHeaders": ["Content-Type", "Range"],
+    "ExposeHeaders": ["ETag", "Content-Range", "Accept-Ranges", "Content-Length"],
+    "MaxAgeSeconds": 3600
+  }
+]

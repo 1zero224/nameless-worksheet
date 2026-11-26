@@ -9,6 +9,7 @@ import {
   createResourceLocationBodySchema,
   type DeleteArtifactVersionResponse,
   detectCloudProvider,
+  detectPreviewKind,
   normalizeText,
   type ResourceLocation,
   type StageBadgeSummary,
@@ -24,7 +25,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { type Db, type Queryable, schema, type Tx } from '../db/index.js';
 import { type TxContext, withTx } from '../db/tx.js';
-import { AppError, notFound } from '../errors.js';
+import { AppError, notFound, uniqueViolation } from '../errors.js';
 import type { EventBus } from '../realtime/bus.js';
 import { findActiveWorksheet, recordChangeLog } from './change-logs.js';
 import { parseBody, parseUuidParam, readOriginConnId } from './helpers.js';
@@ -42,7 +43,7 @@ export function deriveScopeKind(row: {
   return 'doc';
 }
 
-interface ResolvedScope {
+export interface ResolvedScope {
   scopeKind: ArtifactScopeKind;
   worksheetId: string | null;
   workId: string | null;
@@ -51,7 +52,7 @@ interface ResolvedScope {
   label: string;
 }
 
-async function resolveAndValidateScope(
+export async function resolveAndValidateScope(
   db: Queryable,
   projectId: string,
   scope: ArtifactScope,
@@ -197,7 +198,7 @@ async function describeCurrentScope(
   return '通用文档';
 }
 
-async function ensureArtifactParentActive(
+export async function ensureArtifactParentActive(
   db: Queryable,
   projectId: string,
   artifact: { worksheetId: string | null; taskId: string | null },
@@ -240,10 +241,32 @@ async function loadUserDisplayNames(
   return new Map(rows.map((r) => [r.id, r.displayName]));
 }
 
+interface BlobSummary {
+  sizeBytes: number;
+  mimeType: string;
+}
+
 function toLocationDto(
   row: typeof schema.resourceLocations.$inferSelect,
   userMap: Map<string, string>,
+  versionMeta?: {
+    originalFilename: string | null;
+    sizeBytes: number | null;
+    mimeType: string | null;
+  },
+  blobMeta?: BlobSummary,
 ): ResourceLocation {
+  const isR2 = row.type === 'r2';
+  const originalFilename = isR2 ? (versionMeta?.originalFilename ?? null) : null;
+  const sizeBytes = isR2 ? (blobMeta?.sizeBytes ?? versionMeta?.sizeBytes ?? null) : null;
+  const mimeType = isR2 ? (blobMeta?.mimeType ?? versionMeta?.mimeType ?? null) : null;
+  const previewKind =
+    isR2 && originalFilename
+      ? detectPreviewKind(originalFilename, mimeType)
+      : isR2
+        ? 'unsupported'
+        : null;
+
   return {
     id: row.id,
     artifactId: row.artifactId,
@@ -255,6 +278,11 @@ function toLocationDto(
     isFolder: row.isFolder,
     expiresAt: row.expiresAt,
     note: row.note,
+    blobId: row.blobId,
+    originalFilename,
+    sizeBytes,
+    mimeType,
+    previewKind,
     createdBy: { id: row.createdBy, displayName: userMap.get(row.createdBy) ?? '未知用户' },
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -278,6 +306,24 @@ function toVersionDto(
     createdAt: row.createdAt.toISOString(),
     locations,
   };
+}
+
+async function loadBlobSummaries(
+  db: Queryable,
+  projectId: string,
+  blobIds: string[],
+): Promise<Map<string, BlobSummary>> {
+  const unique = [...new Set(blobIds)];
+  if (unique.length === 0) return new Map();
+  const rows = await db
+    .select({
+      id: schema.blobs.id,
+      sizeBytes: schema.blobs.sizeBytes,
+      mimeType: schema.blobs.mimeType,
+    })
+    .from(schema.blobs)
+    .where(and(eq(schema.blobs.projectId, projectId), inArray(schema.blobs.id, unique)));
+  return new Map(rows.map((r) => [r.id, { sizeBytes: r.sizeBytes, mimeType: r.mimeType }]));
 }
 
 export async function hydrateArtifacts(
@@ -314,10 +360,19 @@ export async function hydrateArtifacts(
   ]);
 
   const userIds: string[] = [];
+  const blobIds: string[] = [];
   for (const a of artifactRows) userIds.push(a.createdBy);
   for (const v of versionRows) userIds.push(v.createdBy);
-  for (const l of locationRows) userIds.push(l.createdBy);
-  const userMap = await loadUserDisplayNames(db, userIds);
+  for (const l of locationRows) {
+    userIds.push(l.createdBy);
+    if (l.blobId) blobIds.push(l.blobId);
+  }
+  const [userMap, blobMap] = await Promise.all([
+    loadUserDisplayNames(db, userIds),
+    loadBlobSummaries(db, projectId, blobIds),
+  ]);
+
+  const versionRowMap = new Map(versionRows.map((v) => [v.id, v]));
 
   const locsByVersion = new Map<string, ResourceLocation[]>();
   for (const l of locationRows) {
@@ -326,7 +381,9 @@ export async function hydrateArtifacts(
       arr = [];
       locsByVersion.set(l.versionId, arr);
     }
-    arr.push(toLocationDto(l, userMap));
+    const verRow = versionRowMap.get(l.versionId);
+    const blobMeta = l.blobId ? blobMap.get(l.blobId) : undefined;
+    arr.push(toLocationDto(l, userMap, verRow, blobMeta));
   }
 
   const versionsByArtifact = new Map<string, ArtifactVersionDetail[]>();
@@ -381,10 +438,16 @@ async function hydrateSingleVersion(
     .orderBy(asc(schema.resourceLocations.createdAt), asc(schema.resourceLocations.id));
 
   const userIds = [versionRow.createdBy, ...locRows.map((l) => l.createdBy)];
-  const userMap = await loadUserDisplayNames(db, userIds);
+  const blobIds = locRows.map((l) => l.blobId).filter((id): id is string => id !== null);
+  const [userMap, blobMap] = await Promise.all([
+    loadUserDisplayNames(db, userIds),
+    loadBlobSummaries(db, projectId, blobIds),
+  ]);
   return toVersionDto(
     versionRow,
-    locRows.map((l) => toLocationDto(l, userMap)),
+    locRows.map((l) =>
+      toLocationDto(l, userMap, versionRow, l.blobId ? blobMap.get(l.blobId) : undefined),
+    ),
     userMap,
   );
 }
@@ -567,8 +630,10 @@ export async function buildWorksheetArtifactSummary(
         ? (versionNumMap.get(a.latestVersionId) ?? null)
         : null;
       const locs = a.latestVersionId ? (locsByVersion.get(a.latestVersionId) ?? []) : [];
+      const hasR2File = locs.some((l) => l.type === 'r2');
       const single = locs.length === 1 ? (locs[0] ?? null) : null;
       const canDirectJump =
+        !hasR2File &&
         single !== null &&
         single.type === 'cloud_link' &&
         Boolean(single.url) &&
@@ -579,9 +644,10 @@ export async function buildWorksheetArtifactSummary(
         name: a.name,
         latestVersionNumber: latestVerNum,
         locationCount: locs.length,
+        hasR2File,
         directUrl: canDirectJump ? (single?.url ?? null) : null,
-        directProvider: single?.provider ?? null,
-        directIsFolder: single?.isFolder ?? false,
+        directProvider: canDirectJump ? (single?.provider ?? null) : null,
+        directIsFolder: canDirectJump ? (single?.isFolder ?? false) : false,
         hasExtractCode: locs.some((l) => Boolean(l.extractCode)),
         updatedAt: a.updatedAt.toISOString(),
       };
@@ -613,11 +679,16 @@ export async function buildWorksheetArtifactSummary(
       : null;
     const baseLabel = latestVerNum !== null ? `v${latestVerNum}` : '待补';
     const label = list.length > 1 ? `${baseLabel} +${list.length - 1}` : baseLabel;
+    const hasAnyR2 = list.some((art) => {
+      const locs = art.latestVersionId ? (locsByVersion.get(art.latestVersionId) ?? []) : [];
+      return locs.some((l) => l.type === 'r2');
+    });
     const badge: StageBadgeSummary = {
       artifactCount: list.length,
       latestArtifactId: lead.id,
       latestArtifactName: lead.name,
       latestVersionNumber: latestVerNum,
+      kind: hasAnyR2 ? 'r2' : 'link',
       label,
     };
     summary.stageBadges[key] = badge;
@@ -1691,6 +1762,9 @@ export function registerArtifactRoutes(
             )
             .limit(1);
           if (!loc) throw notFound();
+          if (loc.type !== 'cloud_link') {
+            throw new AppError('VALIDATION_FAILED', '文件入口不支持编辑网盘链接信息');
+          }
 
           const [ver] = await tx
             .select()
@@ -1879,6 +1953,7 @@ export function registerArtifactRoutes(
               ),
             );
 
+          const isR2 = loc.type === 'r2';
           await recordChangeLog(tx, {
             projectId: auth.projectId,
             worksheetId: artifact.worksheetId,
@@ -1886,17 +1961,30 @@ export function registerArtifactRoutes(
             artifactId: artifact.id,
             actorUserId: auth.userId,
             action: 'location.deleted',
-            summary: `移除了资源「${artifact.name}」(v${ver.versionNumber}) 的一个网盘入口`,
-            changes: {
-              artifactId: artifact.id,
-              versionId: ver.id,
-              locationId: loc.id,
-              name: artifact.name,
-              versionNumber: ver.versionNumber,
-              provider: loc.provider,
-              isFolder: loc.isFolder,
-              hasExtractCode: Boolean(loc.extractCode),
-            },
+            summary: isR2
+              ? `移除了资源「${artifact.name}」(v${ver.versionNumber}) 的文件`
+              : `移除了资源「${artifact.name}」(v${ver.versionNumber}) 的一个网盘入口`,
+            changes: isR2
+              ? {
+                  artifactId: artifact.id,
+                  versionId: ver.id,
+                  locationId: loc.id,
+                  name: artifact.name,
+                  versionNumber: ver.versionNumber,
+                  storageType: 'r2',
+                  originalFilename: ver.originalFilename,
+                  sizeBytes: ver.sizeBytes,
+                }
+              : {
+                  artifactId: artifact.id,
+                  versionId: ver.id,
+                  locationId: loc.id,
+                  name: artifact.name,
+                  versionNumber: ver.versionNumber,
+                  provider: loc.provider,
+                  isFolder: loc.isFolder,
+                  hasExtractCode: Boolean(loc.extractCode),
+                },
           });
 
           emitArtifactChanged(emit, auth.projectId, {
@@ -1950,6 +2038,7 @@ export function registerArtifactRoutes(
                 eq(schema.artifactVersions.id, loc.versionId),
               ),
             )
+            .for('update')
             .limit(1);
           if (!ver) throw notFound();
           if (ver.deletedAt !== null) {
@@ -1974,17 +2063,44 @@ export function registerArtifactRoutes(
 
           let restoredLoc = loc;
           if (loc.deletedAt !== null) {
+            if (loc.type === 'r2') {
+              const [existingActiveR2] = await tx
+                .select({ id: schema.resourceLocations.id })
+                .from(schema.resourceLocations)
+                .where(
+                  and(
+                    eq(schema.resourceLocations.projectId, auth.projectId),
+                    eq(schema.resourceLocations.versionId, loc.versionId),
+                    eq(schema.resourceLocations.type, 'r2'),
+                    isNull(schema.resourceLocations.deletedAt),
+                  ),
+                )
+                .limit(1);
+              if (existingActiveR2) {
+                throw new AppError('CONFLICT', '该版本已有其他文件，无法同时恢复两份文件');
+              }
+            }
+
             const now = new Date();
-            const [updated] = await tx
-              .update(schema.resourceLocations)
-              .set({ deletedAt: null, updatedAt: now })
-              .where(
-                and(
-                  eq(schema.resourceLocations.projectId, auth.projectId),
-                  eq(schema.resourceLocations.id, locationId),
-                ),
-              )
-              .returning();
+            let updated: typeof schema.resourceLocations.$inferSelect | undefined;
+            try {
+              const rows = await tx
+                .update(schema.resourceLocations)
+                .set({ deletedAt: null, updatedAt: now })
+                .where(
+                  and(
+                    eq(schema.resourceLocations.projectId, auth.projectId),
+                    eq(schema.resourceLocations.id, locationId),
+                  ),
+                )
+                .returning();
+              updated = rows[0];
+            } catch (err) {
+              if (uniqueViolation(err) === 'resource_locations_version_r2_active_key') {
+                throw new AppError('CONFLICT', '该版本已有其他文件，无法同时恢复两份文件');
+              }
+              throw err;
+            }
             if (!updated) throw notFound();
             restoredLoc = updated;
 
@@ -1998,6 +2114,7 @@ export function registerArtifactRoutes(
                 ),
               );
 
+            const isR2 = restoredLoc.type === 'r2';
             await recordChangeLog(tx, {
               projectId: auth.projectId,
               worksheetId: artifact.worksheetId,
@@ -2005,17 +2122,30 @@ export function registerArtifactRoutes(
               artifactId: artifact.id,
               actorUserId: auth.userId,
               action: 'location.restored',
-              summary: `恢复了资源「${artifact.name}」(v${ver.versionNumber}) 的网盘入口`,
-              changes: {
-                artifactId: artifact.id,
-                versionId: ver.id,
-                locationId: restoredLoc.id,
-                name: artifact.name,
-                versionNumber: ver.versionNumber,
-                provider: restoredLoc.provider,
-                isFolder: restoredLoc.isFolder,
-                hasExtractCode: Boolean(restoredLoc.extractCode),
-              },
+              summary: isR2
+                ? `恢复了资源「${artifact.name}」(v${ver.versionNumber}) 的文件`
+                : `恢复了资源「${artifact.name}」(v${ver.versionNumber}) 的网盘入口`,
+              changes: isR2
+                ? {
+                    artifactId: artifact.id,
+                    versionId: ver.id,
+                    locationId: restoredLoc.id,
+                    name: artifact.name,
+                    versionNumber: ver.versionNumber,
+                    storageType: 'r2',
+                    originalFilename: ver.originalFilename,
+                    sizeBytes: ver.sizeBytes,
+                  }
+                : {
+                    artifactId: artifact.id,
+                    versionId: ver.id,
+                    locationId: restoredLoc.id,
+                    name: artifact.name,
+                    versionNumber: ver.versionNumber,
+                    provider: restoredLoc.provider,
+                    isFolder: restoredLoc.isFolder,
+                    hasExtractCode: Boolean(restoredLoc.extractCode),
+                  },
             });
 
             emitArtifactChanged(emit, auth.projectId, {
@@ -2029,8 +2159,18 @@ export function registerArtifactRoutes(
             });
           }
 
-          const userMap = await loadUserDisplayNames(tx, [restoredLoc.createdBy]);
-          return toLocationDto(restoredLoc, userMap);
+          const [userMap, blobMap] = await Promise.all([
+            loadUserDisplayNames(tx, [restoredLoc.createdBy]),
+            restoredLoc.blobId
+              ? loadBlobSummaries(tx, auth.projectId, [restoredLoc.blobId])
+              : Promise.resolve(new Map<string, BlobSummary>()),
+          ]);
+          return toLocationDto(
+            restoredLoc,
+            userMap,
+            ver,
+            restoredLoc.blobId ? blobMap.get(restoredLoc.blobId) : undefined,
+          );
         },
       );
 

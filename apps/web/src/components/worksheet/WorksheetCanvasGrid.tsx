@@ -55,6 +55,7 @@ import {
   type QuickCreateRequest,
 } from '@/components/artifact/ArtifactQuickPopover.js';
 import {
+  AttachFileToVersionModal,
   CreateVersionModal,
   LocationFormModal,
 } from '@/components/artifact/VersionAndLocationModals.js';
@@ -70,6 +71,7 @@ import {
   PopoverContent,
 } from '@/components/ui/overlays.js';
 import { Button, cn, Input } from '@/components/ui/primitives.js';
+import { FilePreviewModal, type FilePreviewTarget } from '@/components/upload/FilePreviewModal.js';
 import { AddColumnPopover } from '@/components/worksheet/AddColumnPopover.js';
 import type {
   ActiveCellConflict,
@@ -1325,6 +1327,8 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
   const [quickCreateReq, setQuickCreateReq] = useState<QuickCreateRequest | null>(null);
   const [quickVersionTarget, setQuickVersionTarget] = useState<ArtifactDetail | null>(null);
   const [quickLocationTarget, setQuickLocationTarget] = useState<ArtifactDetail | null>(null);
+  const [quickAttachFileTarget, setQuickAttachFileTarget] = useState<ArtifactDetail | null>(null);
+  const [quickPreviewTarget, setQuickPreviewTarget] = useState<FilePreviewTarget | null>(null);
   const lastAttachmentClickTsRef = useRef(0);
   const [headerMenuTarget, setHeaderMenuTarget] = useState<{
     colDef: CanvasColumnDef;
@@ -1664,7 +1668,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         const badge = artifactSummary.stageBadges[`${task.id}:${stageColCfg.id}`] ?? null;
         const stageAttachment: StageAttachmentSummary | null = badge
           ? {
-              kind: 'link',
+              kind: badge.kind,
               label: badge.label,
               onClick: () => {
                 lastAttachmentClickTsRef.current = performance.now();
@@ -2606,6 +2610,8 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             onRequestCreate={(req) => setQuickCreateReq(req)}
             onRequestCreateVersion={(art) => setQuickVersionTarget(art)}
             onRequestAddLocation={(art) => setQuickLocationTarget(art)}
+            onRequestAttachFile={(art) => setQuickAttachFileTarget(art)}
+            onRequestPreview={(p) => setQuickPreviewTarget(p)}
             onOpenTaskDetail={(tid) => onOpenDetail(tid, { focusFiles: true })}
           />
         )}
@@ -2649,6 +2655,28 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             }}
           />
         )}
+
+        {quickAttachFileTarget?.latestVersion && (
+          <AttachFileToVersionModal
+            open
+            onOpenChange={(o) => {
+              if (!o) setQuickAttachFileTarget(null);
+            }}
+            target={{
+              artifact: quickAttachFileTarget,
+              versionId: quickAttachFileTarget.latestVersion.id,
+              versionNumber: quickAttachFileTarget.latestVersion.versionNumber,
+            }}
+          />
+        )}
+
+        <FilePreviewModal
+          open={Boolean(quickPreviewTarget)}
+          onOpenChange={(o) => {
+            if (!o) setQuickPreviewTarget(null);
+          }}
+          target={quickPreviewTarget}
+        />
 
         {/* 锚定发布信息 Popover */}
         {activePopover?.kind === 'publish' && activePopoverTask && activePopoverBounds && (

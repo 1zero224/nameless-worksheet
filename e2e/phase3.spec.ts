@@ -159,6 +159,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
 
     // V3: 粘贴整段百度网盘分享文本自动解析并一步创建通用文档
     await page.getByTestId('docs-create-btn').click();
+    await page.getByTestId('create-mode-link').click();
     await page
       .getByTestId('share-paste-input')
       .fill(
@@ -199,13 +200,14 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await expect(docCard).toContainText('MEGA');
     await expect(page.getByTestId(`artifact-latest-badge-${docId}`)).toHaveText('v1');
 
-    // V4: 登记新版本 v2（留空链接 -> 0 入口「待补充入口」）
+    // V4: 登记新版本 v2（留空链接 -> 0 入口「暂无文件或网盘链接」）
     await page.getByTestId(`artifact-add-version-${docId}`).click();
+    await page.getByTestId('version-mode-link').click();
     await page.getByTestId('version-note-input').fill('2026 修订版');
     await page.getByTestId('version-submit-btn').click();
     await expect(page.getByTestId(`artifact-latest-badge-${docId}`)).toHaveText('v2');
     await expect(docCard).toContainText('2026 修订版');
-    await expect(docCard).toContainText('待补充多网盘');
+    await expect(docCard).toContainText('暂无文件或网盘链接');
 
     // 展开历史版本，删最新版 v2 需弹窗确认 -> 自动回退至 v1
     await page.getByTestId(`artifact-history-toggle-${docId}`).click();
@@ -323,6 +325,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await expect(page.getByTestId('artifact-quick-popover')).toHaveCount(0);
     await expect(page.getByTestId('artifact-scope-tags')).toContainText(wsName);
     await expect(page.getByTestId('artifact-scope-tags')).toContainText('5th-BD');
+    await page.getByTestId('create-mode-link').click();
     await page
       .getByTestId('share-paste-input')
       .fill('通用字体包 https://pan.baidu.com/s/1p3fonts 提取码：f0nt');
@@ -400,6 +403,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await expect(page.getByTestId('artifact-scope-tags')).toContainText('Disc 1 正片');
     await expect(page.getByTestId('artifact-scope-tags')).toContainText('时轴');
     await expect(page.getByTestId('artifact-name-input')).toHaveValue('5th-BD-Disc 1 正片-时轴');
+    await page.getByTestId('create-mode-link').click();
     await page
       .getByTestId('share-paste-input')
       .fill('https://pan.quark.cn/s/p3timingv1 提取码：qk88');
@@ -441,6 +445,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
 
     // 在详情侧栏新建任务级资源
     await page.getByTestId('drawer-add-task-artifact').click();
+    await page.getByTestId('create-mode-link').click();
     await page.getByTestId('artifact-name-input').fill('任务校对备注');
     await page.getByTestId('artifact-url-input').fill('https://www.alipan.com/s/p3tasknote');
     await page.getByTestId('artifact-submit-btn').click();
@@ -550,6 +555,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await pageB.goto('/docs');
 
     await pageA.getByTestId('docs-create-btn').click();
+    await pageA.getByTestId('create-mode-link').click();
     await pageA.getByTestId('artifact-name-input').fill('双端实时通用文档');
     await pageA.getByTestId('artifact-url-input').fill('https://mega.nz/file/syncdoc01');
     await pageA.getByTestId('artifact-submit-btn').click();
@@ -563,6 +569,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
 
     await pageA.getByTestId(`work-add-attachment-${work.id}`).click();
     await pageA.getByTestId('quick-popover-add-btn').click();
+    await pageA.getByTestId('create-mode-link').click();
     await pageA.getByTestId('artifact-name-input').fill('实时同步原片');
     await pageA.getByTestId('artifact-url-input').fill('https://mega.nz/file/syncwork01');
     await pageA.getByTestId('artifact-submit-btn').click();

@@ -3,9 +3,14 @@ import type { FastifyBaseLogger } from 'fastify';
 import { PgBoss } from 'pg-boss';
 import type { Config } from '../config.js';
 import { type Db, schema } from '../db/index.js';
+import type { StorageDriver } from '../storage/driver.js';
+import { cleanupExpiredUploads } from './cleanup-uploads.js';
 
 const JOB_CLEANUP_EXPIRED = 'cleanup-expired';
 const JOB_PRUNE_REALTIME = 'prune-realtime-events';
+const JOB_CLEANUP_EXPIRED_UPLOADS = 'cleanup-expired-uploads';
+
+export { cleanupExpiredUploads } from './cleanup-uploads.js';
 
 /** 清理已过期的会话、邀请和重置记录 */
 export async function cleanupExpired(db: Db, now = new Date()): Promise<void> {
@@ -54,6 +59,7 @@ export async function pruneRealtimeEvents(
 
 export async function startJobs(
   db: Db,
+  storage: StorageDriver,
   config: Config,
   logger: FastifyBaseLogger,
 ): Promise<{ stop: () => Promise<void> }> {
@@ -70,9 +76,11 @@ export async function startJobs(
 
   await boss.createQueue(JOB_CLEANUP_EXPIRED);
   await boss.createQueue(JOB_PRUNE_REALTIME);
+  await boss.createQueue(JOB_CLEANUP_EXPIRED_UPLOADS);
 
   await boss.schedule(JOB_CLEANUP_EXPIRED, '0 * * * *');
   await boss.schedule(JOB_PRUNE_REALTIME, '15 * * * *');
+  await boss.schedule(JOB_CLEANUP_EXPIRED_UPLOADS, '*/30 * * * *');
 
   await boss.work(JOB_CLEANUP_EXPIRED, async () => {
     await cleanupExpired(db);
@@ -80,6 +88,10 @@ export async function startJobs(
 
   await boss.work(JOB_PRUNE_REALTIME, async () => {
     await pruneRealtimeEvents(db, config.realtimeRetentionHours);
+  });
+
+  await boss.work(JOB_CLEANUP_EXPIRED_UPLOADS, async () => {
+    await cleanupExpiredUploads(db, storage, config, logger);
   });
 
   return {

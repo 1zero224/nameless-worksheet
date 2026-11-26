@@ -71,6 +71,12 @@ export async function createTestEnv(opts?: {
   enableRateLimit?: boolean;
   realtimeReplayLimit?: number;
   heartbeatIntervalMs?: number;
+  r2MultipartThresholdBytes?: number;
+  r2PartSizeBytes?: number;
+  r2MaxFileBytes?: number;
+  uploadCleanupGraceHours?: number;
+  uploadSessionTtlHours?: number;
+  logger?: boolean;
 }): Promise<TestEnv> {
   const { dbName, databaseUrl, drop } = await createIsolatedDatabase();
   const config = loadConfig({
@@ -79,6 +85,21 @@ export async function createTestEnv(opts?: {
     APP_ORIGIN: TEST_ORIGIN,
     REALTIME_REPLAY_LIMIT: String(opts?.realtimeReplayLimit ?? 500),
     LOG_LEVEL: 'silent',
+    ...(opts?.r2MultipartThresholdBytes !== undefined
+      ? { R2_MULTIPART_THRESHOLD_BYTES: String(opts.r2MultipartThresholdBytes) }
+      : {}),
+    ...(opts?.r2PartSizeBytes !== undefined
+      ? { R2_PART_SIZE_BYTES: String(opts.r2PartSizeBytes) }
+      : {}),
+    ...(opts?.r2MaxFileBytes !== undefined
+      ? { R2_MAX_FILE_BYTES: String(opts.r2MaxFileBytes) }
+      : {}),
+    ...(opts?.uploadCleanupGraceHours !== undefined
+      ? { UPLOAD_CLEANUP_GRACE_HOURS: String(opts.uploadCleanupGraceHours) }
+      : {}),
+    ...(opts?.uploadSessionTtlHours !== undefined
+      ? { UPLOAD_SESSION_TTL_HOURS: String(opts.uploadSessionTtlHours) }
+      : {}),
   });
 
   const app = await buildApp({
@@ -86,7 +107,7 @@ export async function createTestEnv(opts?: {
     enableJobs: false,
     enableRateLimit: opts?.enableRateLimit ?? false,
     heartbeatIntervalMs: opts?.heartbeatIntervalMs,
-    logger: false,
+    logger: opts?.logger ?? false,
   });
 
   return {

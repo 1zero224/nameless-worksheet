@@ -3,6 +3,7 @@ import type { ArtifactDetail, Work, WorkCapsuleSummary } from '@nw/shared';
 import {
   ChevronDown,
   ChevronRight,
+  FileDown,
   Folder,
   KeyRound,
   Link2,
@@ -20,6 +21,7 @@ import {
 } from '@/components/artifact/ArtifactQuickPopover.js';
 import { isSafeExternalUrl } from '@/components/artifact/utils.js';
 import {
+  AttachFileToVersionModal,
   CreateVersionModal,
   LocationFormModal,
 } from '@/components/artifact/VersionAndLocationModals.js';
@@ -34,6 +36,7 @@ import {
   PopoverContent,
 } from '@/components/ui/overlays.js';
 import { Button, cn } from '@/components/ui/primitives.js';
+import { FilePreviewModal, type FilePreviewTarget } from '@/components/upload/FilePreviewModal.js';
 
 interface WorkSlotPopoverState {
   key: string;
@@ -61,6 +64,8 @@ export function WorkAttachmentSlots({
   const [createReq, setCreateReq] = useState<QuickCreateRequest | null>(null);
   const [versionTarget, setVersionTarget] = useState<ArtifactDetail | null>(null);
   const [locationTarget, setLocationTarget] = useState<ArtifactDetail | null>(null);
+  const [attachFileTarget, setAttachFileTarget] = useState<ArtifactDetail | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<FilePreviewTarget | null>(null);
 
   const visibleCapsules = capsules.slice(0, 3);
   const overflowCount = Math.max(0, capsules.length - visibleCapsules.length);
@@ -86,7 +91,8 @@ export function WorkAttachmentSlots({
       data-work-attachment-slots={workId}
     >
       {visibleCapsules.map((cap) => {
-        const directUrl = isSafeExternalUrl(cap.directUrl) ? cap.directUrl : null;
+        // 含 R2 文件的作品胶囊一律弹浮层防大文件误触下载；仅无 R2 且无提取码的单网盘胶囊直跳
+        const directUrl = !cap.hasR2File && isSafeExternalUrl(cap.directUrl) ? cap.directUrl : null;
         if (directUrl) {
           return (
             <a
@@ -121,13 +127,15 @@ export function WorkAttachmentSlots({
               e.stopPropagation();
               handleToggleSlot(cap.artifactId, e.currentTarget, cap.artifactId);
             }}
-            title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击查看多网盘与提取码`}
+            title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击查看文件与多网盘`}
             className={cn(
               'inline-flex h-6 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-zinc-700 ring-1 transition-colors hover:text-indigo-700 hover:ring-indigo-300 cursor-pointer',
               isActive ? 'text-indigo-700 ring-indigo-400' : 'ring-black/[0.08]',
             )}
           >
-            {cap.hasExtractCode ? (
+            {cap.hasR2File ? (
+              <FileDown className="h-3 w-3 shrink-0 text-emerald-600" />
+            ) : cap.hasExtractCode ? (
               <KeyRound className="h-3 w-3 shrink-0 text-amber-600" />
             ) : (
               <Link2 className="h-3 w-3 shrink-0 text-indigo-500" />
@@ -216,6 +224,8 @@ export function WorkAttachmentSlots({
               onRequestCreate={(req) => setCreateReq(req)}
               onRequestCreateVersion={(art) => setVersionTarget(art)}
               onRequestAddLocation={(art) => setLocationTarget(art)}
+              onRequestAttachFile={(art) => setAttachFileTarget(art)}
+              onRequestPreview={(p) => setPreviewTarget(p)}
             />
           </PopoverContent>
         </Popover>
@@ -259,6 +269,28 @@ export function WorkAttachmentSlots({
           }}
         />
       )}
+
+      {attachFileTarget?.latestVersion && (
+        <AttachFileToVersionModal
+          open
+          onOpenChange={(o) => {
+            if (!o) setAttachFileTarget(null);
+          }}
+          target={{
+            artifact: attachFileTarget,
+            versionId: attachFileTarget.latestVersion.id,
+            versionNumber: attachFileTarget.latestVersion.versionNumber,
+          }}
+        />
+      )}
+
+      <FilePreviewModal
+        open={Boolean(previewTarget)}
+        onOpenChange={(o) => {
+          if (!o) setPreviewTarget(null);
+        }}
+        target={previewTarget}
+      />
     </div>
   );
 }

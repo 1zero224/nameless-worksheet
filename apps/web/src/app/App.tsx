@@ -5,6 +5,7 @@ import { configureApiClient } from '@/api/client.js';
 import { AppShell } from '@/app/AppShell.js';
 import { RequireAuth, RequirePermission, useMe } from '@/app/AuthContext.js';
 import { ToastProvider } from '@/components/ui/overlays.js';
+import { UploadQueueDock } from '@/components/upload/UploadQueueDock.js';
 import { AdminRealtimePage } from '@/pages/AdminRealtimePage.js';
 import { AdminUsersPage } from '@/pages/AdminUsersPage.js';
 import { DocsPage } from '@/pages/DocsPage.js';
@@ -18,6 +19,7 @@ import { WorksheetDetailPage } from '@/pages/WorksheetDetailPage.js';
 import { WorksheetsPage } from '@/pages/WorksheetsPage.js';
 import { RealtimeClient } from '@/realtime/client.js';
 import { createRealtimeUrl, RealtimeProvider } from '@/realtime/context.js';
+import { UploadManagerProvider } from '@/uploads/UploadManagerContext.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,52 +50,55 @@ function AppRoutes() {
 
   return (
     <RealtimeProvider client={realtimeClient} active={Boolean(me)} onAuthLost={handleAuthLost}>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/invite/:token" element={<InviteRegisterPage />} />
-        <Route path="/reset/:token" element={<ResetPasswordPage />} />
-
-        <Route
-          element={
-            <RequireAuth>
-              <AppShell />
-            </RequireAuth>
-          }
-        >
-          <Route index element={<HomePage />} />
-          <Route path="/docs" element={<DocsPage />} />
-          <Route path="/worksheets" element={<WorksheetsPage />} />
-          <Route path="/worksheets/:id" element={<WorksheetDetailPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+      <UploadManagerProvider active={Boolean(me)}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/invite/:token" element={<InviteRegisterPage />} />
+          <Route path="/reset/:token" element={<ResetPasswordPage />} />
 
           <Route
-            path="/admin/users"
             element={
-              <RequirePermission permission="users.manage">
-                <AdminUsersPage />
-              </RequirePermission>
+              <RequireAuth>
+                <AppShell />
+              </RequireAuth>
             }
-          />
-          <Route
-            path="/admin/storage"
-            element={
-              <RequirePermission permission="storage.manage">
-                <PlaceholderPage title="存储" />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin/realtime"
-            element={
-              <RequirePermission permission="diag.realtime">
-                <AdminRealtimePage />
-              </RequirePermission>
-            }
-          />
+          >
+            <Route index element={<HomePage />} />
+            <Route path="/docs" element={<DocsPage />} />
+            <Route path="/worksheets" element={<WorksheetsPage />} />
+            <Route path="/worksheets/:id" element={<WorksheetDetailPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
+            <Route
+              path="/admin/users"
+              element={
+                <RequirePermission permission="users.manage">
+                  <AdminUsersPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/storage"
+              element={
+                <RequirePermission permission="storage.manage">
+                  <PlaceholderPage title="存储" />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/realtime"
+              element={
+                <RequirePermission permission="diag.realtime">
+                  <AdminRealtimePage />
+                </RequirePermission>
+              }
+            />
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+        {Boolean(me) && <UploadQueueDock />}
+      </UploadManagerProvider>
     </RealtimeProvider>
   );
 }
