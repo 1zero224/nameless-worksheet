@@ -152,14 +152,6 @@ export function LocationActionRow({
           </button>
         )}
 
-        {location.note && (
-          <span className="min-w-0 truncate text-[11px] text-zinc-400" title={location.note}>
-            {location.note}
-          </span>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-0.5">
         <button
           type="button"
           data-testid={`location-copy-share-${location.id}`}
@@ -169,13 +161,21 @@ export function LocationActionRow({
             e.stopPropagation();
             void handleCopyShare();
           }}
-          className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
+          className="inline-flex h-5 shrink-0 items-center gap-1 rounded px-1 text-[11px] font-medium text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
         >
-          <Share2 className="h-3.5 w-3.5" />
+          <Share2 className="h-3 w-3" />
           {!compact && <span>分享</span>}
         </button>
 
-        {(onEdit || onDelete) && (
+        {location.note && (
+          <span className="min-w-0 truncate text-[11px] text-zinc-400" title={location.note}>
+            {location.note}
+          </span>
+        )}
+      </div>
+
+      {(onEdit || onDelete) && (
+        <div className="flex shrink-0 items-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -206,8 +206,8 @@ export function LocationActionRow({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
