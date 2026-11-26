@@ -121,7 +121,7 @@ export function WorkAttachmentSlots({
               e.stopPropagation();
               handleToggleSlot(cap.artifactId, e.currentTarget, cap.artifactId);
             }}
-            title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击查看入口与提取码`}
+            title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击查看多网盘与提取码`}
             className={cn(
               'inline-flex h-6 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-zinc-700 ring-1 transition-colors hover:text-indigo-700 hover:ring-indigo-300 cursor-pointer',
               isActive ? 'text-indigo-700 ring-indigo-400' : 'ring-black/[0.08]',

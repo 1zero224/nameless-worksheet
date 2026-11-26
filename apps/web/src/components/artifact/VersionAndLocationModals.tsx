@@ -125,7 +125,7 @@ export function CreateVersionModal({
         <SharePasteInput onParsed={handleParsed} />
 
         <div>
-          <Label htmlFor="ver-url">网盘链接（留空则创建“待补充入口”版本）</Label>
+          <Label htmlFor="ver-url">网盘链接（留空则创建“待补充多网盘”版本）</Label>
           <Input
             id="ver-url"
             data-testid="version-url-input"
@@ -290,7 +290,7 @@ export function LocationFormModal({
         taskId: target?.artifact.taskId ?? null,
       });
       pushToast({
-        message: target?.mode === 'create' ? '已补充网盘入口' : '网盘入口已更新',
+        message: target?.mode === 'create' ? '已补充多网盘链接' : '网盘链接已更新',
         variant: 'success',
       });
       onOpenChange(false);
@@ -315,10 +315,10 @@ export function LocationFormModal({
     <ModalDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={target?.mode === 'edit' ? '编辑网盘入口' : '补充网盘入口'}
+      title={target?.mode === 'edit' ? '编辑网盘链接' : '补充多网盘'}
       description={
         target
-          ? `资源「${target.artifact.name}」(v${target.versionNumber}) · 补充或编辑入口不升版本号`
+          ? `资源「${target.artifact.name}」(v${target.versionNumber}) · 补充或编辑多网盘链接不升版本号`
           : ''
       }
       maxWidthClass="max-w-lg"
@@ -393,7 +393,7 @@ export function LocationFormModal({
             取消
           </Button>
           <Button type="submit" disabled={mutation.isPending} data-testid="location-submit-btn">
-            {mutation.isPending ? '保存中…' : '保存入口'}
+            {mutation.isPending ? '保存中…' : '保存'}
           </Button>
         </div>
       </form>

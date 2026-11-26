@@ -180,7 +180,7 @@ export function CreateArtifactModal({
         </div>
 
         <div>
-          <Label htmlFor="art-url">网盘链接（留空则创建“待补充入口”资源）</Label>
+          <Label htmlFor="art-url">网盘链接（留空则创建“待补充多网盘”资源）</Label>
           <Input
             id="art-url"
             data-testid="artifact-url-input"

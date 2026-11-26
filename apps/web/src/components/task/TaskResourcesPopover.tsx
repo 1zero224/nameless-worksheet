@@ -36,25 +36,23 @@ function CompactArtifactBlock({
         {icon}
         <span className="truncate">{title}</span>
       </div>
-      <div className="space-y-1.5">
+      <div className="divide-y divide-black/[0.06] rounded-lg bg-[#fafafa]/70 px-2">
         {artifacts.map((art) => {
           const latest = art.latestVersion;
           return (
-            <div
-              key={art.id}
-              data-testid={`popover-art-${art.id}`}
-              className="rounded-lg border border-black/[0.07] bg-white p-2 space-y-1"
-            >
+            <div key={art.id} data-testid={`popover-art-${art.id}`} className="space-y-1 py-1.5">
               <div className="flex items-center justify-between gap-1.5">
-                <span className="truncate text-xs font-medium text-zinc-900">{art.name}</span>
+                <span className="truncate text-xs font-medium text-zinc-900" title={art.name}>
+                  {art.name}
+                </span>
                 {latest && (
-                  <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0 text-[10px] font-medium text-zinc-600 tabular-nums">
+                  <span className="shrink-0 rounded-full bg-zinc-900 px-1.5 py-0 text-[10px] font-medium text-white tabular-nums">
                     v{latest.versionNumber}
                   </span>
                 )}
               </div>
               {latest && latest.locations.length > 0 ? (
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {latest.locations.map((loc) => (
                     <LocationActionRow
                       key={loc.id}
@@ -66,7 +64,7 @@ function CompactArtifactBlock({
                   ))}
                 </div>
               ) : (
-                <div className="text-[11px] text-zinc-400">待补充入口</div>
+                <div className="text-[11px] text-zinc-400">待补充多网盘</div>
               )}
             </div>
           );
@@ -179,7 +177,7 @@ export function TaskResourcesPopover({
                   strokeWidth={1.75}
                   aria-hidden="true"
                 />
-                <div className="mt-1 text-xs font-medium text-zinc-600">暂无资源或网盘入口</div>
+                <div className="mt-1 text-xs font-medium text-zinc-600">暂无资源或网盘链接</div>
                 <div className="mt-0.5 text-[11px] text-zinc-400">
                   可打开任务详情或工作表添加资源
                 </div>

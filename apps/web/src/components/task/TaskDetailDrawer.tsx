@@ -1,4 +1,5 @@
 import {
+  type ArtifactDetail,
   type ArtifactScope,
   type Assignee,
   type ChangeLogsResponse,
@@ -18,6 +19,7 @@ import {
 } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Check,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -26,6 +28,7 @@ import {
   MapPin,
   Paperclip,
   Plus,
+  StickyNote,
   Trash2,
   X,
 } from 'lucide-react';
@@ -41,7 +44,13 @@ import {
   type ScopeTagItem,
 } from '@/components/artifact/utils.js';
 import { PRIORITY_DOT_STYLES, STAGE_STATUS_STYLES } from '@/components/ui/colors.js';
-import { Sheet, useToast } from '@/components/ui/overlays.js';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Sheet,
+  useToast,
+} from '@/components/ui/overlays.js';
 import { Button, cn, Input, Label } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
 
@@ -408,31 +417,6 @@ export function TaskDetailDrawer({
             </div>
           </div>
 
-          {/* 工序卡片 */}
-          {stageCols.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="text-xs font-semibold text-slate-700">工序与分工</div>
-              {stageCols.map((col) => {
-                const cell = getEffectiveStageCell(task, col.id);
-                return (
-                  <DetailStageCard
-                    key={col.id}
-                    columnName={col.name}
-                    cell={cell}
-                    users={users}
-                    userMap={userMap}
-                    onSave={(next) =>
-                      patchStageMutation.mutate({
-                        columnId: col.id,
-                        body: { ...next, baseRevision: cell.revision },
-                      })
-                    }
-                  />
-                );
-              })}
-            </div>
-          )}
-
           {/* 自定义列 */}
           {customCols.length > 0 && (
             <div className="space-y-2.5">
@@ -487,86 +471,71 @@ export function TaskDetailDrawer({
             </div>
           )}
 
-          {/* 任务文件与交付区（按工序交付 + 任务其他资源自然分组） */}
+          {/* 统一「工序与交付」区（每道工序一站式编辑负责人/状态/备注 + 挂载与取用本工序资源） */}
           <div
             ref={filesSectionRef}
             data-testid="task-files-section"
             className="space-y-3 border-t border-black/[0.08] pt-4"
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
-                <FolderOpen className="h-3.5 w-3.5 text-zinc-500" />
-                任务文件与交付
-              </div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-900">
+              <FolderOpen className="h-3.5 w-3.5 text-zinc-500" />
+              {stageCols.length > 0 ? '工序与交付' : '任务文件与交付'}
             </div>
 
-            {/* 各工序交付 */}
             {stageCols.length > 0 && (
               <div className="space-y-2.5">
                 {stageCols.map((col) => {
+                  const cell = getEffectiveStageCell(task, col.id);
                   const stageList = taskArtifactsData?.stageArtifacts[col.id] ?? [];
                   return (
-                    <div
+                    <DetailStageCard
                       key={col.id}
-                      data-testid={`drawer-stage-files-${col.id}`}
-                      className="rounded-lg border border-black/[0.07] bg-[#fafafa]/70 p-2.5 space-y-2"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-zinc-800">
-                          {col.name}
-                          {stageList.length > 0 && (
-                            <span className="ml-1.5 text-[11px] text-zinc-400 tabular-nums">
-                              ({stageList.length})
-                            </span>
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          data-testid={`drawer-add-stage-artifact-${col.id}`}
-                          onClick={() =>
-                            setCreateArtConfig({
-                              scope: { kind: 'stage', taskId: task.id, stageColumnId: col.id },
-                              scopeLabel: [
-                                wsData.worksheet.name,
-                                currentWork?.name,
-                                task.title,
-                                col.name,
-                              ]
-                                .filter(Boolean)
-                                .join(' - '),
-                              scopeTags: buildScopeTags({
-                                worksheetName: wsData.worksheet.name,
-                                workName: currentWork?.name,
-                                taskTitle: task.title,
-                                stageColumnName: col.name,
-                              }),
-                              defaultName: buildDefaultArtifactName({
-                                workName: currentWork?.name,
-                                taskTitle: task.title,
-                                stageColumnName: col.name,
-                              }),
-                            })
-                          }
-                          className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
-                        >
-                          <Plus className="h-3 w-3" />
-                          添加
-                        </button>
-                      </div>
-                      {stageList.length > 0 && <ArtifactCardList artifacts={stageList} compact />}
-                    </div>
+                      columnId={col.id}
+                      columnName={col.name}
+                      cell={cell}
+                      artifacts={stageList}
+                      users={users}
+                      userMap={userMap}
+                      onSave={(next) =>
+                        patchStageMutation.mutate({
+                          columnId: col.id,
+                          body: { ...next, baseRevision: cell.revision },
+                        })
+                      }
+                      onAddArtifact={() =>
+                        setCreateArtConfig({
+                          scope: { kind: 'stage', taskId: task.id, stageColumnId: col.id },
+                          scopeLabel: [
+                            wsData.worksheet.name,
+                            currentWork?.name,
+                            task.title,
+                            col.name,
+                          ]
+                            .filter(Boolean)
+                            .join(' - '),
+                          scopeTags: buildScopeTags({
+                            worksheetName: wsData.worksheet.name,
+                            workName: currentWork?.name,
+                            taskTitle: task.title,
+                            stageColumnName: col.name,
+                          }),
+                          defaultName: buildDefaultArtifactName({
+                            workName: currentWork?.name,
+                            taskTitle: task.title,
+                            stageColumnName: col.name,
+                          }),
+                        })
+                      }
+                    />
                   );
                 })}
               </div>
             )}
 
             {/* 任务其他资源 */}
-            <div
-              data-testid="drawer-task-other-files"
-              className="rounded-lg border border-black/[0.07] bg-[#fafafa]/70 p-2.5 space-y-2"
-            >
+            <div data-testid="drawer-task-other-files" className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-zinc-800">
+                <span className="text-xs font-medium text-zinc-700">
                   任务其他资源
                   {(taskArtifactsData?.taskArtifacts.length ?? 0) > 0 && (
                     <span className="ml-1.5 text-[11px] text-zinc-400 tabular-nums">
@@ -594,17 +563,20 @@ export function TaskDetailDrawer({
                       }),
                     })
                   }
-                  className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+                  className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
                 >
                   <Plus className="h-3 w-3" />
                   添加
                 </button>
               </div>
-              <ArtifactCardList
-                artifacts={taskArtifactsData?.taskArtifacts ?? []}
-                compact
-                emptyText="暂无任务级其他资源"
-              />
+              <div className="rounded-lg border border-black/[0.07] bg-[#fafafa]/60 p-1">
+                <ArtifactCardList
+                  artifacts={taskArtifactsData?.taskArtifacts ?? []}
+                  compact
+                  variant="list"
+                  emptyText="暂无任务级其他资源"
+                />
+              </div>
             </div>
           </div>
 
@@ -663,13 +635,13 @@ export function TaskDetailDrawer({
             )}
           </div>
 
-          {/* 所属作品共用资源（置于详情侧栏最下方，不干扰上方任务核心字段与本任务交付） */}
+          {/* 所属作品共用资源（置于详情侧栏最下方，采用紧凑平铺列表） */}
           {currentWork && (
             <div
               data-testid="work-shared-attachments-slot"
-              className="rounded-lg border border-indigo-200/80 bg-indigo-50/35 p-3 space-y-2.5"
+              className="space-y-2 rounded-lg bg-indigo-50/45 p-2.5 ring-1 ring-indigo-200/60"
             >
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 px-0.5">
                 <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-indigo-950">
                   <Paperclip className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
                   <span className="truncate">所属作品「{currentWork.name}」共用资源</span>
@@ -687,7 +659,7 @@ export function TaskDetailDrawer({
                       }),
                     })
                   }
-                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-indigo-200 bg-white px-2 text-[11px] font-medium text-indigo-800 hover:bg-indigo-50 cursor-pointer"
+                  className="inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-medium text-indigo-700 transition-colors hover:bg-indigo-100/70 hover:text-indigo-950 cursor-pointer"
                 >
                   <Plus className="h-3 w-3" />
                   添加共用资源
@@ -696,6 +668,7 @@ export function TaskDetailDrawer({
               <ArtifactCardList
                 artifacts={taskArtifactsData?.workArtifacts ?? []}
                 compact
+                variant="list"
                 emptyText="暂无作品共用资源，可点击右上角添加整片原片或通用字体包"
               />
             </div>
@@ -707,17 +680,23 @@ export function TaskDetailDrawer({
 }
 
 function DetailStageCard({
+  columnId,
   columnName,
   cell,
+  artifacts,
   users,
   userMap,
   onSave,
+  onAddArtifact,
 }: {
+  columnId: string;
   columnName: string;
   cell: StageCell;
+  artifacts: ArtifactDetail[];
   users: UserListItem[];
   userMap: Map<string, string>;
   onSave: (next: { assignees?: Assignee[]; status?: StageStatus; note?: string }) => void;
+  onAddArtifact: () => void;
 }) {
   const [note, setNote] = useState(cell.note);
   const [textName, setTextName] = useState('');
@@ -752,9 +731,106 @@ function DetailStageCard({
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-slate-900">{columnName}</span>
+    <div
+      data-testid={`drawer-stage-files-${columnId}`}
+      className="space-y-2 rounded-lg border border-black/[0.08] bg-white p-2.5"
+    >
+      {/* 顶行：工序名 + 负责人胶囊 + 弹出式选择器 + 状态胶囊 */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <span className="text-[13px] font-semibold text-zinc-900">{columnName}</span>
+
+          {cell.assignees.map((a, idx) => {
+            const label = a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name;
+            const key = a.type === 'user' ? `u:${a.userId}` : `t:${a.name}`;
+            return (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700"
+              >
+                {label}
+                {a.type === 'text' && <span className="text-[10px] text-zinc-400">文本</span>}
+                <button
+                  type="button"
+                  onClick={() => removeAssignee(idx)}
+                  aria-label={`移除负责人 ${label}`}
+                  className="text-zinc-400 hover:text-zinc-800 cursor-pointer"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            );
+          })}
+
+          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={`为 ${columnName} 选择负责人`}
+                className="inline-flex h-5 items-center gap-0.5 rounded-full border border-dashed border-zinc-300 px-1.5 text-[11px] text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-900 cursor-pointer"
+              >
+                <Plus className="h-3 w-3" />
+                {cell.assignees.length === 0 && <span>负责人</span>}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" sideOffset={6} className="w-64 space-y-2.5 p-2.5">
+              <div>
+                <div className="mb-1.5 text-[11px] font-medium text-zinc-500">选择项目用户</div>
+                <div className="flex max-h-28 flex-wrap gap-1 overflow-y-auto">
+                  {users.map((u) => {
+                    const checked = cell.assignees.some(
+                      (a) => a.type === 'user' && a.userId === u.id,
+                    );
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => toggleUser(u.id)}
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors cursor-pointer',
+                          checked
+                            ? 'border-zinc-900 bg-zinc-900 text-white'
+                            : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
+                        )}
+                      >
+                        {checked && <Check className="h-3 w-3" />}
+                        {u.displayName}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="border-t border-black/[0.06] pt-2">
+                <div className="mb-1 text-[11px] font-medium text-zinc-500">纯文本负责人</div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    value={textName}
+                    onChange={(e) => setTextName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addTextAssignee();
+                      }
+                    }}
+                    placeholder="输入名字回车添加"
+                    className="h-7 min-w-0 flex-1 py-1 text-xs"
+                    maxLength={32}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 shrink-0 whitespace-nowrap px-2.5 text-xs"
+                    onClick={addTextAssignee}
+                  >
+                    添加
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+
         <SelectField
           aria-label={`${columnName} 状态`}
           variant="pill"
@@ -771,99 +847,70 @@ function DetailStageCard({
         />
       </div>
 
-      {/* 负责人芯片 */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {cell.assignees.length === 0 ? (
-          <span className="text-xs text-slate-400">暂无负责人</span>
-        ) : (
-          cell.assignees.map((a, idx) => {
-            const label = a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name;
-            const key = a.type === 'user' ? `u:${a.userId}` : `t:${a.name}`;
-            return (
-              <span
-                key={key}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
-              >
-                {label}
-                {a.type === 'text' && <span className="text-[10px] text-slate-400">文本</span>}
-                <button
-                  type="button"
-                  onClick={() => removeAssignee(idx)}
-                  aria-label={`移除负责人 ${label}`}
-                  className="text-slate-400 hover:text-slate-700 cursor-pointer"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            );
-          })
-        )}
-        <button
-          type="button"
-          onClick={() => setPickerOpen((v) => !v)}
-          className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:border-slate-500 cursor-pointer"
-        >
-          <Plus className="h-3 w-3" />
-          负责人
-        </button>
+      {/* 轻量带语义标签的工序备注 */}
+      <div className="flex items-center gap-1.5 rounded-md bg-zinc-50/90 px-2 py-1 transition-colors focus-within:bg-white focus-within:ring-1 focus-within:ring-zinc-300">
+        <StickyNote className="h-3 w-3 shrink-0 text-zinc-400" />
+        <span className="shrink-0 text-[11px] font-medium text-zinc-400">备注</span>
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onBlur={() => {
+            if (note.trim() !== cell.note) {
+              onSave({ note: note.trim() });
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur();
+            }
+          }}
+          placeholder="添加工序备注…"
+          aria-label={`${columnName} 备注`}
+          maxLength={200}
+          className="h-5 min-w-0 flex-1 bg-transparent text-xs text-zinc-800 placeholder:text-zinc-400 focus:outline-none"
+        />
       </div>
 
-      {pickerOpen && (
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-2 space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            {users.map((u) => {
-              const checked = cell.assignees.some((a) => a.type === 'user' && a.userId === u.id);
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => toggleUser(u.id)}
-                  className={cn(
-                    'rounded-full border px-2 py-0.5 text-xs cursor-pointer',
-                    checked
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100',
-                  )}
-                >
-                  {u.displayName}
-                </button>
-              );
-            })}
+      {/* 集成在本工序卡片底部的交付资源 */}
+      <div className="border-t border-dashed border-black/[0.07] pt-1.5">
+        {artifacts.length === 0 ? (
+          <div className="flex items-center justify-between gap-2 px-0.5 text-[11px] text-zinc-400">
+            <span className="inline-flex items-center gap-1">
+              <Paperclip className="h-3 w-3" />
+              暂无交付资源
+            </span>
+            <button
+              type="button"
+              data-testid={`drawer-add-stage-artifact-${columnId}`}
+              onClick={onAddArtifact}
+              className="inline-flex h-5 items-center gap-0.5 rounded px-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
+            >
+              <Plus className="h-3 w-3" />
+              添加资源
+            </button>
           </div>
-          <div className="flex gap-1.5">
-            <Input
-              value={textName}
-              onChange={(e) => setTextName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  addTextAssignee();
-                }
-              }}
-              placeholder="输入纯文本名字回车添加"
-              className="h-7 py-1 text-xs"
-              maxLength={32}
-            />
-            <Button type="button" size="sm" variant="secondary" onClick={addTextAssignee}>
-              添加
-            </Button>
+        ) : (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2 px-0.5">
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500">
+                <Paperclip className="h-3 w-3 text-zinc-400" />
+                交付资源
+                <span className="tabular-nums text-zinc-400">({artifacts.length})</span>
+              </span>
+              <button
+                type="button"
+                data-testid={`drawer-add-stage-artifact-${columnId}`}
+                onClick={onAddArtifact}
+                className="inline-flex h-5 items-center gap-0.5 rounded px-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
+              >
+                <Plus className="h-3 w-3" />
+                添加
+              </button>
+            </div>
+            <ArtifactCardList artifacts={artifacts} compact variant="list" />
           </div>
-        </div>
-      )}
-
-      {/* 备注 */}
-      <Input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        onBlur={() => {
-          if (note.trim() !== cell.note) {
-            onSave({ note: note.trim() });
-          }
-        }}
-        placeholder="工序备注（如初校/终校说明）"
-        className="h-7 py-1 text-xs"
-        maxLength={200}
-      />
+        )}
+      </div>
     </div>
   );
 }

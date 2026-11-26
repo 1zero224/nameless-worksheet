@@ -5,7 +5,7 @@ import type {
   WorkArtifactsResponse,
 } from '@nw/shared';
 import { useQuery } from '@tanstack/react-query';
-import { PanelRightOpen, Plus, X } from 'lucide-react';
+import { MoreHorizontal, PanelRightOpen, Plus, X } from 'lucide-react';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { LocationActionRow } from '@/components/artifact/ArtifactCardList.js';
@@ -14,7 +14,15 @@ import {
   buildScopeTags,
   type ScopeTagItem,
 } from '@/components/artifact/utils.js';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/overlays.js';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from '@/components/ui/overlays.js';
 
 export type QuickPopoverTarget =
   | {
@@ -155,7 +163,7 @@ export function ArtifactQuickPopoverContent({
             className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-zinc-900 px-2 text-[11px] font-medium text-white hover:bg-zinc-800 cursor-pointer"
           >
             <Plus className="h-3 w-3" />
-            添加资源
+            添加
           </button>
           <button
             type="button"
@@ -173,21 +181,23 @@ export function ArtifactQuickPopoverContent({
         <div className="py-5 text-center text-xs text-zinc-400">正在加载资源…</div>
       ) : artifacts.length === 0 ? (
         <div className="rounded-lg border border-dashed border-black/[0.1] bg-[#fafafa] px-3 py-4 text-center text-xs text-zinc-400">
-          暂无资源，点击右上角「添加资源」粘贴网盘链接
+          暂无资源，点击右上角「添加」粘贴网盘链接
         </div>
       ) : (
-        <div className="no-scrollbar max-h-[300px] space-y-2 overflow-y-auto">
+        <div className="no-scrollbar max-h-[300px] divide-y divide-black/[0.06] overflow-y-auto">
           {artifacts.map((art) => {
             const latest = art.latestVersion;
             return (
               <div
                 key={art.id}
                 data-testid={`quick-art-${art.id}`}
-                className="rounded-lg border border-black/[0.07] bg-white p-2 space-y-1.5"
+                className="space-y-1 py-2 first:pt-0.5 last:pb-0.5"
               >
-                <div className="flex items-center justify-between gap-1.5">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-xs font-semibold text-zinc-900">{art.name}</span>
+                    <span className="truncate text-xs font-semibold text-zinc-900" title={art.name}>
+                      {art.name}
+                    </span>
                     {latest && (
                       <span className="inline-flex shrink-0 items-center overflow-hidden rounded-full bg-zinc-900 text-white">
                         <span className="pl-1.5 pr-1 py-0 text-[10px] font-medium tabular-nums">
@@ -211,26 +221,36 @@ export function ArtifactQuickPopoverContent({
                       </span>
                     )}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {latest && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          onRequestAddLocation(art);
-                        }}
-                        className="rounded px-1.5 py-0.5 text-[11px] text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900 cursor-pointer"
-                      >
-                        + 入口
-                      </button>
-                    )}
-                  </div>
+                  {latest && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`更多操作 ${art.name}`}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[132px]">
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            onClose();
+                            onRequestAddLocation(art);
+                          }}
+                        >
+                          <Plus className="h-3.5 w-3.5 text-zinc-400" />
+                          补充多网盘
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
 
                 {latest?.note && <div className="text-[11px] text-zinc-500">{latest.note}</div>}
 
                 {latest && latest.locations.length > 0 ? (
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {latest.locations.map((loc) => (
                       <LocationActionRow
                         key={loc.id}
@@ -242,7 +262,7 @@ export function ArtifactQuickPopoverContent({
                     ))}
                   </div>
                 ) : (
-                  <div className="text-[11px] text-zinc-400">待补充入口</div>
+                  <div className="px-1 text-[11px] text-zinc-400">待补充多网盘</div>
                 )}
               </div>
             );
@@ -251,17 +271,17 @@ export function ArtifactQuickPopoverContent({
       )}
 
       {target.kind === 'stage' && onOpenTaskDetail && (
-        <div className="flex justify-end border-t border-black/[0.06] pt-2">
+        <div className="flex justify-end border-t border-black/[0.06] pt-1.5">
           <button
             type="button"
             onClick={() => {
               onClose();
               onOpenTaskDetail(target.taskId);
             }}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-black/[0.05] hover:text-zinc-950 cursor-pointer"
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.04] hover:text-zinc-900 cursor-pointer"
           >
-            <PanelRightOpen className="h-3.5 w-3.5" />
-            在详情侧栏中管理全部历史
+            <PanelRightOpen className="h-3 w-3" />
+            在详情侧栏管理全部
           </button>
         </div>
       )}

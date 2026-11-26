@@ -178,7 +178,8 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
       'noopener noreferrer',
     );
 
-    // V3: 同版本补充第二个网盘入口（MEGA）-> 不升版本号
+    // V3: 同版本通过 ··· 菜单补充第二个多网盘链接（MEGA）-> 不升版本号
+    await page.getByTestId(`artifact-menu-${docId}`).click();
     await page.getByTestId(`artifact-add-location-${docId}`).click();
     await page.getByTestId('location-url-input').fill('https://mega.nz/file/p3mirror001');
     await page.getByTestId('location-submit-btn').click();
@@ -191,7 +192,7 @@ test.describe('阶段 3 端到端验收（V1–V12：四级挂载、版本历史
     await page.getByTestId('version-submit-btn').click();
     await expect(page.getByTestId(`artifact-latest-badge-${docId}`)).toHaveText('v2');
     await expect(docCard).toContainText('2026 修订版');
-    await expect(docCard).toContainText('待补充入口');
+    await expect(docCard).toContainText('待补充多网盘');
 
     // 展开历史版本，删最新版 v2 需弹窗确认 -> 自动回退至 v1
     await page.getByTestId(`artifact-history-toggle-${docId}`).click();

@@ -7,14 +7,15 @@ import {
 } from '@nw/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  Check,
   ChevronDown,
   ChevronRight,
   Copy,
   ExternalLink,
-  File as FileIcon,
   Folder,
   History,
   KeyRound,
+  Link2,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -60,12 +61,17 @@ export function LocationActionRow({
   onDelete?: () => void;
 }) {
   const { pushToast } = useToast();
+  const [copiedCode, setCopiedCode] = useState(false);
   const providerLabel = location.provider ? CLOUD_PROVIDER_LABELS[location.provider] : '链接';
   const safeUrl = isSafeExternalUrl(location.url) ? location.url : null;
 
   const handleCopyCode = async () => {
     if (!location.extractCode) return;
     const ok = await copyToClipboard(location.extractCode);
+    if (ok) {
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 1500);
+    }
     pushToast({
       message: ok ? `已复制提取码：${location.extractCode}` : '复制失败，请手动复制',
       variant: ok ? 'success' : 'error',
@@ -85,72 +91,88 @@ export function LocationActionRow({
     <div
       data-testid={`location-row-${location.id}`}
       className={cn(
-        'flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/[0.06] bg-[#fafafa] px-2.5 py-1.5',
-        compact && 'px-2 py-1',
+        'group/loc flex items-center justify-between gap-2 rounded-md transition-colors hover:bg-black/[0.03]',
+        compact ? 'px-1.5 py-1' : 'bg-[#fafafa] px-2.5 py-1.5 hover:bg-zinc-100/80',
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-xs">
-        {location.isFolder ? (
-          <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" strokeWidth={1.75} />
-        ) : (
-          <FileIcon className="h-3.5 w-3.5 shrink-0 text-zinc-500" strokeWidth={1.75} />
-        )}
-        <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[11px] font-medium text-zinc-800 ring-1 ring-black/[0.08]">
-          {providerLabel}
-        </span>
-        {location.extractCode && (
-          <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] text-zinc-700">
-            <KeyRound className="h-2.5 w-2.5 text-zinc-400" />
-            {location.extractCode}
-          </span>
-        )}
-        {location.note && (
-          <span className="truncate text-[11px] text-zinc-500" title={location.note}>
-            {location.note}
-          </span>
-        )}
-      </div>
-
-      <div className="flex shrink-0 flex-wrap items-center gap-1">
-        {safeUrl && (
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs">
+        {safeUrl ? (
           <a
             href={safeUrl}
             target="_blank"
             rel="noopener noreferrer"
             data-testid={`location-open-${location.id}`}
+            aria-label="打开链接"
+            title={`打开 ${providerLabel} 链接`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-800 transition-colors hover:border-zinc-400 hover:text-zinc-950"
+            className="group/link inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-xs font-medium text-zinc-800 transition-colors hover:bg-blue-50 hover:text-blue-700"
           >
-            <ExternalLink className="h-3 w-3" />
-            打开链接
+            {location.isFolder ? (
+              <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" strokeWidth={1.75} />
+            ) : (
+              <Link2
+                className="h-3.5 w-3.5 shrink-0 text-zinc-400 group-hover/link:text-blue-600"
+                strokeWidth={1.75}
+              />
+            )}
+            <span>{providerLabel}</span>
+            <ExternalLink className="h-3 w-3 shrink-0 text-zinc-300 transition-colors group-hover/link:text-blue-600" />
           </a>
+        ) : (
+          <span className="inline-flex shrink-0 items-center gap-1 px-1 py-0.5 text-xs font-medium text-zinc-700">
+            <Link2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" strokeWidth={1.75} />
+            <span>{providerLabel}</span>
+          </span>
         )}
+
         {location.extractCode && (
           <button
             type="button"
             data-testid={`location-copy-code-${location.id}`}
+            aria-label="复制提取码"
+            title={`点击复制提取码：${location.extractCode}`}
             onClick={(e) => {
               e.stopPropagation();
               void handleCopyCode();
             }}
-            className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+            className={cn(
+              'inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 font-mono text-[11px] transition-colors cursor-pointer',
+              copiedCode
+                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200/80 hover:text-zinc-950',
+            )}
           >
-            <Copy className="h-3 w-3" />
-            复制提取码
+            {copiedCode ? (
+              <Check className="h-2.5 w-2.5 text-emerald-600" />
+            ) : (
+              <KeyRound className="h-2.5 w-2.5 text-zinc-400" />
+            )}
+            <span>{location.extractCode}</span>
+            {!copiedCode && <Copy className="h-2.5 w-2.5 text-zinc-400" />}
           </button>
         )}
+
+        {location.note && (
+          <span className="min-w-0 truncate text-[11px] text-zinc-400" title={location.note}>
+            {location.note}
+          </span>
+        )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-0.5">
         <button
           type="button"
           data-testid={`location-copy-share-${location.id}`}
+          aria-label="复制分享信息"
+          title="复制包含名称、链接与提取码的完整分享信息"
           onClick={(e) => {
             e.stopPropagation();
             void handleCopyShare();
           }}
-          title="复制包含名称、链接与提取码的完整分享信息"
-          className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+          className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
         >
-          <Share2 className="h-3 w-3" />
-          <span className={compact ? 'sr-only' : 'inline'}>复制分享信息</span>
+          <Share2 className="h-3.5 w-3.5" />
+          {!compact && <span>分享</span>}
         </button>
 
         {(onEdit || onDelete) && (
@@ -158,24 +180,24 @@ export function LocationActionRow({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="入口操作"
+                aria-label="多网盘操作"
                 onClick={(e) => e.stopPropagation()}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[120px]">
+            <DropdownMenuContent align="end" className="min-w-[128px]">
               {onEdit && (
                 <DropdownMenuItem onSelect={onEdit}>
                   <Pencil className="h-3.5 w-3.5 text-zinc-400" />
-                  编辑入口
+                  编辑网盘链接
                 </DropdownMenuItem>
               )}
               {onDelete && (
                 <DropdownMenuItem variant="destructive" onSelect={onDelete}>
                   <Trash2 className="h-3.5 w-3.5" />
-                  移除入口
+                  移除网盘链接
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -190,11 +212,13 @@ export function ArtifactCardList({
   artifacts,
   highlightedArtifactId = null,
   compact = false,
+  variant = 'card',
   emptyText = '暂无资源',
 }: {
   artifacts: ArtifactDetail[];
   highlightedArtifactId?: string | null;
   compact?: boolean;
+  variant?: 'card' | 'list';
   emptyText?: string;
 }) {
   const queryClient = useQueryClient();
@@ -297,7 +321,7 @@ export function ArtifactCardList({
         taskId: artifact.taskId,
       });
       pushToast({
-        message: `已移除「${artifact.name}」的一个网盘入口`,
+        message: `已移除「${artifact.name}」的一个网盘链接`,
         variant: 'info',
         actionLabel: '撤销',
         onAction: async () => {
@@ -307,13 +331,13 @@ export function ArtifactCardList({
             workId: artifact.workId,
             taskId: artifact.taskId,
           });
-          pushToast({ message: '网盘入口已恢复', variant: 'success' });
+          pushToast({ message: '网盘链接已恢复', variant: 'success' });
         },
       });
     },
     onError: (err) => {
       pushToast({
-        message: err instanceof ApiError ? err.message : '移除入口失败',
+        message: err instanceof ApiError ? err.message : '移除网盘链接失败',
         variant: 'error',
       });
     },
@@ -330,132 +354,163 @@ export function ArtifactCardList({
 
   if (artifacts.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-black/[0.1] bg-[#fafafa] px-3 py-4 text-center text-xs text-zinc-400">
+      <div
+        className={cn(
+          'text-center text-xs text-zinc-400',
+          variant === 'list'
+            ? 'py-2'
+            : 'rounded-lg border border-dashed border-black/[0.1] bg-[#fafafa] px-3 py-4',
+        )}
+      >
         {emptyText}
       </div>
     );
   }
 
   return (
-    <div className="space-y-2.5" data-testid="artifact-list">
+    <div
+      className={cn(
+        variant === 'list'
+          ? 'divide-y divide-black/[0.06] rounded-md bg-white/95 px-2.5'
+          : 'space-y-2.5',
+      )}
+      data-testid="artifact-list"
+    >
       {artifacts.map((art) => {
         const latest = art.latestVersion;
         const isHistoryOpen = expandedHistory.has(art.id);
         const isHighlighted = highlightedArtifactId === art.id;
+        const actorName = latest ? latest.createdBy.displayName : art.createdBy.displayName;
+        const timeStr = new Date(latest ? latest.createdAt : art.updatedAt).toLocaleString(
+          'zh-CN',
+          {
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          },
+        );
+        const hasMultipleVersions = art.versions.length > 1;
 
         return (
           <div
             key={art.id}
             data-testid={`artifact-card-${art.id}`}
             className={cn(
-              'rounded-lg border border-black/[0.08] bg-white transition-all',
-              compact ? 'p-2.5' : 'p-3.5',
-              isHighlighted && 'ring-2 ring-zinc-900 bg-zinc-50/70',
+              'transition-all',
+              variant === 'list'
+                ? 'py-2 first:pt-1.5 last:pb-1.5'
+                : cn('rounded-lg border border-black/[0.08] bg-white', compact ? 'p-2.5' : 'p-3.5'),
+              isHighlighted && 'ring-2 ring-zinc-900 bg-zinc-50/70 rounded-md',
             )}
           >
-            {/* 头部：资源名 + 版本徽章 + 操作按钮 */}
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="truncate text-sm font-semibold text-zinc-950">{art.name}</span>
-                  {latest ? (
-                    <span className="inline-flex items-center overflow-hidden rounded-full bg-zinc-900 text-white">
-                      <span
-                        data-testid={`artifact-latest-badge-${art.id}`}
-                        className="pl-2 pr-1.5 py-0.5 text-[11px] font-medium tabular-nums"
-                      >
-                        v{latest.versionNumber}
-                      </span>
-                      <button
-                        type="button"
-                        data-testid={`artifact-add-version-${art.id}`}
-                        aria-label="更新版本"
-                        title="更新版本"
-                        onClick={() => setVersionArtifact(art)}
-                        className="group/ver inline-flex items-center gap-0.5 border-l border-white/20 px-1.5 py-0.5 text-[11px] font-medium text-white/90 transition-colors hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:outline-none cursor-pointer"
-                      >
-                        <Plus className="h-3 w-3 shrink-0" />
-                        <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">
-                          更新
-                        </span>
-                      </button>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center overflow-hidden rounded-full bg-zinc-100 text-zinc-600">
-                      <span className="pl-2 pr-1.5 py-0.5 text-[11px] font-medium">暂无版本</span>
-                      <button
-                        type="button"
-                        data-testid={`artifact-add-version-${art.id}`}
-                        aria-label="更新版本"
-                        title="更新版本"
-                        onClick={() => setVersionArtifact(art)}
-                        className="group/ver inline-flex items-center gap-0.5 border-l border-black/10 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-black/[0.06] hover:text-zinc-950 focus-visible:bg-black/[0.06] focus-visible:outline-none cursor-pointer"
-                      >
-                        <Plus className="h-3 w-3 shrink-0" />
-                        <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">
-                          更新
-                        </span>
-                      </button>
-                    </span>
+            {/* 头部：资源名优先 + 紧凑版本更新胶囊 + 精简操作 */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <span
+                  className={cn(
+                    'truncate font-semibold text-zinc-950',
+                    compact ? 'text-[13px]' : 'text-sm',
                   )}
-                  <span className="text-[11px] text-zinc-400">
-                    {latest ? latest.createdBy.displayName : art.createdBy.displayName} ·{' '}
-                    {new Date(latest ? latest.createdAt : art.updatedAt).toLocaleString('zh-CN', {
-                      month: 'numeric',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                  title={`${art.name} · ${actorName} 更新于 ${timeStr}`}
+                >
+                  {art.name}
+                </span>
+                {latest ? (
+                  <span className="inline-flex shrink-0 items-center overflow-hidden rounded-full bg-zinc-900 text-white">
+                    <span
+                      data-testid={`artifact-latest-badge-${art.id}`}
+                      className="pl-1.5 pr-1 py-0.5 text-[10.5px] font-medium tabular-nums leading-none"
+                    >
+                      v{latest.versionNumber}
+                    </span>
+                    <button
+                      type="button"
+                      data-testid={`artifact-add-version-${art.id}`}
+                      aria-label="更新版本"
+                      title="更新版本"
+                      onClick={() => setVersionArtifact(art)}
+                      className="group/ver inline-flex items-center gap-0.5 border-l border-white/20 px-1 py-0.5 text-[10.5px] font-medium leading-none text-white/90 transition-colors hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:outline-none cursor-pointer"
+                    >
+                      <Plus className="h-2.5 w-2.5 shrink-0" />
+                      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">
+                        更新
+                      </span>
+                    </button>
                   </span>
-                </div>
-                {latest?.note && <p className="mt-1 text-xs text-zinc-600">{latest.note}</p>}
+                ) : (
+                  <span className="inline-flex shrink-0 items-center overflow-hidden rounded-full bg-zinc-100 text-zinc-600">
+                    <span className="pl-1.5 pr-1 py-0.5 text-[10.5px] font-medium leading-none">
+                      暂无版本
+                    </span>
+                    <button
+                      type="button"
+                      data-testid={`artifact-add-version-${art.id}`}
+                      aria-label="更新版本"
+                      title="更新版本"
+                      onClick={() => setVersionArtifact(art)}
+                      className="group/ver inline-flex items-center gap-0.5 border-l border-black/10 px-1 py-0.5 text-[10.5px] font-medium leading-none text-zinc-700 transition-colors hover:bg-black/[0.06] hover:text-zinc-950 focus-visible:bg-black/[0.06] focus-visible:outline-none cursor-pointer"
+                    >
+                      <Plus className="h-2.5 w-2.5 shrink-0" />
+                      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">
+                        更新
+                      </span>
+                    </button>
+                  </span>
+                )}
+                {!compact && (
+                  <span className="hidden shrink-0 text-[11px] text-zinc-400 sm:inline">
+                    {actorName} · {timeStr}
+                  </span>
+                )}
               </div>
 
-              <div className="flex shrink-0 flex-wrap items-center gap-1">
-                {latest && (
+              <div className="flex shrink-0 items-center gap-0.5">
+                {hasMultipleVersions && (
                   <button
                     type="button"
-                    data-testid={`artifact-add-location-${art.id}`}
-                    onClick={() =>
-                      setLocationTarget({
-                        mode: 'create',
-                        artifact: art,
-                        versionId: latest.id,
-                        versionNumber: latest.versionNumber,
-                      })
-                    }
-                    className="inline-flex h-6 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+                    data-testid={`artifact-history-toggle-${art.id}`}
+                    title="展开查看全部历史版本"
+                    onClick={() => toggleHistory(art.id)}
+                    className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-black/[0.04] hover:text-zinc-900 cursor-pointer"
                   >
-                    <Plus className="h-3 w-3" />
-                    补充入口
+                    {isHistoryOpen ? (
+                      <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3" />
+                    )}
+                    <History className="h-3 w-3" />
+                    <span className="tabular-nums">{art.versions.length}</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  data-testid={`artifact-history-toggle-${art.id}`}
-                  onClick={() => toggleHistory(art.id)}
-                  className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900 cursor-pointer"
-                >
-                  {isHistoryOpen ? (
-                    <ChevronDown className="h-3 w-3" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3" />
-                  )}
-                  <History className="h-3 w-3" />
-                  历史 ({art.versions.length})
-                </button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
                       data-testid={`artifact-menu-${art.id}`}
                       aria-label={`资源操作 ${art.name}`}
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
                     >
                       <MoreHorizontal className="h-3.5 w-3.5" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[144px]">
+                    {latest && (
+                      <DropdownMenuItem
+                        data-testid={`artifact-add-location-${art.id}`}
+                        onSelect={() =>
+                          setLocationTarget({
+                            mode: 'create',
+                            artifact: art,
+                            versionId: latest.id,
+                            versionNumber: latest.versionNumber,
+                          })
+                        }
+                      >
+                        <Plus className="h-3.5 w-3.5 text-zinc-400" />
+                        补充多网盘
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onSelect={() => setEditingArtifact(art)}>
                       <Pencil className="h-3.5 w-3.5 text-zinc-400" />
                       改名 / 移动归属
@@ -473,12 +528,14 @@ export function ArtifactCardList({
               </div>
             </div>
 
-            {/* 最新版本的入口列表 */}
+            {latest?.note && <p className="mt-1 text-xs text-zinc-500">{latest.note}</p>}
+
+            {/* 最新版本的多网盘列表 */}
             {latest && (
-              <div className="mt-2.5 space-y-1.5">
+              <div className="mt-1.5 space-y-0.5">
                 {latest.locations.length === 0 ? (
-                  <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-black/[0.12] bg-[#fafafa] px-2.5 py-2 text-xs text-zinc-500">
-                    <span>待补充入口</span>
+                  <div className="flex items-center justify-between gap-2 rounded-md bg-zinc-50 px-2 py-1.5 text-xs text-zinc-400">
+                    <span>待补充多网盘</span>
                     <button
                       type="button"
                       onClick={() =>
@@ -489,10 +546,10 @@ export function ArtifactCardList({
                           versionNumber: latest.versionNumber,
                         })
                       }
-                      className="inline-flex items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+                      className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 hover:bg-black/[0.05] cursor-pointer"
                     >
                       <Plus className="h-3 w-3" />
-                      添加入口
+                      添加网盘
                     </button>
                   </div>
                 ) : (
@@ -524,106 +581,111 @@ export function ArtifactCardList({
             {isHistoryOpen && (
               <div
                 data-testid={`artifact-history-${art.id}`}
-                className="mt-3 space-y-2 border-t border-black/[0.06] pt-2.5"
+                className="mt-2.5 space-y-1.5 border-t border-black/[0.06] pt-2"
               >
-                <div className="text-[11px] font-medium text-zinc-500">
-                  全部版本历史（按版本号倒序）
-                </div>
+                <div className="text-[11px] font-medium text-zinc-400">全部版本历史</div>
                 {art.versions.length === 0 ? (
                   <div className="text-xs text-zinc-400">暂无历史版本</div>
                 ) : (
-                  art.versions.map((ver) => {
-                    const isLatest = latest?.id === ver.id;
-                    const remainingOther = art.versions.find((v) => v.id !== ver.id) ?? null;
-                    return (
-                      <div
-                        key={ver.id}
-                        data-testid={`version-item-${ver.id}`}
-                        className="rounded-md border border-black/[0.07] bg-white p-2 space-y-1.5"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                            <span className="font-semibold text-zinc-900 tabular-nums">
-                              v{ver.versionNumber}
-                            </span>
-                            {isLatest && (
-                              <span className="rounded bg-emerald-50 px-1.5 py-0 text-[10px] font-medium text-emerald-700">
-                                最新
+                  <div className="divide-y divide-black/[0.05] rounded-md bg-[#fafafa]/80 px-2">
+                    {art.versions.map((ver) => {
+                      const isLatest = latest?.id === ver.id;
+                      const remainingOther = art.versions.find((v) => v.id !== ver.id) ?? null;
+                      return (
+                        <div
+                          key={ver.id}
+                          data-testid={`version-item-${ver.id}`}
+                          className="space-y-1 py-1.5"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                              <span className="font-semibold text-zinc-900 tabular-nums">
+                                v{ver.versionNumber}
                               </span>
-                            )}
-                            <span className="text-[11px] text-zinc-400">
-                              {ver.createdBy.displayName} ·{' '}
-                              {new Date(ver.createdAt).toLocaleString('zh-CN')}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setLocationTarget({
-                                  mode: 'create',
-                                  artifact: art,
-                                  versionId: ver.id,
-                                  versionNumber: ver.versionNumber,
-                                })
-                              }
-                              className="inline-flex h-6 items-center gap-0.5 rounded px-1.5 text-[11px] text-zinc-600 hover:bg-black/[0.04] cursor-pointer"
-                            >
-                              <Plus className="h-3 w-3" />
-                              入口
-                            </button>
-                            <button
-                              type="button"
-                              data-testid={`delete-version-${ver.id}`}
-                              onClick={() => {
-                                if (isLatest) {
-                                  setDeletingVersion({
-                                    artifact: art,
-                                    version: ver,
-                                    isLatest: true,
-                                    fallbackVersionNumber: remainingOther?.versionNumber ?? null,
-                                  });
-                                } else {
-                                  deleteVersionMutation.mutate({ artifact: art, version: ver });
-                                }
-                              }}
-                              className="inline-flex h-6 items-center gap-0.5 rounded px-1.5 text-[11px] text-red-600 hover:bg-red-50 cursor-pointer"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              删除
-                            </button>
-                          </div>
-                        </div>
-                        {ver.note && <div className="text-xs text-zinc-600">{ver.note}</div>}
-                        {ver.locations.length === 0 ? (
-                          <div className="text-[11px] text-zinc-400">待补充入口</div>
-                        ) : (
-                          <div className="space-y-1">
-                            {ver.locations.map((loc) => (
-                              <LocationActionRow
-                                key={loc.id}
-                                artifact={art}
-                                versionNumber={ver.versionNumber}
-                                location={loc}
-                                compact
-                                onEdit={() =>
+                              {isLatest && (
+                                <span className="rounded bg-emerald-50 px-1.5 py-0 text-[10px] font-medium text-emerald-700">
+                                  最新
+                                </span>
+                              )}
+                              <span className="text-[11px] text-zinc-400">
+                                {ver.createdBy.displayName} ·{' '}
+                                {new Date(ver.createdAt).toLocaleString('zh-CN', {
+                                  month: 'numeric',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
                                   setLocationTarget({
-                                    mode: 'edit',
+                                    mode: 'create',
                                     artifact: art,
+                                    versionId: ver.id,
                                     versionNumber: ver.versionNumber,
-                                    location: loc,
                                   })
                                 }
-                                onDelete={() =>
-                                  deleteLocationMutation.mutate({ artifact: art, location: loc })
-                                }
-                              />
-                            ))}
+                                className="inline-flex h-5 items-center gap-0.5 rounded px-1.5 text-[11px] text-zinc-500 hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
+                              >
+                                <Plus className="h-2.5 w-2.5" />
+                                多网盘
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`delete-version-${ver.id}`}
+                                onClick={() => {
+                                  if (isLatest) {
+                                    setDeletingVersion({
+                                      artifact: art,
+                                      version: ver,
+                                      isLatest: true,
+                                      fallbackVersionNumber: remainingOther?.versionNumber ?? null,
+                                    });
+                                  } else {
+                                    deleteVersionMutation.mutate({ artifact: art, version: ver });
+                                  }
+                                }}
+                                className="inline-flex h-5 items-center gap-0.5 rounded px-1.5 text-[11px] text-red-600 hover:bg-red-50 cursor-pointer"
+                              >
+                                <Trash2 className="h-2.5 w-2.5" />
+                                删除
+                              </button>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })
+                          {ver.note && <div className="text-xs text-zinc-500">{ver.note}</div>}
+                          {ver.locations.length === 0 ? (
+                            <div className="text-[11px] text-zinc-400">待补充多网盘</div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              {ver.locations.map((loc) => (
+                                <LocationActionRow
+                                  key={loc.id}
+                                  artifact={art}
+                                  versionNumber={ver.versionNumber}
+                                  location={loc}
+                                  compact
+                                  onEdit={() =>
+                                    setLocationTarget({
+                                      mode: 'edit',
+                                      artifact: art,
+                                      versionNumber: ver.versionNumber,
+                                      location: loc,
+                                    })
+                                  }
+                                  onDelete={() =>
+                                    deleteLocationMutation.mutate({ artifact: art, location: loc })
+                                  }
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}
