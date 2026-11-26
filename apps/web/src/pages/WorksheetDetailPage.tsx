@@ -1,7 +1,6 @@
 import {
   type Assignee,
   type ColumnChangedPayload,
-  computeBoardData,
   getEffectiveStageCell,
   type PresencePeer,
   type Priority,
@@ -28,18 +27,14 @@ import {
   ChevronRight,
   ExternalLink,
   History,
-  Kanban,
   RotateCcw,
-  Table2,
 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ApiError, apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
-import { TopBarCenterSlot, TopBarRightSlot } from '@/app/AppShell.js';
+import { TopBarRightSlot } from '@/app/AppShell.js';
 import { useMe } from '@/app/AuthContext.js';
-import { KanbanBoard } from '@/components/board/KanbanBoard.js';
 import { KeywordSearchInput } from '@/components/search/KeywordSearchInput.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import { peerColorForUser } from '@/components/ui/colors.js';
@@ -59,7 +54,6 @@ import { useRealtimeClient, useRealtimeScope } from '@/realtime/context.js';
 
 const EMPTY_TASKS: TaskDetail[] = [];
 
-type ViewMode = 'grid' | 'board';
 type StatusChip = 'all' | 'mine' | 'not_started' | 'in_progress' | 'all_stages_done';
 type LocalSort = 'manual' | 'title' | 'priority' | 'work';
 
@@ -82,7 +76,6 @@ export function WorksheetDetailPage() {
   const realtime = useRealtimeClient();
   const { pushToast } = useToast();
 
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [subscribedReady, setSubscribedReady] = useState(false);
   const [peers, setPeers] = useState<Map<string, PresencePeer>>(new Map());
   const [selectedCell, setSelectedCell] = useState<{ taskId: string; columnKey: string } | null>(
@@ -92,7 +85,6 @@ export function WorksheetDetailPage() {
 
   const [textConflicts, setTextConflicts] = useState<Map<string, ActiveCellConflict>>(new Map());
   const [stageConflicts, setStageConflicts] = useState<Map<string, StageCellConflict>>(new Map());
-  const [claimingKeys, setClaimingKeys] = useState<Set<string>>(new Set());
 
   const [colModalOpen, setColModalOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
@@ -123,7 +115,6 @@ export function WorksheetDetailPage() {
 
   useEffect(() => {
     if (!worksheetId) return;
-    setViewMode('grid');
     setSubscribedReady(false);
     setPeers(new Map());
     setSelectedCell(null);
@@ -398,7 +389,6 @@ export function WorksheetDetailPage() {
     if (!locateTaskId || !data) return;
     const target = data.tasks.find((t) => t.id === locateTaskId);
     if (!target) return;
-    setViewMode('grid');
     if (target.publishStatus === 'published') {
       setPublishedExpanded(true);
     }
@@ -650,36 +640,6 @@ export function WorksheetDetailPage() {
     return list;
   }, [displayBlocks, collapsedWorkIds]);
 
-  // 单表「看板视图」实时推导数据（零额外后端接口，严格复用 @nw/shared computeBoardData）
-  const singleSheetBoard = useMemo(() => {
-    if (!data || !me) return { boardColumns: [], cards: [] };
-    const mappedBoardColIds = new Set(
-      data.columns
-        .filter((c) => c.type === 'stage' && c.boardColumnId)
-        .map((c) => c.boardColumnId as string),
-    );
-    const relevantBoardCols =
-      mappedBoardColIds.size > 0
-        ? data.boardColumns.filter((bc) => mappedBoardColIds.has(bc.id))
-        : data.boardColumns;
-    const computed = computeBoardData({
-      boardColumns: relevantBoardCols,
-      worksheets: [
-        {
-          id: data.worksheet.id,
-          name: data.worksheet.name,
-          color: data.worksheet.color,
-          sortOrder: data.worksheet.sortOrder,
-        },
-      ],
-      stageColumns: data.columns,
-      works: allWorks,
-      tasks: activeTasks,
-      currentUserId: me.user.id,
-    });
-    return { boardColumns: relevantBoardCols, cards: computed.cards };
-  }, [data, me, allWorks, activeTasks]);
-
   const createTaskMutation = useMutation({
     mutationFn: (payload: { title: string; afterTaskId?: string | null; workId?: string | null }) =>
       apiFetch<TaskDetail>(`/api/worksheets/${worksheetId}/tasks`, {
@@ -721,7 +681,6 @@ export function WorksheetDetailPage() {
       }),
     onSuccess: (createdWork) => {
       if (!worksheetId) return;
-      setViewMode('grid');
       setPendingWorks((prev) =>
         prev.some((w) => w.id === createdWork.id) ||
         (data?.works ?? []).some((w) => w.id === createdWork.id)
@@ -812,31 +771,6 @@ export function WorksheetDetailPage() {
     },
     [worksheetId, queryClient],
   );
-
-  const handleBoardClaim = async (taskId: string, columnId: string, stageName: string) => {
-    const key = `${taskId}:${columnId}`;
-    if (claimingKeys.has(key)) return;
-    setClaimingKeys((prev) => new Set(prev).add(key));
-    try {
-      await apiFetch(`/api/tasks/${taskId}/stages/${columnId}/claim`, { method: 'POST' });
-      pushToast({ message: `已认领「${stageName}」（保持未开始）`, variant: 'success' });
-      refetchWorksheet();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.board });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.myTasks });
-    } catch (err) {
-      pushToast({
-        message: err instanceof ApiError ? err.message : '认领失败',
-        variant: 'error',
-      });
-      refetchWorksheet();
-    } finally {
-      setClaimingKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
-    }
-  };
 
   const deleteTask = useCallback(
     async (task: TaskDetail) => {
@@ -1077,46 +1011,6 @@ export function WorksheetDetailPage() {
     <div className="flex h-full min-h-0 flex-col bg-white">
       <h1 className="sr-only">{data.worksheet.name}</h1>
 
-      {/* 注入全局单行顶栏：表格视图 / 看板视图切换 */}
-      <TopBarCenterSlot>
-        <span className="mx-1 h-4 w-px shrink-0 bg-black/[0.08]" />
-        <div className="flex h-11 items-center gap-0.5" role="tablist" aria-label="工作表视图">
-          {(
-            [
-              { id: 'grid', label: '表格视图', icon: Table2, testId: 'view-tab-grid' },
-              { id: 'board', label: '看板视图', icon: Kanban, testId: 'view-tab-board' },
-            ] as const
-          ).map((tab) => {
-            const active = viewMode === tab.id;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                data-testid={tab.testId}
-                onClick={() => setViewMode(tab.id)}
-                className={cn(
-                  'relative inline-flex h-11 shrink-0 items-center gap-1.5 px-2 text-xs font-medium transition-colors cursor-pointer',
-                  active ? 'text-zinc-950' : 'text-zinc-500 hover:text-zinc-900',
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                <span>{tab.label}</span>
-                {active && (
-                  <motion.span
-                    layoutId="worksheet-view-tab-indicator"
-                    transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-                    className="absolute right-1.5 bottom-0 left-1.5 h-[2px] rounded-full bg-zinc-950"
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </TopBarCenterSlot>
-
       {/* 注入全局单行顶栏右侧：在线状态 + 修改记录（紧邻用户头像左侧） */}
       <TopBarRightSlot>
         {onlineUsers.length > 0 && (
@@ -1161,21 +1055,17 @@ export function WorksheetDetailPage() {
 
       {/* 工具栏（36px） */}
       <div className="flex min-h-[36px] shrink-0 flex-wrap items-center gap-1.5 border-b border-black/[0.08] bg-[#fafafa]/60 px-3 py-1">
-        {viewMode === 'grid' && (
-          <>
-            <FieldVisibilityPopover
-              worksheet={data.worksheet}
-              columns={data.columns}
-              onOpenFullModal={() => setColModalOpen(true)}
-            />
-            <AddColumnPopover
-              worksheetId={data.worksheet.id}
-              columns={data.columns}
-              boardColumns={data.boardColumns}
-            />
-            <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />
-          </>
-        )}
+        <FieldVisibilityPopover
+          worksheet={data.worksheet}
+          columns={data.columns}
+          onOpenFullModal={() => setColModalOpen(true)}
+        />
+        <AddColumnPopover
+          worksheetId={data.worksheet.id}
+          columns={data.columns}
+          boardColumns={data.boardColumns}
+        />
+        <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />
 
         <div className="flex flex-wrap items-center gap-0.5">
           {(
@@ -1246,23 +1136,21 @@ export function WorksheetDetailPage() {
             ]}
           />
 
-          {viewMode === 'grid' && (
-            <SelectField
-              aria-label="本地排序"
-              size="xs"
-              align="end"
-              leadingIcon={<ArrowUpDown className="h-3 w-3" />}
-              value={localSort}
-              onValueChange={(v) => setLocalSort(v as LocalSort)}
-              className="w-32 sm:w-36"
-              options={[
-                { value: 'manual', label: '默认顺序' },
-                { value: 'title', label: '按标题排序' },
-                { value: 'priority', label: '按优先级排序' },
-                { value: 'work', label: '按作品排序' },
-              ]}
-            />
-          )}
+          <SelectField
+            aria-label="本地排序"
+            size="xs"
+            align="end"
+            leadingIcon={<ArrowUpDown className="h-3 w-3" />}
+            value={localSort}
+            onValueChange={(v) => setLocalSort(v as LocalSort)}
+            className="w-32 sm:w-36"
+            options={[
+              { value: 'manual', label: '默认顺序' },
+              { value: 'title', label: '按标题排序' },
+              { value: 'priority', label: '按优先级排序' },
+              { value: 'work', label: '按作品排序' },
+            ]}
+          />
 
           {isFilteredOrSorted && (
             <button
@@ -1377,75 +1265,60 @@ export function WorksheetDetailPage() {
         </div>
       )}
 
-      {/* 主视图区：Teable Canvas Grid 或 单表作品聚合看板 */}
-      {viewMode === 'grid' ? (
-        <WorksheetCanvasGrid
-          worksheet={data.worksheet}
-          columns={data.columns}
-          boardColumns={data.boardColumns}
-          works={allWorks}
-          workMap={workMap}
-          displayBlocks={displayBlocks}
-          visualActiveTasks={visualActiveTasks}
-          stageCols={stageCols}
-          users={users}
-          userMap={userMap}
-          peers={peers}
-          selectedCell={selectedCell}
-          textConflicts={textConflicts}
-          stageConflicts={stageConflicts}
-          highlightedTaskId={highlightedTaskId}
-          collapsedWorkIds={collapsedWorkIds}
-          addingSegmentWorkId={addingSegmentWorkId}
-          dragEnabled={dragEnabled}
-          isFilteredOrSorted={isFilteredOrSorted}
-          createTaskPending={createTaskMutation.isPending}
-          createWorkPending={createWorkMutation.isPending}
-          onSelectCell={selectCell}
-          onSetEditingFocus={setEditingFocus}
-          onPatchTask={patchTask}
-          onPatchStage={patchStage}
-          onCreateTask={(payload) => createTaskMutation.mutate(payload)}
-          onCreateWork={async (name) => {
-            await createWorkMutation.mutateAsync(name);
-          }}
-          onDeleteTask={(t) => void deleteTask(t)}
-          onReorderRows={(movingTaskId, dropRowIndex) =>
-            void handleReorderRows(movingTaskId, dropRowIndex)
+      {/* 主视图区：Teable Canvas Grid */}
+      <WorksheetCanvasGrid
+        worksheet={data.worksheet}
+        columns={data.columns}
+        boardColumns={data.boardColumns}
+        works={allWorks}
+        workMap={workMap}
+        displayBlocks={displayBlocks}
+        visualActiveTasks={visualActiveTasks}
+        stageCols={stageCols}
+        users={users}
+        userMap={userMap}
+        peers={peers}
+        selectedCell={selectedCell}
+        textConflicts={textConflicts}
+        stageConflicts={stageConflicts}
+        highlightedTaskId={highlightedTaskId}
+        collapsedWorkIds={collapsedWorkIds}
+        addingSegmentWorkId={addingSegmentWorkId}
+        dragEnabled={dragEnabled}
+        isFilteredOrSorted={isFilteredOrSorted}
+        createTaskPending={createTaskMutation.isPending}
+        createWorkPending={createWorkMutation.isPending}
+        onSelectCell={selectCell}
+        onSetEditingFocus={setEditingFocus}
+        onPatchTask={patchTask}
+        onPatchStage={patchStage}
+        onCreateTask={(payload) => createTaskMutation.mutate(payload)}
+        onCreateWork={async (name) => {
+          await createWorkMutation.mutateAsync(name);
+        }}
+        onDeleteTask={(t) => void deleteTask(t)}
+        onReorderRows={(movingTaskId, dropRowIndex) =>
+          void handleReorderRows(movingTaskId, dropRowIndex)
+        }
+        onResizeColumn={handleResizeColumn}
+        onToggleWorkCollapsed={toggleWorkCollapsed}
+        onRenameWork={renameWork}
+        onOpenAddSegment={openAddSegmentForWork}
+        onCloseAddSegment={() => setAddingSegmentWorkId(null)}
+        onUngroupWork={(block) => {
+          if (block.isEmptyPending || block.tasks.length === 0) {
+            setPendingWorks((prev) => prev.filter((w) => w.id !== block.work.id));
+            if (addingSegmentWorkId === block.work.id) setAddingSegmentWorkId(null);
+            pushToast({ message: '已关闭空作品横幅', variant: 'info' });
+          } else {
+            setUngroupingWork({ work: block.work, tasks: block.tasks });
           }
-          onResizeColumn={handleResizeColumn}
-          onToggleWorkCollapsed={toggleWorkCollapsed}
-          onRenameWork={renameWork}
-          onOpenAddSegment={openAddSegmentForWork}
-          onCloseAddSegment={() => setAddingSegmentWorkId(null)}
-          onUngroupWork={(block) => {
-            if (block.isEmptyPending || block.tasks.length === 0) {
-              setPendingWorks((prev) => prev.filter((w) => w.id !== block.work.id));
-              if (addingSegmentWorkId === block.work.id) setAddingSegmentWorkId(null);
-              pushToast({ message: '已关闭空作品横幅', variant: 'info' });
-            } else {
-              setUngroupingWork({ work: block.work, tasks: block.tasks });
-            }
-          }}
-          onOpenDetail={setDetailTaskId}
-          onClearTextConflict={clearTextConflict}
-          onClearStageConflict={clearStageConflict}
-          onAcceptRemoteField={acceptRemoteField}
-        />
-      ) : (
-        <KanbanBoard
-          boardColumns={singleSheetBoard.boardColumns}
-          cards={singleSheetBoard.cards}
-          userMap={userMap}
-          claimingKeys={claimingKeys}
-          showWorksheetSource={false}
-          onClaim={handleBoardClaim}
-          onOpenDetail={({ taskId }) => setDetailTaskId(taskId)}
-          onSelectWorkFilter={({ workId }) =>
-            setWorkFilter((prev) => (prev === workId ? '' : workId))
-          }
-        />
-      )}
+        }}
+        onOpenDetail={setDetailTaskId}
+        onClearTextConflict={clearTextConflict}
+        onClearStageConflict={clearStageConflict}
+        onAcceptRemoteField={acceptRemoteField}
+      />
 
       {/* 解散作品分组二次确认 */}
       <ConfirmDialog

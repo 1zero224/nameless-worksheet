@@ -362,12 +362,9 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await expect(pageA.getByTestId('col-header-divisionNote')).toHaveCount(1);
     await pageA.keyboard.press('Escape');
 
-    // 验证工作表顶部视图标签栏切换：「表格视图」↔「看板视图」
-    await pageA.getByTestId('view-tab-board').click();
-    await expect(pageA.getByTestId('board-columns')).toBeVisible();
-    await expect(pageA.getByTestId('board-columns')).toContainText('5th 专场演唱会');
-    await pageA.getByTestId('view-tab-grid').click();
-    await expect(pageA.getByTestId('worksheet-canvas-grid')).toBeVisible();
+    // 确认工作表顶栏不再有重复的「表格视图 / 看板视图」切换（看板由顶栏「任务看板」标签统一承载）
+    await expect(pageA.getByTestId('view-tab-grid')).toHaveCount(0);
+    await expect(pageA.getByTestId('view-tab-board')).toHaveCount(0);
 
     // 点击 Canvas 第一道工序列（时轴）：锚定弹出 Radix StageCellEditor，选小爱 + 纯文本外援小王并设进行中
     await clickCanvasCell(pageA, task1Id, stage1ColId);

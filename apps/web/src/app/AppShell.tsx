@@ -80,20 +80,12 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
 ];
 
 interface TopBarSlotsContextValue {
-  centerEl: HTMLDivElement | null;
   rightEl: HTMLDivElement | null;
 }
 
 const TopBarSlotsContext = createContext<TopBarSlotsContextValue>({
-  centerEl: null,
   rightEl: null,
 });
-
-export function TopBarCenterSlot({ children }: { children: ReactNode }) {
-  const { centerEl } = useContext(TopBarSlotsContext);
-  if (!centerEl) return null;
-  return createPortal(children, centerEl);
-}
 
 export function TopBarRightSlot({ children }: { children: ReactNode }) {
   const { rightEl } = useContext(TopBarSlotsContext);
@@ -201,7 +193,6 @@ export function AppShell() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingWs, setEditingWs] = useState<WorksheetSummary | null>(null);
   const [deletingWs, setDeletingWs] = useState<WorksheetSummary | null>(null);
-  const [centerSlotEl, setCenterSlotEl] = useState<HTMLDivElement | null>(null);
   const [rightSlotEl, setRightSlotEl] = useState<HTMLDivElement | null>(null);
 
   const location = useLocation();
@@ -280,14 +271,14 @@ export function AppShell() {
   const showDisconnectBanner = status === 'disconnected';
 
   return (
-    <TopBarSlotsContext.Provider value={{ centerEl: centerSlotEl, rightEl: rightSlotEl }}>
+    <TopBarSlotsContext.Provider value={{ rightEl: rightSlotEl }}>
       <div
         className={cn(
           'flex w-full flex-col overflow-x-hidden',
           isCanvasPage ? 'h-dvh overflow-hidden bg-white' : 'min-h-screen bg-[#fafafa]',
         )}
       >
-        {/* 单行统一顶栏（44px）：项目名 + 任务看板/多工作表标签/+建表 + 页面视图切换 + 在线/修改记录 + 右上角头像管理菜单 */}
+        {/* 单行统一顶栏（44px）：项目名 + 任务看板/多工作表标签/+建表 + 在线/修改记录 + 右上角头像管理菜单 */}
         <header className="flex h-11 shrink-0 items-center gap-2 border-b border-black/[0.08] bg-white px-2.5 sm:px-3">
           <NavLink
             to="/"
@@ -298,69 +289,64 @@ export function AppShell() {
 
           <span className="hidden h-4 w-px shrink-0 bg-black/[0.08] lg:inline-block" />
 
-          {/* 左侧主区：任务看板 + 多工作表标签页 + 新建表 + 工作表视图切换（同一行内顺滑横滚） */}
-          <div className="no-scrollbar flex h-11 min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-            <nav
-              aria-label="主导航"
-              data-testid="top-nav-tabs"
-              className="flex h-11 shrink-0 items-center gap-1"
+          {/* 左侧主区：任务看板 + 多工作表标签页 + 新建表（同一行内顺滑横滚） */}
+          <nav
+            aria-label="主导航"
+            data-testid="top-nav-tabs"
+            className="no-scrollbar flex h-11 min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+          >
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                cn(
+                  'flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] transition-colors select-none',
+                  isActive
+                    ? 'bg-black/[0.06] font-medium text-zinc-950'
+                    : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
+                )
+              }
             >
-              <NavLink
-                to="/"
-                end
-                className={({ isActive }) =>
-                  cn(
-                    'flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] transition-colors select-none',
-                    isActive
-                      ? 'bg-black/[0.06] font-medium text-zinc-950'
-                      : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
-                  )
-                }
+              <Kanban className="h-3.5 w-3.5 shrink-0 text-zinc-500" strokeWidth={1.75} />
+              <span>任务看板</span>
+            </NavLink>
+
+            <span className="mx-0.5 h-4 w-px shrink-0 bg-black/[0.08]" />
+
+            <div className="flex shrink-0 items-center gap-1" data-testid="topbar-worksheets">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleTabsDragEnd}
               >
-                <Kanban className="h-3.5 w-3.5 shrink-0 text-zinc-500" strokeWidth={1.75} />
-                <span>任务看板</span>
-              </NavLink>
-
-              <span className="mx-0.5 h-4 w-px shrink-0 bg-black/[0.08]" />
-
-              <div className="flex shrink-0 items-center gap-1" data-testid="topbar-worksheets">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleTabsDragEnd}
+                <SortableContext
+                  items={worksheets.map((w) => w.id)}
+                  strategy={horizontalListSortingStrategy}
                 >
-                  <SortableContext
-                    items={worksheets.map((w) => w.id)}
-                    strategy={horizontalListSortingStrategy}
-                  >
-                    {worksheets.map((ws) => (
-                      <SortableTopWorksheetTab
-                        key={ws.id}
-                        ws={ws}
-                        isActive={location.pathname === `/worksheets/${ws.id}`}
-                        onEdit={(target) => setEditingWs(target)}
-                        onDelete={(target) => setDeletingWs(target)}
-                      />
-                    ))}
-                  </SortableContext>
-                </DndContext>
-              </div>
+                  {worksheets.map((ws) => (
+                    <SortableTopWorksheetTab
+                      key={ws.id}
+                      ws={ws}
+                      isActive={location.pathname === `/worksheets/${ws.id}`}
+                      onEdit={(target) => setEditingWs(target)}
+                      onDelete={(target) => setDeletingWs(target)}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                title="新建工作表"
-                aria-label="快速建表"
-                data-testid="topbar-create-worksheet"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-950 cursor-pointer"
-              >
-                <Plus className="h-4 w-4" strokeWidth={1.75} />
-              </button>
-            </nav>
-
-            {/* 页面内联插槽（例如工作表的「表格视图 / 看板视图」切换） */}
-            <div ref={setCenterSlotEl} className="flex h-11 shrink-0 items-center" />
-          </div>
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              title="新建工作表"
+              aria-label="快速建表"
+              data-testid="topbar-create-worksheet"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-950 cursor-pointer"
+            >
+              <Plus className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          </nav>
 
           {/* 右侧固定操作区：页面扩展操作（在线状态 / 修改记录等） + 用户头像下拉菜单 */}
           <div className="flex shrink-0 items-center gap-1.5">
