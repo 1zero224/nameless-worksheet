@@ -569,7 +569,7 @@ export function TaskDetailDrawer({
                   添加
                 </button>
               </div>
-              <div className="rounded-lg border border-black/[0.07] bg-[#fafafa]/60 p-1">
+              <div className="rounded-lg border border-black/[0.06] bg-[#fafafa] px-2.5 py-1.5">
                 <ArtifactCardList
                   artifacts={taskArtifactsData?.taskArtifacts ?? []}
                   compact
@@ -665,12 +665,14 @@ export function TaskDetailDrawer({
                   添加共用资源
                 </button>
               </div>
-              <ArtifactCardList
-                artifacts={taskArtifactsData?.workArtifacts ?? []}
-                compact
-                variant="list"
-                emptyText="暂无作品共用资源，可点击右上角添加整片原片或通用字体包"
-              />
+              <div className="rounded-md bg-white/95 px-2.5 py-1">
+                <ArtifactCardList
+                  artifacts={taskArtifactsData?.workArtifacts ?? []}
+                  compact
+                  variant="list"
+                  emptyText="暂无作品共用资源，可点击右上角添加整片原片或通用字体包"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -733,148 +735,150 @@ function DetailStageCard({
   return (
     <div
       data-testid={`drawer-stage-files-${columnId}`}
-      className="space-y-2 rounded-lg border border-black/[0.08] bg-white p-2.5"
+      className="overflow-hidden rounded-lg border border-black/[0.08] bg-white"
     >
-      {/* 顶行：工序名 + 负责人胶囊 + 弹出式选择器 + 状态胶囊 */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-          <span className="text-[13px] font-semibold text-zinc-900">{columnName}</span>
+      {/* 上半部（纯白）：工序分工层 — 工序名 + 负责人 + 状态 + 备注 */}
+      <div className="space-y-2 p-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            <span className="text-sm font-semibold text-zinc-950">{columnName}</span>
 
-          {cell.assignees.map((a, idx) => {
-            const label = a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name;
-            const key = a.type === 'user' ? `u:${a.userId}` : `t:${a.name}`;
-            return (
-              <span
-                key={key}
-                className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700"
-              >
-                {label}
-                {a.type === 'text' && <span className="text-[10px] text-zinc-400">文本</span>}
+            {cell.assignees.map((a, idx) => {
+              const label = a.type === 'user' ? (userMap.get(a.userId) ?? '未知用户') : a.name;
+              const key = a.type === 'user' ? `u:${a.userId}` : `t:${a.name}`;
+              return (
+                <span
+                  key={key}
+                  className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700"
+                >
+                  {label}
+                  {a.type === 'text' && <span className="text-[10px] text-zinc-400">文本</span>}
+                  <button
+                    type="button"
+                    onClick={() => removeAssignee(idx)}
+                    aria-label={`移除负责人 ${label}`}
+                    className="text-zinc-400 hover:text-zinc-800 cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              );
+            })}
+
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => removeAssignee(idx)}
-                  aria-label={`移除负责人 ${label}`}
-                  className="text-zinc-400 hover:text-zinc-800 cursor-pointer"
+                  aria-label={`为 ${columnName} 选择负责人`}
+                  className="inline-flex h-5 items-center gap-0.5 rounded-full border border-dashed border-zinc-300 px-1.5 text-[11px] text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-900 cursor-pointer"
                 >
-                  <X className="h-3 w-3" />
+                  <Plus className="h-3 w-3" />
+                  {cell.assignees.length === 0 && <span>负责人</span>}
                 </button>
-              </span>
-            );
-          })}
+              </PopoverTrigger>
+              <PopoverContent align="start" sideOffset={6} className="w-64 space-y-2.5 p-2.5">
+                <div>
+                  <div className="mb-1.5 text-[11px] font-medium text-zinc-500">选择项目用户</div>
+                  <div className="flex max-h-28 flex-wrap gap-1 overflow-y-auto">
+                    {users.map((u) => {
+                      const checked = cell.assignees.some(
+                        (a) => a.type === 'user' && a.userId === u.id,
+                      );
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => toggleUser(u.id)}
+                          className={cn(
+                            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors cursor-pointer',
+                            checked
+                              ? 'border-zinc-900 bg-zinc-900 text-white'
+                              : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
+                          )}
+                        >
+                          {checked && <Check className="h-3 w-3" />}
+                          {u.displayName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="border-t border-black/[0.06] pt-2">
+                  <div className="mb-1 text-[11px] font-medium text-zinc-500">纯文本负责人</div>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={textName}
+                      onChange={(e) => setTextName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addTextAssignee();
+                        }
+                      }}
+                      placeholder="输入名字回车添加"
+                      className="h-7 min-w-0 flex-1 py-1 text-xs"
+                      maxLength={32}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 shrink-0 whitespace-nowrap px-2.5 text-xs"
+                      onClick={addTextAssignee}
+                    >
+                      添加
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
 
-          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                aria-label={`为 ${columnName} 选择负责人`}
-                className="inline-flex h-5 items-center gap-0.5 rounded-full border border-dashed border-zinc-300 px-1.5 text-[11px] text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-900 cursor-pointer"
-              >
-                <Plus className="h-3 w-3" />
-                {cell.assignees.length === 0 && <span>负责人</span>}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" sideOffset={6} className="w-64 space-y-2.5 p-2.5">
-              <div>
-                <div className="mb-1.5 text-[11px] font-medium text-zinc-500">选择项目用户</div>
-                <div className="flex max-h-28 flex-wrap gap-1 overflow-y-auto">
-                  {users.map((u) => {
-                    const checked = cell.assignees.some(
-                      (a) => a.type === 'user' && a.userId === u.id,
-                    );
-                    return (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => toggleUser(u.id)}
-                        className={cn(
-                          'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors cursor-pointer',
-                          checked
-                            ? 'border-zinc-900 bg-zinc-900 text-white'
-                            : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
-                        )}
-                      >
-                        {checked && <Check className="h-3 w-3" />}
-                        {u.displayName}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="border-t border-black/[0.06] pt-2">
-                <div className="mb-1 text-[11px] font-medium text-zinc-500">纯文本负责人</div>
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    value={textName}
-                    onChange={(e) => setTextName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addTextAssignee();
-                      }
-                    }}
-                    placeholder="输入名字回车添加"
-                    className="h-7 min-w-0 flex-1 py-1 text-xs"
-                    maxLength={32}
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="h-7 shrink-0 whitespace-nowrap px-2.5 text-xs"
-                    onClick={addTextAssignee}
-                  >
-                    添加
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <SelectField
+            aria-label={`${columnName} 状态`}
+            variant="pill"
+            size="sm"
+            align="end"
+            value={cell.status}
+            onValueChange={(val) => onSave({ status: val as StageStatus })}
+            className={statusStyle.cell}
+            options={STAGE_STATUSES.map((s) => ({
+              value: s,
+              label: STAGE_STATUS_LABELS[s],
+              dotClass: STAGE_STATUS_STYLES[s].dot,
+            }))}
+          />
         </div>
 
-        <SelectField
-          aria-label={`${columnName} 状态`}
-          variant="pill"
-          size="sm"
-          align="end"
-          value={cell.status}
-          onValueChange={(val) => onSave({ status: val as StageStatus })}
-          className={statusStyle.cell}
-          options={STAGE_STATUSES.map((s) => ({
-            value: s,
-            label: STAGE_STATUS_LABELS[s],
-            dotClass: STAGE_STATUS_STYLES[s].dot,
-          }))}
-        />
+        {/* 轻量带语义标签的工序备注 */}
+        <div className="flex items-center gap-1.5 rounded-md bg-zinc-50/90 px-2 py-1 transition-colors focus-within:bg-white focus-within:ring-1 focus-within:ring-zinc-300">
+          <StickyNote className="h-3 w-3 shrink-0 text-zinc-400" />
+          <span className="shrink-0 text-[11px] font-medium text-zinc-400">备注</span>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onBlur={() => {
+              if (note.trim() !== cell.note) {
+                onSave({ note: note.trim() });
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="添加工序备注…"
+            aria-label={`${columnName} 备注`}
+            maxLength={200}
+            className="h-5 min-w-0 flex-1 bg-transparent text-xs text-zinc-800 placeholder:text-zinc-400 focus:outline-none"
+          />
+        </div>
       </div>
 
-      {/* 轻量带语义标签的工序备注 */}
-      <div className="flex items-center gap-1.5 rounded-md bg-zinc-50/90 px-2 py-1 transition-colors focus-within:bg-white focus-within:ring-1 focus-within:ring-zinc-300">
-        <StickyNote className="h-3 w-3 shrink-0 text-zinc-400" />
-        <span className="shrink-0 text-[11px] font-medium text-zinc-400">备注</span>
-        <input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          onBlur={() => {
-            if (note.trim() !== cell.note) {
-              onSave({ note: note.trim() });
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.currentTarget.blur();
-            }
-          }}
-          placeholder="添加工序备注…"
-          aria-label={`${columnName} 备注`}
-          maxLength={200}
-          className="h-5 min-w-0 flex-1 bg-transparent text-xs text-zinc-800 placeholder:text-zinc-400 focus:outline-none"
-        />
-      </div>
-
-      {/* 集成在本工序卡片底部的交付资源 */}
-      <div className="border-t border-dashed border-black/[0.07] pt-1.5">
+      {/* 下半部（微灰底托盘）：交付资源层，与上方工序分工清晰区分 */}
+      <div className="border-t border-black/[0.06] bg-[#fafafa] px-2.5 py-2">
         {artifacts.length === 0 ? (
-          <div className="flex items-center justify-between gap-2 px-0.5 text-[11px] text-zinc-400">
+          <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-400">
             <span className="inline-flex items-center gap-1">
               <Paperclip className="h-3 w-3" />
               暂无交付资源
@@ -891,7 +895,7 @@ function DetailStageCard({
           </div>
         ) : (
           <div className="space-y-1">
-            <div className="flex items-center justify-between gap-2 px-0.5">
+            <div className="flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500">
                 <Paperclip className="h-3 w-3 text-zinc-400" />
                 交付资源

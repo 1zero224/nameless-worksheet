@@ -52,7 +52,7 @@ function CompactArtifactBlock({
                 )}
               </div>
               {latest && latest.locations.length > 0 ? (
-                <div className="space-y-0.5">
+                <div className="ml-1.5 space-y-0.5 border-l-2 border-zinc-200/85 pl-2.5">
                   {latest.locations.map((loc) => (
                     <LocationActionRow
                       key={loc.id}
@@ -64,7 +64,9 @@ function CompactArtifactBlock({
                   ))}
                 </div>
               ) : (
-                <div className="text-[11px] text-zinc-400">待补充多网盘</div>
+                <div className="ml-1.5 border-l-2 border-zinc-200/75 pl-2.5 text-[11px] text-zinc-400">
+                  待补充多网盘
+                </div>
               )}
             </div>
           );

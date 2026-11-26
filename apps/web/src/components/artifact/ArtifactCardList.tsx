@@ -91,8 +91,8 @@ export function LocationActionRow({
     <div
       data-testid={`location-row-${location.id}`}
       className={cn(
-        'group/loc flex items-center justify-between gap-2 rounded-md transition-colors hover:bg-black/[0.03]',
-        compact ? 'px-1.5 py-1' : 'bg-[#fafafa] px-2.5 py-1.5 hover:bg-zinc-100/80',
+        'group/loc flex items-center justify-between gap-2 rounded-md transition-colors hover:bg-black/[0.035]',
+        compact ? 'px-1 py-0.5' : 'bg-[#fafafa] px-2 py-1.5 hover:bg-zinc-100/80',
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs">
@@ -182,7 +182,11 @@ export function LocationActionRow({
                 type="button"
                 aria-label="多网盘操作"
                 onClick={(e) => e.stopPropagation()}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
+                className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-opacity hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer',
+                  compact &&
+                    'sm:opacity-0 sm:group-hover/loc:opacity-100 sm:focus-visible:opacity-100 data-[state=open]:opacity-100',
+                )}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
@@ -369,11 +373,7 @@ export function ArtifactCardList({
 
   return (
     <div
-      className={cn(
-        variant === 'list'
-          ? 'divide-y divide-black/[0.06] rounded-md bg-white/95 px-2.5'
-          : 'space-y-2.5',
-      )}
+      className={cn(variant === 'list' ? 'divide-y divide-black/[0.06]' : 'space-y-2.5')}
       data-testid="artifact-list"
     >
       {artifacts.map((art) => {
@@ -399,7 +399,7 @@ export function ArtifactCardList({
             className={cn(
               'transition-all',
               variant === 'list'
-                ? 'py-2 first:pt-1.5 last:pb-1.5'
+                ? 'py-1.5 first:pt-1 last:pb-0.5'
                 : cn('rounded-lg border border-black/[0.08] bg-white', compact ? 'p-2.5' : 'p-3.5'),
               isHighlighted && 'ring-2 ring-zinc-900 bg-zinc-50/70 rounded-md',
             )}
@@ -409,8 +409,10 @@ export function ArtifactCardList({
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <span
                   className={cn(
-                    'truncate font-semibold text-zinc-950',
-                    compact ? 'text-[13px]' : 'text-sm',
+                    'truncate',
+                    compact
+                      ? 'text-[12.5px] font-medium text-zinc-800'
+                      : 'text-sm font-semibold text-zinc-950',
                   )}
                   title={`${art.name} · ${actorName} 更新于 ${timeStr}`}
                 >
@@ -530,11 +532,16 @@ export function ArtifactCardList({
 
             {latest?.note && <p className="mt-1 text-xs text-zinc-500">{latest.note}</p>}
 
-            {/* 最新版本的多网盘列表 */}
+            {/* 最新版本的多网盘列表（左侧树形引导线明确从属层级） */}
             {latest && (
-              <div className="mt-1.5 space-y-0.5">
+              <div
+                className={cn(
+                  'mt-1.5 space-y-0.5',
+                  compact && 'ml-1.5 border-l-2 border-zinc-200/85 pl-2.5',
+                )}
+              >
                 {latest.locations.length === 0 ? (
-                  <div className="flex items-center justify-between gap-2 rounded-md bg-zinc-50 px-2 py-1.5 text-xs text-zinc-400">
+                  <div className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-zinc-400">
                     <span>待补充多网盘</span>
                     <button
                       type="button"
@@ -657,9 +664,11 @@ export function ArtifactCardList({
                           </div>
                           {ver.note && <div className="text-xs text-zinc-500">{ver.note}</div>}
                           {ver.locations.length === 0 ? (
-                            <div className="text-[11px] text-zinc-400">待补充多网盘</div>
+                            <div className="ml-1.5 border-l-2 border-zinc-200/75 pl-2 text-[11px] text-zinc-400">
+                              待补充多网盘
+                            </div>
                           ) : (
-                            <div className="space-y-0.5">
+                            <div className="ml-1.5 space-y-0.5 border-l-2 border-zinc-200/75 pl-2">
                               {ver.locations.map((loc) => (
                                 <LocationActionRow
                                   key={loc.id}
