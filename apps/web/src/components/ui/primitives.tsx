@@ -35,7 +35,7 @@ export function Button({
     <button
       {...props}
       className={cn(
-        'inline-flex items-center justify-center rounded-md font-medium transition-colors cursor-pointer disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center rounded-[3px] font-medium transition-colors cursor-pointer disabled:cursor-not-allowed',
         variants[variant],
         sizes[size],
         className,
@@ -51,7 +51,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
         ref={ref}
         {...props}
         className={cn(
-          'block w-full rounded-md border border-black/[0.12] bg-white px-3 py-2 text-sm text-zinc-950 shadow-[0_1px_2px_rgba(0,0,0,0.03)] placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900/20 disabled:bg-zinc-50',
+          'block w-full rounded-[3px] border border-black/[0.12] bg-white px-3 py-2 text-sm text-zinc-950 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900/20 disabled:bg-zinc-50',
           className,
         )}
       />
@@ -68,12 +68,7 @@ export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElem
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div
-      className={cn(
-        'rounded-lg border border-black/[0.08] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]',
-        className,
-      )}
-    >
+    <div className={cn('rounded-[3px] border border-black/[0.08] bg-white p-5', className)}>
       {children}
     </div>
   );
@@ -96,7 +91,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center rounded-[2px] px-1.5 py-0.5 text-xs font-medium',
         styles[variant],
       )}
     >
@@ -119,7 +114,9 @@ export function Alert({
     warning: 'border-amber-200/90 bg-amber-50/80 text-amber-900',
   };
   return (
-    <div className={cn('rounded-md border px-3.5 py-2.5 text-sm', styles[variant])}>{children}</div>
+    <div className={cn('rounded-[3px] border px-3.5 py-2.5 text-sm', styles[variant])}>
+      {children}
+    </div>
   );
 }
 
@@ -142,13 +139,13 @@ export function Dialog({
       aria-modal="true"
       aria-label={title}
     >
-      <div className="w-full max-w-md rounded-xl border border-black/[0.08] bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-[4px] border border-black/[0.08] bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between gap-2">
           <h3 className="text-base font-semibold text-zinc-950">{title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 cursor-pointer"
+            className="rounded-[2px] p-1 text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 cursor-pointer"
             aria-label="关闭"
           >
             ✕

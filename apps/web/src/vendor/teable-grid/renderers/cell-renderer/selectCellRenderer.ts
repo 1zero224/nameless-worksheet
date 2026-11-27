@@ -31,7 +31,7 @@ const positionCache: LRUCache<string, ISelectRegion[]> = new LRUCache({
   max: 10,
 });
 
-const OPTION_RADIUS = 6;
+const OPTION_RADIUS = 2;
 const OPTION_GAP_SIZE = 6;
 const OPTION_PADDING_HORIZONTAL = 8;
 const SELECT_CELL_PADDING_TOP = 6;
@@ -182,11 +182,79 @@ export const selectCellRenderer: IInternalCellRenderer<ISelectCell> = {
   },
   draw: (cell: ISelectCell, props: ICellRenderProps) => {
     const { ctx, rect, theme, isActive, spriteManager } = props;
-    const { displayData, choiceMap, readonly, showAddButton } = cell;
+    const { displayData, choiceMap, readonly, showAddButton, plain } = cell;
     const { x: _x, y: _y, width, height } = rect;
     const clipEnable = !isActive && displayData.length;
-    const { fontSizeXS, fontFamily, iconSizeSM, iconSizeXS, cellOptionBg, cellOptionTextColor } =
-      theme;
+    const {
+      fontSizeXS,
+      fontSizeSM,
+      fontFamily,
+      iconSizeSM,
+      iconSizeXS,
+      cellOptionBg,
+      cellOptionTextColor,
+      cellTextColor,
+    } = theme;
+
+    // Plain mode: render clean inline text (and optional status dot) without any rounded capsule box
+    if (plain) {
+      if (!displayData.length) return;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(_x, _y, width, height);
+      ctx.clip();
+
+      let curX = _x + cellHorizontalPadding;
+      const centerY = _y + height / 2;
+      const maxX = _x + width - cellHorizontalPadding;
+      const textFontSize = fontSizeSM;
+
+      for (let i = 0; i < displayData.length; i++) {
+        const text = displayData[i]!;
+        if (curX >= maxX - 4) break;
+        const choice = choiceMap?.[text];
+        const textColor = choice?.color || cellTextColor;
+        const dotColor = choice?.dotColor;
+
+        if (i > 0) {
+          ctx.font = `400 ${textFontSize}px ${fontFamily}`;
+          const sep = '、';
+          drawSingleLineText(ctx, {
+            text: sep,
+            x: curX,
+            y: centerY - textFontSize / 2,
+            fill: '#A1A1AA',
+            fontSize: textFontSize,
+          });
+          curX += ctx.measureText(sep).width;
+        }
+
+        if (dotColor) {
+          ctx.beginPath();
+          ctx.arc(curX + 3, centerY, 3, 0, Math.PI * 2);
+          ctx.fillStyle = dotColor;
+          ctx.fill();
+          curX += 11;
+        }
+
+        const availW = Math.max(0, maxX - curX);
+        if (availW <= 4) break;
+
+        ctx.font = `${dotColor ? '500' : '400'} ${textFontSize}px ${fontFamily}`;
+        const { width: drawnW } = drawSingleLineText(ctx, {
+          text,
+          x: curX,
+          y: centerY - textFontSize / 2,
+          fill: textColor,
+          fontSize: textFontSize,
+          maxWidth: availW,
+        });
+        curX += drawnW;
+      }
+
+      ctx.restore();
+      return;
+    }
 
     const addBtnSize = iconSizeXS;
     const addBtnOffset = isActive && showAddButton && !readonly ? addBtnSize + OPTION_GAP_SIZE : 0;

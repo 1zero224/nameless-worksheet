@@ -121,6 +121,7 @@ export interface ISelectChoice {
   name: string;
   color?: string;
   backgroundColor?: string;
+  dotColor?: string;
 }
 
 export interface ISelectChoiceSorted {
@@ -138,6 +139,7 @@ export interface ISelectCell extends IEditableCell {
   isMultiple?: boolean;
   isEditingOnClick?: boolean;
   showAddButton?: boolean;
+  plain?: boolean;
   onPreview?: (activeId: string) => void;
 }
 

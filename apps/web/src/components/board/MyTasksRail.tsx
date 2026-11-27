@@ -12,7 +12,7 @@ const CARD_SPRING = {
 } as const;
 
 const INLINE_ACTION_BTN_BASE =
-  'inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-50 cursor-pointer';
+  'inline-flex h-6 shrink-0 items-center gap-0.5 rounded-[2px] px-1.5 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-50 cursor-pointer';
 
 export interface MyTasksListContentProps {
   myInProgress: MyTaskItem[];
@@ -37,7 +37,7 @@ export function MyTasksListContent({
 
   if (totalCount === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-black/[0.08] bg-white/70 px-3 py-6 text-center text-xs text-zinc-400">
+      <div className="px-3 py-6 text-center text-xs text-zinc-400">
         当前没有认领中的任务
         <div className="mt-1 text-xs text-zinc-400/80">可在右侧看板直接点击「空缺」认领</div>
       </div>
@@ -55,15 +55,13 @@ export function MyTasksListContent({
             />
             <span className="text-xs font-semibold text-zinc-700">进行中</span>
           </div>
-          <span className="rounded-full bg-black/[0.05] px-2 py-0 text-xs font-medium tabular-nums text-zinc-500">
+          <span className="text-xs font-medium tabular-nums text-zinc-400">
             {myInProgress.length}
           </span>
         </div>
 
         {myInProgress.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-black/[0.08] bg-[#fafafa]/70 py-2.5 text-center text-xs text-zinc-400">
-            暂无进行中工序
-          </div>
+          <div className="py-2.5 text-center text-xs text-zinc-400">暂无进行中工序</div>
         ) : (
           <div data-testid="my-tasks-in-progress-list" className="space-y-1.5">
             <AnimatePresence mode="popLayout" initial={false}>
@@ -95,7 +93,7 @@ export function MyTasksListContent({
                     data-testid={`my-in-progress-item-${item.taskId}-${item.stageColumnId}`}
                     data-card-state="in_progress"
                     className={cn(
-                      'group cursor-pointer rounded-lg border px-2.5 py-2 transition-[border-color,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60',
+                      'group cursor-pointer rounded-[2px] border px-2.5 py-2 transition-[border-color,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60',
                       stateStyle.card,
                     )}
                   >
@@ -124,7 +122,7 @@ export function MyTasksListContent({
                         {item.priority !== 'normal' && (
                           <span
                             className={cn(
-                              'mt-0.5 shrink-0 rounded border px-1 py-0 text-[11px] font-medium leading-4',
+                              'mt-0.5 shrink-0 text-[11px] leading-4',
                               PRIORITY_STYLES[item.priority],
                             )}
                           >
@@ -173,7 +171,7 @@ export function MyTasksListContent({
                               e.stopPropagation();
                               onShare(item);
                             }}
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
                           >
                             <Share2 className="h-3.5 w-3.5" strokeWidth={1.85} />
                           </button>
@@ -206,15 +204,11 @@ export function MyTasksListContent({
             <span className={cn('h-1.5 w-1.5 rounded-full', BOARD_CARD_STATE_STYLES.waiting.dot)} />
             <span className="text-xs font-semibold text-zinc-600">待开始</span>
           </div>
-          <span className="rounded-full bg-black/[0.05] px-2 py-0 text-xs font-medium tabular-nums text-zinc-500">
-            {myPending.length}
-          </span>
+          <span className="text-xs font-medium tabular-nums text-zinc-400">{myPending.length}</span>
         </div>
 
         {myPending.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-black/[0.08] bg-[#fafafa]/70 py-2.5 text-center text-xs text-zinc-400">
-            暂无待开始工序
-          </div>
+          <div className="py-2.5 text-center text-xs text-zinc-400">暂无待开始工序</div>
         ) : (
           <div data-testid="my-tasks-pending-list" className="space-y-1.5">
             <AnimatePresence mode="popLayout" initial={false}>
@@ -246,7 +240,7 @@ export function MyTasksListContent({
                     data-testid={`my-pending-item-${item.taskId}-${item.stageColumnId}`}
                     data-card-state="waiting"
                     className={cn(
-                      'group cursor-pointer rounded-lg border px-2.5 py-2 transition-[border-color,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60',
+                      'group cursor-pointer rounded-[2px] border px-2.5 py-2 transition-[border-color,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60',
                       stateStyle.card,
                     )}
                   >
@@ -275,7 +269,7 @@ export function MyTasksListContent({
                         {item.priority !== 'normal' && (
                           <span
                             className={cn(
-                              'mt-0.5 shrink-0 rounded border px-1 py-0 text-[11px] font-medium leading-4',
+                              'mt-0.5 shrink-0 text-[11px] leading-4',
                               PRIORITY_STYLES[item.priority],
                             )}
                           >
@@ -324,7 +318,7 @@ export function MyTasksListContent({
                               e.stopPropagation();
                               onShare(item);
                             }}
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
                           >
                             <Share2 className="h-3.5 w-3.5" strokeWidth={1.85} />
                           </button>
@@ -398,13 +392,11 @@ export function MyTasksRail({
             onClick={onToggleCollapsed}
             aria-label="展开我的任务"
             title="展开「我的任务」面板"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
+            className="flex h-7 w-7 items-center justify-center rounded-[2px] text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
           >
             <PanelLeftOpen className="h-4 w-4" strokeWidth={1.75} />
           </button>
-          <span className="mt-2 rounded-full bg-zinc-100 px-2 py-0.25 text-xs font-medium tabular-nums text-zinc-500">
-            {totalCount}
-          </span>
+          <span className="mt-2 text-xs font-medium tabular-nums text-zinc-400">{totalCount}</span>
           <button
             type="button"
             onClick={onToggleCollapsed}
@@ -427,16 +419,14 @@ export function MyTasksRail({
             <div className="flex min-w-0 items-center gap-2">
               <ListTodo className="h-3.5 w-3.5 shrink-0 text-zinc-500" strokeWidth={1.75} />
               <h2 className="truncate text-sm font-semibold text-zinc-900">我的任务</h2>
-              <span className="rounded-full bg-zinc-100 px-2 py-0 text-xs font-medium tabular-nums text-zinc-500">
-                {totalCount}
-              </span>
+              <span className="text-xs font-medium tabular-nums text-zinc-400">{totalCount}</span>
             </div>
             <button
               type="button"
               onClick={onToggleCollapsed}
               aria-label="折叠我的任务"
               title="折叠「我的任务」面板"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
             >
               <PanelLeftClose className="h-3.5 w-3.5" strokeWidth={1.75} />
             </button>

@@ -1214,9 +1214,9 @@ export function WorksheetDetailPage({
         {onlineUsers.length > 0 && (
           <div
             data-testid="presence-bar"
-            className="flex items-center gap-1 rounded-full border border-black/[0.08] bg-[#fafafa] px-2 py-0.5"
+            className="flex items-center gap-2 px-1.5 text-[11px] text-zinc-500"
           >
-            <span className="hidden text-[11px] text-zinc-400 sm:inline">在线</span>
+            <span className="hidden text-zinc-400 sm:inline">在线</span>
             {onlineUsers.map((peer) => {
               const color = peerColorForUser(peer.userId);
               return (
@@ -1227,13 +1227,10 @@ export function WorksheetDetailPage({
                       ? `${peer.displayName}${peer.focus.editing ? '（正在编辑）' : '（正在查看）'}`
                       : `${peer.displayName}（在线）`
                   }
-                  className={cn(
-                    'inline-flex items-center rounded-full px-1.5 py-0.25 text-[11px] font-medium',
-                    color.bg,
-                    color.text,
-                  )}
+                  className="inline-flex items-center gap-1 font-medium text-zinc-700"
                 >
-                  {peer.displayName}
+                  <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', color.bg)} />
+                  <span>{peer.displayName}</span>
                 </span>
               );
             })}
@@ -1246,7 +1243,7 @@ export function WorksheetDetailPage({
             setCellHistoryScope(null);
             setLogsOpen(true);
           }}
-          className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+          className="inline-flex h-7 items-center gap-1 rounded-[2px] px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
         >
           <History className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
           <span className="hidden sm:inline">修改记录</span>
@@ -1254,8 +1251,8 @@ export function WorksheetDetailPage({
         </button>
       </TopBarRightSlot>
 
-      {/* 工具栏（36px） */}
-      <div className="flex min-h-[36px] shrink-0 flex-wrap items-center gap-1.5 border-b border-black/[0.08] bg-[#fafafa]/60 px-3 py-1">
+      {/* 工具栏（36px）：去边框盒子化，无框 Ghost 按钮与纯文本筛选 */}
+      <div className="flex min-h-[36px] shrink-0 flex-wrap items-center gap-1 border-b border-black/[0.08] bg-[#fafafa]/60 px-3 py-1">
         <FieldVisibilityPopover
           worksheet={data.worksheet}
           columns={data.columns}
@@ -1267,10 +1264,12 @@ export function WorksheetDetailPage({
           columns={data.columns}
           boardColumns={data.boardColumns}
         />
-        {!isFreeTable && <span className="hidden h-4 w-px bg-black/[0.08] sm:inline-block" />}
+        {!isFreeTable && (
+          <span className="mx-1 hidden h-3.5 w-px bg-black/[0.08] sm:inline-block" />
+        )}
 
         {!isFreeTable && (
-          <div className="flex flex-wrap items-center gap-0.5">
+          <div className="flex flex-wrap items-center gap-1">
             {(
               [
                 ['all', '全部'],
@@ -1285,10 +1284,10 @@ export function WorksheetDetailPage({
                 type="button"
                 onClick={() => setStatusChip(val)}
                 className={cn(
-                  'rounded-md px-2 py-1 text-xs font-medium transition-colors cursor-pointer',
+                  'relative inline-flex h-7 items-center px-2 text-xs transition-colors cursor-pointer',
                   statusChip === val
-                    ? 'bg-black/[0.07] text-zinc-950'
-                    : 'text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900',
+                    ? 'font-semibold text-zinc-950 after:absolute after:right-1.5 after:bottom-0 after:left-1.5 after:h-[1.5px] after:bg-zinc-900'
+                    : 'font-medium text-zinc-500 hover:text-zinc-900',
                 )}
               >
                 {label}
@@ -1311,9 +1310,10 @@ export function WorksheetDetailPage({
             <SelectField
               aria-label="按作品筛选"
               size="xs"
+              variant="ghost"
               value={workFilter}
               onValueChange={setWorkFilter}
-              className="w-28 sm:w-32"
+              className="max-w-[136px]"
               options={[
                 { value: '', label: '全部作品' },
                 ...allWorks.map((w) => ({ value: w.id, label: w.name })),
@@ -1325,9 +1325,10 @@ export function WorksheetDetailPage({
             <SelectField
               aria-label="按负责人筛选"
               size="xs"
+              variant="ghost"
               value={assigneeFilter}
               onValueChange={setAssigneeFilter}
-              className="w-28 sm:w-32"
+              className="max-w-[136px]"
               options={[
                 { value: '', label: '全部负责人' },
                 ...users.map((u) => ({
@@ -1347,11 +1348,12 @@ export function WorksheetDetailPage({
           <SelectField
             aria-label="本地排序"
             size="xs"
+            variant="ghost"
             align="end"
             leadingIcon={<ArrowUpDown className="h-3 w-3" />}
             value={localSort}
             onValueChange={(v) => setLocalSort(v as LocalSort)}
-            className="w-32 sm:w-36"
+            className="max-w-[144px]"
             options={
               isFreeTable
                 ? [
@@ -1379,7 +1381,7 @@ export function WorksheetDetailPage({
                 setKeyword('');
                 setLocalSort('manual');
               }}
-              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-zinc-700 hover:bg-black/[0.05] cursor-pointer"
+              className="inline-flex h-7 items-center gap-1 rounded-[2px] px-1.5 text-xs font-medium text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
             >
               <RotateCcw className="h-3 w-3" />
               重置
@@ -1427,10 +1429,10 @@ export function WorksheetDetailPage({
                           key={task.id}
                           className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs hover:bg-black/[0.02]"
                         >
-                          <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex min-w-0 items-center gap-1.5">
                             {w && (
-                              <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">
-                                {w.name}
+                              <span className="shrink-0 text-[11px] font-medium text-zinc-400">
+                                {w.name} /
                               </span>
                             )}
                             <button
@@ -1524,14 +1526,14 @@ export function WorksheetDetailPage({
                           key={task.id}
                           className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs hover:bg-black/[0.02]"
                         >
-                          <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex min-w-0 items-center gap-1.5">
                             {w && (
-                              <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">
-                                {w.name}
+                              <span className="shrink-0 text-[11px] font-medium text-zinc-400">
+                                {w.name} /
                               </span>
                             )}
-                            <span className="shrink-0 rounded bg-zinc-200/80 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">
-                              已搁置
+                            <span className="shrink-0 text-[11px] font-medium text-zinc-500">
+                              [已搁置]
                             </span>
                             <button
                               type="button"

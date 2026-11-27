@@ -25,7 +25,7 @@ const CARD_TRANSITION = {
 } as const;
 
 const INLINE_ACTION_BTN_BASE =
-  'inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-50 cursor-pointer';
+  'inline-flex h-6 shrink-0 items-center gap-0.5 rounded-[2px] px-1.5 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-50 cursor-pointer';
 
 const DRAG_SCROLL_THRESHOLD = 6;
 
@@ -356,7 +356,7 @@ export function KanbanBoard({
                 void onClaim(card.taskId, currentStageMissing.columnId, currentStageMissing.name);
               }}
               className={cn(
-                'pointer-events-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-md px-1.5 -mx-0.5 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-50 cursor-pointer',
+                'pointer-events-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-[2px] px-1.5 -mx-0.5 text-xs font-medium transition-colors duration-150 active:scale-[0.97] disabled:opacity-50 cursor-pointer',
                 stateStyle.actionBtn,
               )}
             >
@@ -376,11 +376,7 @@ export function KanbanBoard({
         <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', stateStyle.dot)} />
         <span className={cn('truncate', stateStyle.statusText)}>{formatStageStatusLine(card)}</span>
         {mine && (
-          <span
-            className={cn('shrink-0 rounded px-1 py-0 text-[11px] font-medium', stateStyle.meTag)}
-          >
-            我
-          </span>
+          <span className={cn('shrink-0 text-[11px] font-semibold', stateStyle.meTag)}>我</span>
         )}
       </div>
     );
@@ -436,7 +432,7 @@ export function KanbanBoard({
 
   return (
     <LayoutGroup id="kanban-board">
-      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[#fafafa]">
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-white">
         <div
           ref={scrollerRef}
           data-testid="board-columns"
@@ -444,7 +440,7 @@ export function KanbanBoard({
           onClickCapture={handleScrollerClickCapture}
           onWheel={stopMomentum}
           className={cn(
-            'board-scrollbar flex min-h-0 flex-1 gap-3 overflow-x-auto p-3 pb-2',
+            'board-scrollbar flex min-h-0 flex-1 gap-0 overflow-x-auto p-0',
             scrollEdges.overflow && !isDragScrolling && 'cursor-grab',
             isDragScrolling && 'cursor-grabbing select-none',
           )}
@@ -464,10 +460,10 @@ export function KanbanBoard({
                 data-board-column-name={bc.name}
                 data-collapsed={isCollapsed ? 'true' : 'false'}
                 className={cn(
-                  'flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-white',
+                  'flex h-full min-h-0 flex-col overflow-hidden border-r border-black/[0.08] bg-white last:border-r-0',
                   isCollapsed
                     ? 'w-[52px] min-w-[52px] max-w-[52px] shrink-0 grow-0 hover:bg-zinc-50 transition-colors'
-                    : 'min-w-[256px] max-w-[420px] flex-1',
+                    : 'min-w-[260px] max-w-[420px] flex-1',
                 )}
               >
                 {isCollapsed ? (
@@ -483,11 +479,11 @@ export function KanbanBoard({
                       onClick={() => toggleColumnCollapsed(bc.id)}
                       aria-label={`展开列 ${bc.name}`}
                       title={`展开「${bc.name}」列`}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
+                      className="flex h-7 w-7 items-center justify-center rounded-[2px] text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
                     >
                       <PanelLeftOpen className="h-4 w-4" strokeWidth={1.75} />
                     </button>
-                    <span className="mt-2 rounded-full bg-zinc-100 px-2 py-0.25 text-xs font-medium tabular-nums text-zinc-500">
+                    <span className="mt-2 text-xs font-medium tabular-nums text-zinc-400">
                       {colCards.length}
                     </span>
                     <button
@@ -508,13 +504,13 @@ export function KanbanBoard({
                     transition={{ duration: 0.16 }}
                     className="flex h-full min-h-0 w-full flex-col"
                   >
-                    {/* 极简纯白列顶栏：无背景黑字标题 + 轻计数 */}
+                    {/* 极简纯白列顶栏：无背景黑字标题 + 纯数字计数 */}
                     <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-black/[0.06] bg-white px-3">
                       <div className="flex min-w-0 items-center gap-2">
                         <h2 className="truncate text-sm font-semibold leading-5 text-zinc-900">
                           {bc.name}
                         </h2>
-                        <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0 text-xs font-medium tabular-nums text-zinc-500">
+                        <span className="shrink-0 text-xs font-medium tabular-nums text-zinc-400">
                           {colCards.length}
                         </span>
                       </div>
@@ -523,7 +519,7 @@ export function KanbanBoard({
                         onClick={() => toggleColumnCollapsed(bc.id)}
                         aria-label={`折叠列 ${bc.name}`}
                         title={`竖向折叠「${bc.name}」列`}
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
                       >
                         <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.75} />
                       </button>
@@ -532,7 +528,7 @@ export function KanbanBoard({
                     {/* 纯白列内容区 */}
                     <div className="no-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto bg-white p-2.5">
                       {displayItems.length === 0 ? (
-                        <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-black/[0.08] bg-[#fafafa]/70 text-xs text-zinc-400">
+                        <div className="flex h-24 items-center justify-center text-xs text-zinc-400">
                           暂无任务
                         </div>
                       ) : (
@@ -585,7 +581,7 @@ export function KanbanBoard({
                                       : undefined
                                   }
                                   className={cn(
-                                    'group cursor-pointer rounded-lg border px-2.5 py-2 transition-[border-color,background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60',
+                                    'group cursor-pointer rounded-[2px] border px-2.5 py-2 transition-[border-color,background-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/60',
                                     stateStyle.card,
                                     isWorkHighlighted && 'ring-1 ring-zinc-900/20',
                                   )}
@@ -620,7 +616,7 @@ export function KanbanBoard({
                                       {card.priority !== 'normal' && (
                                         <span
                                           className={cn(
-                                            'mt-0.5 shrink-0 rounded border px-1 py-0 text-[11px] font-medium leading-4',
+                                            'mt-0.5 shrink-0 text-[11px] leading-4',
                                             PRIORITY_STYLES[card.priority],
                                           )}
                                         >
@@ -654,7 +650,7 @@ export function KanbanBoard({
                                             e.stopPropagation();
                                             onShareCard(card);
                                           }}
-                                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+                                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
                                         >
                                           <Share2 className="h-3.5 w-3.5" strokeWidth={1.85} />
                                         </button>
@@ -706,7 +702,7 @@ export function KanbanBoard({
                                   setHoveredWorkKey((prev) => (prev === item.workKey ? null : prev))
                                 }
                                 className={cn(
-                                  'overflow-hidden rounded-lg border border-black/[0.10] bg-white transition-[border-color,box-shadow] duration-150 hover:border-black/[0.18]',
+                                  'overflow-hidden rounded-[2px] border border-black/[0.10] bg-white transition-[border-color,box-shadow] duration-150 hover:border-black/[0.18]',
                                   isWorkHighlighted && 'border-zinc-300 ring-1 ring-zinc-900/20',
                                 )}
                               >
@@ -823,7 +819,7 @@ export function KanbanBoard({
                                               <span
                                                 aria-hidden="true"
                                                 className={cn(
-                                                  'pointer-events-none absolute left-[7px] w-[11px] rounded-bl-[5px] border-b-[1.5px] border-l-[1.5px] border-zinc-200',
+                                                  'pointer-events-none absolute left-[7px] w-[11px] border-b-[1.5px] border-l-[1.5px] border-zinc-200',
                                                   isLast ? 'top-0 h-[17px]' : 'top-[9px] h-[8px]',
                                                 )}
                                               />
@@ -832,7 +828,7 @@ export function KanbanBoard({
                                                 data-testid={`board-card-${card.taskId}-${card.boardColumnId}`}
                                                 data-card-state={cardState}
                                                 className={cn(
-                                                  'group relative rounded-md border px-2 py-1.5 transition-[border-color,background-color] duration-150 focus-within:ring-2 focus-within:ring-zinc-400/60',
+                                                  'group relative rounded-[2px] border px-2 py-1.5 transition-[border-color,background-color] duration-150 focus-within:ring-2 focus-within:ring-zinc-400/60',
                                                   stateStyle.subCard,
                                                 )}
                                               >
@@ -845,7 +841,7 @@ export function KanbanBoard({
                                                       : card.taskTitle
                                                   }
                                                   onClick={openChildDetail}
-                                                  className="absolute inset-0 z-0 cursor-pointer rounded-md focus:outline-none"
+                                                  className="absolute inset-0 z-0 cursor-pointer focus:outline-none"
                                                 />
 
                                                 <div className="pointer-events-none relative z-10 flex items-start justify-between gap-1.5">
@@ -861,7 +857,7 @@ export function KanbanBoard({
                                                   {card.priority !== 'normal' && (
                                                     <span
                                                       className={cn(
-                                                        'shrink-0 rounded border px-1 py-0 text-[11px] font-medium leading-4',
+                                                        'shrink-0 text-[11px] leading-4',
                                                         PRIORITY_STYLES[card.priority],
                                                       )}
                                                     >
@@ -884,7 +880,7 @@ export function KanbanBoard({
                                                           e.stopPropagation();
                                                           onShareCard(card);
                                                         }}
-                                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+                                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
                                                       >
                                                         <Share2
                                                           className="h-3.5 w-3.5"
@@ -931,13 +927,13 @@ export function KanbanBoard({
         {scrollEdges.left && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-[#fafafa] to-transparent"
+            className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent"
           />
         )}
         {scrollEdges.right && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#fafafa] to-transparent"
+            className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent"
           />
         )}
       </div>

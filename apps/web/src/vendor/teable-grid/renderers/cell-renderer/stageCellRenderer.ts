@@ -134,14 +134,15 @@ export const stageCellRenderer: IInternalCellRenderer<IStageCell> = {
     let rightReserved = cellHorizontalPadding;
 
     if (attachment) {
-      const badgePrefix = attachment.kind === 'r2' ? '⬇ ' : '🔗 ';
+      const badgePrefix = attachment.kind === 'r2' ? '↓ ' : '↗ ';
       const badgeLabel = `${badgePrefix}${attachment.label}`;
-      ctx.font = `500 10px ${theme.fontFamily}`;
+      ctx.font = `500 11px ${theme.fontFamily}`;
       const textW = Math.min(ctx.measureText(badgeLabel).width, 64);
-      const badgeW = textW + 10;
+      const badgeW = Math.max(textW + 6, 26);
       const badgeH = 18;
       const badgeRelX = Math.max(cellHorizontalPadding, width - rightReserved - badgeW);
       const badgeRelY = (height - badgeH) / 2;
+      const textRelX = badgeRelX + Math.max(2, badgeW - textW - 2);
 
       const cacheKey = getAttachmentCacheKey(cell, width, height);
       attachmentHotspotCache.set(cacheKey, {
@@ -156,24 +157,26 @@ export const stageCellRenderer: IInternalCellRenderer<IStageCell> = {
         inRange(hoverCellPosition[0], badgeRelX, badgeRelX + badgeW) &&
         inRange(hoverCellPosition[1], badgeRelY, badgeRelY + badgeH);
 
-      drawRect(ctx, {
-        x: x + badgeRelX,
-        y: y + badgeRelY,
-        width: badgeW,
-        height: badgeH,
-        radius: 4,
-        fill: badgeHovered ? '#FFFFFF' : 'rgba(255, 255, 255, 0.88)',
-        stroke: badgeHovered ? '#3B82F6' : 'rgba(0, 0, 0, 0.1)',
-      });
-
+      const linkColor = badgeHovered ? '#1D4ED8' : '#52525B';
       drawSingleLineText(ctx, {
-        x: x + badgeRelX + 5,
-        y: y + badgeRelY + 4,
+        x: x + textRelX,
+        y: y + badgeRelY + 3.5,
         text: badgeLabel,
-        fill: badgeHovered ? '#1D4ED8' : '#3F3F46',
-        fontSize: 10,
+        fill: linkColor,
+        fontSize: 11,
         maxWidth: textW + 2,
       });
+
+      if (badgeHovered) {
+        ctx.save();
+        ctx.strokeStyle = '#1D4ED8';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + textRelX, y + badgeRelY + 15.5);
+        ctx.lineTo(x + textRelX + textW, y + badgeRelY + 15.5);
+        ctx.stroke();
+        ctx.restore();
+      }
 
       rightReserved += badgeW + 6;
     }

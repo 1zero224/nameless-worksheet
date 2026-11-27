@@ -129,19 +129,19 @@ function SortableTopWorksheetTab({
       {...attributes}
       {...listeners}
       className={cn(
-        'group relative flex h-7 shrink-0 items-center rounded-md select-none transition-colors duration-150',
-        !isActive && 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
+        'group relative flex h-11 shrink-0 items-center select-none transition-colors duration-150',
+        !isActive && 'text-zinc-500 hover:text-zinc-950',
         isActive && 'text-zinc-950',
         isDragging && 'z-30 opacity-90 shadow-md ring-1 ring-black/15 bg-white',
       )}
     >
-      {/* Teable 风格共享滑块：切换工作表与任务看板时平滑滑移 */}
+      {/* 极简底部指示线：切换工作表与任务看板时平滑滑移，无白底圆角浮块 */}
       {isActive && !isDragging && (
         <motion.span
           layoutId="topbar-active-tab-pill"
           transition={TAB_SPRING}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-md bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.06]"
+          className="pointer-events-none absolute right-2 bottom-0 left-2 h-[2px] bg-zinc-900"
         />
       )}
 
@@ -149,7 +149,7 @@ function SortableTopWorksheetTab({
         to={`/worksheets/${ws.id}`}
         className={cn(
           'relative z-10 flex h-full items-center pl-2.5 pr-6 text-sm transition-colors duration-150',
-          isActive ? 'font-medium text-zinc-950' : 'text-zinc-600 group-hover:text-zinc-950',
+          isActive ? 'font-semibold text-zinc-950' : 'text-zinc-500 group-hover:text-zinc-950',
         )}
       >
         <span className="max-w-[132px] truncate">{ws.name}</span>
@@ -171,7 +171,7 @@ function SortableTopWorksheetTab({
               aria-label={`工作表操作 ${ws.name}`}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-800 cursor-pointer"
+              className="flex h-5 w-5 items-center justify-center rounded-[2px] text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-800 cursor-pointer"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
@@ -304,8 +304,8 @@ export function AppShell() {
           isCanvasPage ? 'bg-white' : 'bg-[#fafafa]',
         )}
       >
-        {/* Teable 风格单行统一顶栏（44px）：柔和浅灰顶轨 + 浮起白底激活滑块 */}
-        <header className="flex h-11 shrink-0 items-center gap-2 border-b border-black/[0.08] bg-[#f8f8f9] px-2.5 sm:px-3">
+        {/* 极简纯白单行顶栏（44px）：底部细线指示激活页签，去卡片浮块 */}
+        <header className="flex h-11 shrink-0 items-center gap-2 border-b border-black/[0.08] bg-white px-2.5 sm:px-3">
           <NavLink
             to="/"
             className="hidden shrink-0 items-center gap-1.5 pr-0.5 text-sm font-semibold tracking-tight text-zinc-950 lg:flex"
@@ -315,21 +315,21 @@ export function AppShell() {
 
           <span className="hidden h-4 w-px shrink-0 bg-black/[0.08] lg:inline-block" />
 
-          {/* 左侧主区：任务看板 + 多工作表标签页（共享 layoutId 弹簧滑块）+ 新建表 */}
+          {/* 左侧主区：任务看板 + 多工作表标签页（共享 layoutId 底部指示条）+ 新建表 */}
           <LayoutGroup id="topbar-tabs">
             <nav
               aria-label="主导航"
               data-testid="top-nav-tabs"
-              className="no-scrollbar flex h-11 min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+              className="no-scrollbar flex h-11 min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
             >
               <NavLink
                 to="/"
                 end
                 className={cn(
-                  'relative flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors duration-150 select-none',
+                  'relative flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-sm transition-colors duration-150 select-none',
                   isBoardActive
-                    ? 'font-medium text-zinc-950'
-                    : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
+                    ? 'font-semibold text-zinc-950'
+                    : 'text-zinc-500 hover:text-zinc-950',
                 )}
               >
                 {isBoardActive && (
@@ -337,13 +337,13 @@ export function AppShell() {
                     layoutId="topbar-active-tab-pill"
                     transition={TAB_SPRING}
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 rounded-md bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.06]"
+                    className="pointer-events-none absolute right-2 bottom-0 left-2 h-[2px] bg-zinc-900"
                   />
                 )}
                 <Kanban
                   className={cn(
                     'relative z-10 h-3.5 w-3.5 shrink-0 transition-colors duration-150',
-                    isBoardActive ? 'text-zinc-900' : 'text-zinc-500',
+                    isBoardActive ? 'text-zinc-900' : 'text-zinc-400',
                   )}
                   strokeWidth={1.75}
                 />
@@ -354,10 +354,10 @@ export function AppShell() {
                 to="/docs"
                 data-testid="topbar-docs-tab"
                 className={cn(
-                  'relative flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors duration-150 select-none',
+                  'relative flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-sm transition-colors duration-150 select-none',
                   isDocsActive
-                    ? 'font-medium text-zinc-950'
-                    : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
+                    ? 'font-semibold text-zinc-950'
+                    : 'text-zinc-500 hover:text-zinc-950',
                 )}
               >
                 {isDocsActive && (
@@ -365,22 +365,25 @@ export function AppShell() {
                     layoutId="topbar-active-tab-pill"
                     transition={TAB_SPRING}
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 rounded-md bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.06]"
+                    className="pointer-events-none absolute right-2 bottom-0 left-2 h-[2px] bg-zinc-900"
                   />
                 )}
                 <FileText
                   className={cn(
                     'relative z-10 h-3.5 w-3.5 shrink-0 transition-colors duration-150',
-                    isDocsActive ? 'text-zinc-900' : 'text-zinc-500',
+                    isDocsActive ? 'text-zinc-900' : 'text-zinc-400',
                   )}
                   strokeWidth={1.75}
                 />
                 <span className="relative z-10">通用文档</span>
               </NavLink>
 
-              <span className="mx-0.5 h-4 w-px shrink-0 bg-black/[0.08]" />
+              <span className="mx-1 h-4 w-px shrink-0 bg-black/[0.08]" />
 
-              <div className="flex shrink-0 items-center gap-1" data-testid="topbar-worksheets">
+              <div
+                className="flex h-11 shrink-0 items-center gap-0.5"
+                data-testid="topbar-worksheets"
+              >
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -409,7 +412,7 @@ export function AppShell() {
                 title="新建工作表"
                 aria-label="快速建表"
                 data-testid="topbar-create-worksheet"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-all duration-150 hover:bg-black/[0.05] hover:text-zinc-950 active:scale-95 cursor-pointer"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[2px] text-zinc-400 transition-all duration-150 hover:bg-black/[0.04] hover:text-zinc-950 active:scale-95 cursor-pointer"
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} />
               </button>
