@@ -2010,7 +2010,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     const onOverlayWheel = (e: WheelEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
-      if (target.closest('[data-t-grid-container]')) return;
+      if (target.closest('[data-t-grid-container], [data-t-grid-scrollbar]')) return;
       if (target.closest('textarea, [role="dialog"], [data-radix-popper-content-wrapper]')) return;
 
       let [dx, dy] = [e.deltaX, e.deltaY];
@@ -2549,33 +2549,40 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           />
         )}
 
-        {/* 原生 LinearRowType.Group 作品大标题横幅精确对齐浮层 */}
-        <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 overflow-hidden">
+        {/* 原生 LinearRowType.Group 作品大标题横幅精确对齐浮层（右侧预留 16px 避免遮挡纵向滚动条） */}
+        <div className="pointer-events-none absolute left-0 right-4 top-[34px] bottom-0 overflow-hidden">
           {groupHeadersLayout.map((hdr) => {
             const block = workBlockById.get(hdr.id);
             if (!block) return null;
             const relativeTop = hdr.y - 34;
-            if (relativeTop < -hdr.height || relativeTop > 2400) return null;
+            const isOffscreen = relativeTop < -hdr.height || relativeTop > 2400;
             const doneCount = block.tasks.filter((t) => isTaskAllStagesDone(t, stageCols)).length;
             return (
-              <CanvasWorkBannerOverlay
+              <div
                 key={block.work.id}
-                worksheetId={worksheet.id}
-                worksheetName={worksheet.name}
-                work={block.work}
-                capsules={artifactSummary.workCapsules[block.work.id] ?? []}
-                top={relativeTop}
-                height={hdr.height}
-                taskCount={block.tasks.length}
-                doneCount={doneCount}
-                hasStages={stageCols.length > 0}
-                collapsed={collapsedWorkIds.has(block.work.id)}
-                isEmptyPending={block.isEmptyPending}
-                onToggleCollapse={() => onToggleWorkCollapsed(block.work.id)}
-                onRename={(nextName) => onRenameWork(block.work.id, nextName)}
-                onAddSegment={() => onOpenAddSegment(block.work.id)}
-                onUngroup={() => onUngroupWork(block)}
-              />
+                style={{
+                  visibility: isOffscreen ? 'hidden' : 'visible',
+                  pointerEvents: isOffscreen ? 'none' : undefined,
+                }}
+              >
+                <CanvasWorkBannerOverlay
+                  worksheetId={worksheet.id}
+                  worksheetName={worksheet.name}
+                  work={block.work}
+                  capsules={artifactSummary.workCapsules[block.work.id] ?? []}
+                  top={relativeTop}
+                  height={hdr.height}
+                  taskCount={block.tasks.length}
+                  doneCount={doneCount}
+                  hasStages={stageCols.length > 0}
+                  collapsed={collapsedWorkIds.has(block.work.id)}
+                  isEmptyPending={block.isEmptyPending}
+                  onToggleCollapse={() => onToggleWorkCollapsed(block.work.id)}
+                  onRename={(nextName) => onRenameWork(block.work.id, nextName)}
+                  onAddSegment={() => onOpenAddSegment(block.work.id)}
+                  onUngroup={() => onUngroupWork(block)}
+                />
+              </div>
             );
           })}
         </div>

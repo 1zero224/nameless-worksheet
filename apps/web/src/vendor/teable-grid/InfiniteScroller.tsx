@@ -83,8 +83,12 @@ const InfiniteScrollerBase: ForwardRefRenderFunction<ScrollerRef, ScrollerProps>
       }
     },
     scrollBy: (deltaX: number, deltaY: number) => {
-      horizontalScrollRef.current?.scrollBy(deltaX, 0);
-      verticalScrollRef.current?.scrollBy(0, deltaY);
+      if (horizontalScrollRef.current) {
+        horizontalScrollRef.current.scrollLeft += deltaX;
+      }
+      if (verticalScrollRef.current) {
+        verticalScrollRef.current.scrollTop += deltaY;
+      }
     },
   }));
 
@@ -248,8 +252,9 @@ const InfiniteScrollerBase: ForwardRefRenderFunction<ScrollerRef, ScrollerProps>
     <>
       <div
         ref={horizontalScrollRef}
+        data-t-grid-scrollbar="horizontal"
         className={cn(
-          'absolute bottom-[2px] start-0 h-3.5 cursor-pointer overflow-y-hidden overflow-x-auto will-change-transform',
+          'absolute bottom-[2px] start-0 z-20 h-3.5 cursor-pointer overflow-y-hidden overflow-x-auto will-change-transform',
           !scrollBarVisible && 'pointer-events-none opacity-0',
         )}
         style={{
@@ -268,8 +273,9 @@ const InfiniteScrollerBase: ForwardRefRenderFunction<ScrollerRef, ScrollerProps>
       </div>
       <div
         ref={verticalScrollRef}
+        data-t-grid-scrollbar="vertical"
         className={cn(
-          'absolute end-[2px] w-3.5 cursor-pointer overflow-x-hidden overflow-y-auto will-change-transform',
+          'absolute end-[2px] z-20 w-3.5 cursor-pointer overflow-x-hidden overflow-y-auto will-change-transform',
           !scrollBarVisible && 'pointer-events-none opacity-0',
         )}
         style={{
