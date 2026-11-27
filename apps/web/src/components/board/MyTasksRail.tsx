@@ -1,5 +1,5 @@
 import { type MyTaskItem, PRIORITY_LABELS } from '@nw/shared';
-import { Check, Folder, ListTodo, PanelLeftClose, PanelLeftOpen, Play } from 'lucide-react';
+import { Check, Folder, ListTodo, PanelLeftClose, PanelLeftOpen, Play, Share2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { TaskResourcesPopover } from '@/components/task/TaskResourcesPopover.js';
 import { BOARD_CARD_STATE_STYLES, PRIORITY_STYLES } from '@/components/ui/colors.js';
@@ -21,6 +21,7 @@ export interface MyTasksListContentProps {
   onStart: (item: MyTaskItem) => void;
   onComplete: (item: MyTaskItem) => void;
   onOpenDetail: (target: { worksheetId: string; taskId: string }) => void;
+  onShare?: (item: MyTaskItem) => void;
 }
 
 export function MyTasksListContent({
@@ -30,6 +31,7 @@ export function MyTasksListContent({
   onStart,
   onComplete,
   onOpenDetail,
+  onShare,
 }: MyTasksListContentProps) {
   const totalCount = myInProgress.length + myPending.length;
 
@@ -160,6 +162,22 @@ export function MyTasksListContent({
                           <Check className="h-3 w-3" strokeWidth={2} />
                           完成
                         </button>
+
+                        {onShare && (
+                          <button
+                            type="button"
+                            data-testid={`my-task-share-btn-${item.taskId}-${item.stageColumnId}`}
+                            aria-label={`分享 ${item.stageColumnName} 工序`}
+                            title={`复制「${item.stageColumnName}」工序交接分享`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onShare(item);
+                            }}
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+                          >
+                            <Share2 className="h-3.5 w-3.5" strokeWidth={1.85} />
+                          </button>
+                        )}
 
                         <TaskResourcesPopover
                           taskId={item.taskId}
@@ -296,6 +314,22 @@ export function MyTasksListContent({
                           开始
                         </button>
 
+                        {onShare && (
+                          <button
+                            type="button"
+                            data-testid={`my-task-share-btn-${item.taskId}-${item.stageColumnId}`}
+                            aria-label={`分享 ${item.stageColumnName} 工序`}
+                            title={`复制「${item.stageColumnName}」工序进度与资源链接`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onShare(item);
+                            }}
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+                          >
+                            <Share2 className="h-3.5 w-3.5" strokeWidth={1.85} />
+                          </button>
+                        )}
+
                         <TaskResourcesPopover
                           taskId={item.taskId}
                           taskTitle={item.taskTitle}
@@ -333,6 +367,7 @@ export function MyTasksRail({
   onStart,
   onComplete,
   onOpenDetail,
+  onShare,
 }: MyTasksRailProps) {
   const totalCount = myInProgress.length + myPending.length;
 
@@ -415,6 +450,7 @@ export function MyTasksRail({
               onStart={onStart}
               onComplete={onComplete}
               onOpenDetail={onOpenDetail}
+              onShare={onShare}
             />
           </div>
         </motion.div>

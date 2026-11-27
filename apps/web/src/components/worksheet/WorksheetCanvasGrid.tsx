@@ -35,6 +35,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Share2,
   Trash2,
   Unlink,
   X,
@@ -44,6 +45,7 @@ import {
   type KeyboardEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -81,6 +83,7 @@ import type {
 import type { CellChangeLogScope } from '@/components/worksheet/ChangeLogDrawer.js';
 import { ColumnHeaderMenu } from '@/components/worksheet/ColumnHeaderMenu.js';
 import { isSystemColumnHidden } from '@/components/worksheet/FieldVisibilityPopover.js';
+import { StageAssigneeInput } from '@/components/worksheet/StageAssigneeInput.js';
 import { WorkAttachmentSlots } from '@/components/worksheet/WorkBannerRow.js';
 import {
   CellType,
@@ -666,30 +669,35 @@ function AnchoredStagePopover({
   const [status, setStatus] = useState<StageStatus>(cell.status);
   const [note, setNote] = useState(cell.note);
   const [baseRevision, setBaseRevision] = useState(cell.revision);
-  const [textInput, setTextInput] = useState('');
   const [localConflict, setLocalConflict] = useState<StageCellConflict | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const conflict = remoteConflict ?? localConflict;
 
-  const toggleUser = (userId: string) => {
-    setAssignees((prev) =>
-      prev.some((a) => a.type === 'user' && a.userId === userId)
-        ? prev.filter((a) => !(a.type === 'user' && a.userId === userId))
-        : [...prev, { type: 'user', userId }],
-    );
+  const toggleAssignee = (target: Assignee) => {
+    setAssignees((prev) => {
+      const exists =
+        target.type === 'user'
+          ? prev.some((a) => a.type === 'user' && a.userId === target.userId)
+          : prev.some((a) => a.type === 'text' && a.name === target.name);
+      if (exists) {
+        return target.type === 'user'
+          ? prev.filter((a) => !(a.type === 'user' && a.userId === target.userId))
+          : prev.filter((a) => !(a.type === 'text' && a.name === target.name));
+      }
+      return [...prev, target];
+    });
   };
 
-  const addTextAssignee = () => {
-    const trimmed = textInput.trim();
-    if (!trimmed) return;
-    setAssignees((prev) =>
-      prev.some((a) => a.type === 'text' && a.name === trimmed)
-        ? prev
-        : [...prev, { type: 'text', name: trimmed }],
-    );
-    setTextInput('');
+  const addAssignee = (target: Assignee) => {
+    setAssignees((prev) => {
+      const exists =
+        target.type === 'user'
+          ? prev.some((a) => a.type === 'user' && a.userId === target.userId)
+          : prev.some((a) => a.type === 'text' && a.name === target.name);
+      return exists ? prev : [...prev, target];
+    });
   };
 
   const handleSave = async (force: boolean) => {
@@ -844,54 +852,13 @@ function AnchoredStagePopover({
           </div>
         </div>
 
-        <div>
-          <div className="mb-1 text-xs text-zinc-500">选择项目用户</div>
-          <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
-            {users.map((u) => {
-              const active = assignees.some((a) => a.type === 'user' && a.userId === u.id);
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => toggleUser(u.id)}
-                  className={cn(
-                    'rounded-full border px-2 py-0.5 text-xs cursor-pointer',
-                    active
-                      ? 'border-zinc-900 bg-zinc-900 text-white'
-                      : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
-                  )}
-                >
-                  {u.displayName}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex gap-1.5">
-          <Input
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                addTextAssignee();
-              }
-            }}
-            placeholder="输入纯文本名字（如外援小王）"
-            className="h-7 text-xs"
-            maxLength={32}
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="h-7 shrink-0 whitespace-nowrap px-2.5 text-xs"
-            onClick={addTextAssignee}
-          >
-            添加
-          </Button>
-        </div>
+        <StageAssigneeInput
+          columnName={columnName}
+          assignees={assignees}
+          users={users}
+          onToggleAssignee={toggleAssignee}
+          onAddAssignee={addAssignee}
+        />
 
         <div>
           <div className="mb-1 text-xs text-zinc-500">工序备注</div>
@@ -1266,6 +1233,9 @@ export interface WorksheetCanvasGridProps {
   onUngroupWork: (block: Extract<GridDisplayBlock, { kind: 'work' }>) => void;
   onOpenDetail: (taskId: string, opts?: { focusFiles?: boolean }) => void;
   onOpenCellHistory: (scope: CellChangeLogScope) => void;
+  onShareTask?: (task: TaskDetail, stageCol?: ColumnConfig | null) => void;
+  openStageResourcesRequest?: { taskId: string; stageColumnId: string; nonce: number } | null;
+  onConsumeStageResourcesRequest?: () => void;
   onClearTextConflict: (key: string) => void;
   onClearStageConflict: (key: string) => void;
   onAcceptRemoteField: (taskId: string, field: string, remoteVal: string) => void;
@@ -1311,6 +1281,9 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     onUngroupWork,
     onOpenDetail,
     onOpenCellHistory,
+    onShareTask,
+    openStageResourcesRequest = null,
+    onConsumeStageResourcesRequest,
     onClearTextConflict,
     onClearStageConflict,
     onAcceptRemoteField,
@@ -2023,13 +1996,41 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     openEditorForCell,
   ]);
 
-  // 同步 groupPoints / scroll 变化时重绘浮层坐标
+  // 同步 groupPoints / scroll 变化时重绘浮层坐标（useLayoutEffect 确保与子组件 Grid 同帧对齐）
   const layoutKey = `${groupPoints?.length ?? 0}:${visualActiveTasks.length}:${columnDefs.length}:${collapsedWorkIds.size}`;
-  useEffect(() => {
+  useLayoutEffect(() => {
     void layoutKey;
-    const raf = requestAnimationFrame(() => setLayoutTick((t) => t + 1));
-    return () => cancelAnimationFrame(raf);
+    setLayoutTick((t) => t + 1);
   }, [layoutKey]);
+
+  // 转发作品横幅 / 底部新增行等浮层上的滚轮事件到 Grid，避免光标停在浮层上时无法继续上下滚动
+  useEffect(() => {
+    const host = canvasHostRef.current;
+    if (!host) return;
+    const onOverlayWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-t-grid-container]')) return;
+      if (target.closest('textarea, [role="dialog"], [data-radix-popper-content-wrapper]')) return;
+
+      let [dx, dy] = [e.deltaX, e.deltaY];
+      if (dx === 0 && e.shiftKey) {
+        [dy, dx] = [0, dy];
+      }
+      if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+        dy *= 36;
+      } else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+        dy *= Math.max(100, host.clientHeight - 34);
+      }
+      if (dx === 0 && dy === 0) return;
+      e.preventDefault();
+      gridRef.current?.scrollBy(dx, dy);
+    };
+    host.addEventListener('wheel', onOverlayWheel, { passive: false });
+    return () => {
+      host.removeEventListener('wheel', onOverlayWheel);
+    };
+  }, []);
 
   const moveSelectionAfterEdit = useCallback(
     (colIndex: number, rowIndex: number, dir?: 'down' | 'right' | 'left') => {
@@ -2128,6 +2129,56 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
       null
     );
   }, [layoutTick, stageQuickPopover]);
+
+  // 响应深链定位打开指定工序资源浮层（自动滚动该单元格入视口并锚定弹出）
+  const lastHandledStageReqNonceRef = useRef(0);
+  const onSelectCellRef = useRef(onSelectCell);
+  onSelectCellRef.current = onSelectCell;
+  const onConsumeStageReqRef = useRef(onConsumeStageResourcesRequest);
+  onConsumeStageReqRef.current = onConsumeStageResourcesRequest;
+
+  useEffect(() => {
+    if (!openStageResourcesRequest) return;
+    if (openStageResourcesRequest.nonce === lastHandledStageReqNonceRef.current) return;
+    const colIndex = columnDefs.findIndex((c) => c.id === openStageResourcesRequest.stageColumnId);
+    const rowIndex = visualActiveTasks.findIndex((t) => t.id === openStageResourcesRequest.taskId);
+    if (colIndex === -1 || rowIndex === -1) return;
+
+    const col = columnDefs[colIndex];
+    const task = visualActiveTasks[rowIndex];
+    if (!col || !task) return;
+
+    lastHandledStageReqNonceRef.current = openStageResourcesRequest.nonce;
+    setActivePopover(null);
+    setActiveTextEdit(null);
+    gridRef.current?.scrollToItem([colIndex, rowIndex]);
+    gridRef.current?.setActiveCell([colIndex, rowIndex]);
+    setStageQuickPopover({
+      taskId: task.id,
+      taskTitle: task.title,
+      workName: task.workId ? (workMap.get(task.workId)?.name ?? null) : null,
+      stageColumnId: col.id,
+      stageColumnName: col.name,
+      colIndex,
+      rowIndex,
+    });
+    setLayoutTick((t) => t + 1);
+    onSelectCellRef.current(task.id, col.id);
+    onConsumeStageReqRef.current?.();
+  }, [openStageResourcesRequest, columnDefs, visualActiveTasks, workMap]);
+
+  // 弹出工序资源浮层后下一帧同步最新单元格锚点坐标（兼容刚滚动或初次挂载度量）
+  useEffect(() => {
+    if (!stageQuickPopover) return;
+    const raf = requestAnimationFrame(() => setLayoutTick((t) => t + 1));
+    return () => cancelAnimationFrame(raf);
+  }, [stageQuickPopover]);
+
+  useEffect(() => {
+    if (!stageQuickPopover || stageQuickPopoverBounds) return;
+    const raf = requestAnimationFrame(() => setLayoutTick((t) => t + 1));
+    return () => cancelAnimationFrame(raf);
+  }, [stageQuickPopover, stageQuickPopoverBounds]);
 
   const buildCreateRowPayload = (
     text: string,
@@ -2697,6 +2748,15 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             onRequestAttachFile={(art) => setQuickAttachFileTarget(art)}
             onRequestPreview={(p) => setQuickPreviewTarget(p)}
             onOpenTaskDetail={(tid) => onOpenDetail(tid, { focusFiles: true })}
+            onShare={
+              onShareTask
+                ? () => {
+                    const task = visualActiveTasks.find((t) => t.id === stageQuickPopover.taskId);
+                    const col = columns.find((c) => c.id === stageQuickPopover.stageColumnId);
+                    if (task) onShareTask(task, col ?? null);
+                  }
+                : undefined
+            }
           />
         )}
 
@@ -3070,6 +3130,40 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
             <PanelRightOpen className="h-3.5 w-3.5 text-zinc-400" />
             展开任务详情
           </button>
+          {onShareTask && (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="context-menu-share-task"
+                onClick={() => {
+                  const t = rowContextMenu.task;
+                  setRowContextMenu(null);
+                  onShareTask(t, null);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+              >
+                <Share2 className="h-3.5 w-3.5 text-zinc-400" />
+                {isFreeTable ? '复制行分享链接' : '分享任务进度'}
+              </button>
+              {rowContextMenu.col?.kind === 'stage' && rowContextMenu.col.columnConfig && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-testid="context-menu-share-stage"
+                  onClick={() => {
+                    const { task: t, col } = rowContextMenu;
+                    setRowContextMenu(null);
+                    onShareTask(t, col?.columnConfig ?? null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+                >
+                  <Share2 className="h-3.5 w-3.5 text-zinc-400" />
+                  分享「{rowContextMenu.col.name}」工序
+                </button>
+              )}
+            </>
+          )}
           <button
             type="button"
             role="menuitem"

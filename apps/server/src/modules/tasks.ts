@@ -13,6 +13,7 @@ import {
   reorderTaskBodySchema,
   type StageCell,
   type TaskDetail,
+  type TaskLocateResponse,
   type Work,
 } from '@nw/shared';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
@@ -1035,6 +1036,69 @@ export function registerTaskRoutes(app: FastifyInstance, deps: { db: Db; bus: Ev
       );
 
       return result;
+    },
+  );
+
+  // GET /api/tasks/:taskId/locate?stageId=<uuid>（无状态分享短链定位）
+  app.get<{ Params: { taskId: string }; Querystring: { stageId?: string } }>(
+    '/api/tasks/:taskId/locate',
+    { config: { access: 'authenticated' } },
+    async (request) => {
+      const auth = request.auth!;
+      const taskId = parseUuidParam(request.params.taskId);
+      const rawStageId = request.query.stageId?.trim() || null;
+
+      const [task] = await db
+        .select({
+          id: schema.tasks.id,
+          worksheetId: schema.tasks.worksheetId,
+        })
+        .from(schema.tasks)
+        .where(
+          and(
+            eq(schema.tasks.projectId, auth.projectId),
+            eq(schema.tasks.id, taskId),
+            isNull(schema.tasks.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!task) throw notFound();
+
+      const ws = await findActiveWorksheet(db, auth.projectId, task.worksheetId);
+      if (!ws) throw notFound();
+
+      let stageColumnId: string | null = null;
+      let stageExists = false;
+      if (rawStageId) {
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (UUID_RE.test(rawStageId)) {
+          stageColumnId = rawStageId.toLowerCase();
+          const [col] = await db
+            .select({ id: schema.columnConfigs.id })
+            .from(schema.columnConfigs)
+            .where(
+              and(
+                eq(schema.columnConfigs.projectId, auth.projectId),
+                eq(schema.columnConfigs.worksheetId, task.worksheetId),
+                eq(schema.columnConfigs.id, stageColumnId),
+                eq(schema.columnConfigs.type, 'stage'),
+                isNull(schema.columnConfigs.deletedAt),
+              ),
+            )
+            .limit(1);
+          stageExists = Boolean(col);
+        }
+      }
+
+      const res: TaskLocateResponse = {
+        taskId: task.id,
+        worksheetId: task.worksheetId,
+        worksheetKind: ws.kind,
+        worksheetPlacement: ws.placement,
+        stageColumnId,
+        stageExists,
+      };
+      return res;
     },
   );
 }

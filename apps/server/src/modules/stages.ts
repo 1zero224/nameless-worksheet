@@ -1,11 +1,13 @@
 import {
   type Assignee,
   makeDefaultStageCell,
+  normalizeText,
   patchStageCellBodySchema,
   STAGE_STATUS_LABELS,
+  type StageAssigneeStatsResponse,
   type StageCell,
 } from '@nw/shared';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { type Db, schema, type Tx } from '../db/index.js';
 import { withTx } from '../db/tx.js';
@@ -73,6 +75,77 @@ async function findLastStageActorName(
 
 export function registerStageRoutes(app: FastifyInstance, deps: { db: Db; bus: EventBus }): void {
   const { db, bus } = deps;
+
+  // GET /api/stages/assignee-stats
+  app.get(
+    '/api/stages/assignee-stats',
+    { config: { access: 'authenticated' } },
+    async (request): Promise<StageAssigneeStatsResponse> => {
+      const auth = request.auth!;
+
+      const rows = await db
+        .select({
+          columnName: schema.columnConfigs.name,
+          assignees: schema.stageCells.assignees,
+        })
+        .from(schema.stageCells)
+        .innerJoin(
+          schema.columnConfigs,
+          and(
+            eq(schema.stageCells.columnId, schema.columnConfigs.id),
+            eq(schema.columnConfigs.projectId, auth.projectId),
+            eq(schema.columnConfigs.type, 'stage'),
+            isNull(schema.columnConfigs.deletedAt),
+          ),
+        )
+        .innerJoin(
+          schema.tasks,
+          and(
+            eq(schema.stageCells.taskId, schema.tasks.id),
+            eq(schema.tasks.projectId, auth.projectId),
+            isNull(schema.tasks.deletedAt),
+          ),
+        )
+        .innerJoin(
+          schema.worksheets,
+          and(
+            eq(schema.stageCells.worksheetId, schema.worksheets.id),
+            eq(schema.worksheets.projectId, auth.projectId),
+            isNull(schema.worksheets.deletedAt),
+          ),
+        )
+        .where(
+          and(
+            eq(schema.stageCells.projectId, auth.projectId),
+            ne(schema.stageCells.status, 'na'),
+            sql`jsonb_array_length(${schema.stageCells.assignees}) > 0`,
+          ),
+        );
+
+      const byStageName: StageAssigneeStatsResponse['byStageName'] = {};
+      for (const row of rows) {
+        const stageName = normalizeText(row.columnName);
+        if (!stageName) continue;
+        let bucket = byStageName[stageName];
+        if (!bucket) {
+          bucket = { users: {}, texts: {} };
+          byStageName[stageName] = bucket;
+        }
+        for (const a of row.assignees ?? []) {
+          if (a.type === 'user') {
+            bucket.users[a.userId] = (bucket.users[a.userId] ?? 0) + 1;
+          } else {
+            const name = normalizeText(a.name);
+            if (name) {
+              bucket.texts[name] = (bucket.texts[name] ?? 0) + 1;
+            }
+          }
+        }
+      }
+
+      return { byStageName };
+    },
+  );
 
   // PATCH /api/tasks/:taskId/stages/:columnId
   app.patch<{ Params: { taskId: string; columnId: string } }>(

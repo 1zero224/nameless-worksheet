@@ -364,13 +364,22 @@ test.describe('阶段 2 端到端验收（V1–V14 + Teable Canvas 表格与作�
     await expect(pageA.getByTestId('view-tab-grid')).toHaveCount(0);
     await expect(pageA.getByTestId('view-tab-board')).toHaveCount(0);
 
-    // 点击 Canvas 第一道工序列（时轴）：锚定弹出 Radix StageCellEditor，选小爱 + 纯文本外援小王并设进行中
+    // 点击 Canvas 第一道工序列（时轴）：锚定弹出 Radix StageCellEditor，聚焦负责人输入框弹出频次菜单（当前用户置顶），选小爱 + 纯文本外援小王并设进行中
     await clickCanvasCell(pageA, task1Id, stage1ColId);
     const stagePopover = pageA.getByTestId('stage-cell-popover');
     await expect(stagePopover).toBeVisible();
+    await expect(stagePopover.getByTestId('stage-assignee-menu')).toHaveCount(0);
     await stagePopover.getByRole('button', { name: '进行中', exact: true }).click();
-    await stagePopover.getByRole('button', { name: USER_A_NAME, exact: true }).click();
-    await stagePopover.getByPlaceholder('输入纯文本名字（如外援小王）').fill('外援小王');
+    const assigneeInput = stagePopover.getByTestId('stage-assignee-input');
+    await assigneeInput.click();
+    const assigneeMenu = stagePopover.getByTestId('stage-assignee-menu');
+    await expect(assigneeMenu).toBeVisible();
+    await expect(assigneeMenu.locator('button').first()).toHaveAttribute(
+      'data-assignee-label',
+      USER_A_NAME,
+    );
+    await assigneeMenu.getByRole('button', { name: USER_A_NAME, exact: true }).click();
+    await assigneeInput.fill('外援小王');
     await stagePopover.getByRole('button', { name: '添加', exact: true }).click();
     await stagePopover.getByRole('button', { name: '保存', exact: true }).click();
     const stageCell1 = pageA.getByTestId(`cell-${task1Id}-${stage1ColId}`);

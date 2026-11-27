@@ -19,7 +19,6 @@ import {
 } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Check,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -28,6 +27,7 @@ import {
   MapPin,
   Paperclip,
   Plus,
+  Share2,
   StickyNote,
   Trash2,
   X,
@@ -43,6 +43,7 @@ import {
   buildScopeTags,
   type ScopeTagItem,
 } from '@/components/artifact/utils.js';
+import { buildStagesFromTaskDetail, copyTaskOrStageShare } from '@/components/task/share-utils.js';
 import { PRIORITY_DOT_STYLES, STAGE_STATUS_STYLES } from '@/components/ui/colors.js';
 import {
   Popover,
@@ -53,12 +54,14 @@ import {
 } from '@/components/ui/overlays.js';
 import { Button, cn, Input, Label } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
+import { StageAssigneeInput } from '@/components/worksheet/StageAssigneeInput.js';
 
 export function TaskDetailDrawer({
   worksheetId,
   taskId,
   open,
   focusFiles = false,
+  focusStageColumnId = null,
   onClose,
   showLocateButton = true,
 }: {
@@ -66,6 +69,7 @@ export function TaskDetailDrawer({
   taskId: string | null;
   open: boolean;
   focusFiles?: boolean;
+  focusStageColumnId?: string | null;
   onClose: () => void;
   showLocateButton?: boolean;
 }) {
@@ -73,6 +77,7 @@ export function TaskDetailDrawer({
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
   const [logsExpanded, setLogsExpanded] = useState(false);
+  const [highlightedStageId, setHighlightedStageId] = useState<string | null>(null);
   const [createArtConfig, setCreateArtConfig] = useState<{
     scope: ArtifactScope;
     scopeLabel: string;
@@ -110,13 +115,32 @@ export function TaskDetailDrawer({
   });
 
   useEffect(() => {
-    if (open && focusFiles && filesSectionRef.current) {
+    if (!open) {
+      setHighlightedStageId(null);
+      return;
+    }
+    if (focusStageColumnId && wsData) {
+      let clearTimer: ReturnType<typeof setTimeout> | null = null;
+      const raf = requestAnimationFrame(() => {
+        const el = document.querySelector(
+          `[data-testid="drawer-stage-files-${focusStageColumnId}"]`,
+        );
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedStageId(focusStageColumnId);
+        clearTimer = setTimeout(() => setHighlightedStageId(null), 2400);
+      });
+      return () => {
+        cancelAnimationFrame(raf);
+        if (clearTimer) clearTimeout(clearTimer);
+      };
+    }
+    if (focusFiles && filesSectionRef.current) {
       const raf = requestAnimationFrame(() => {
         filesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
       return () => cancelAnimationFrame(raf);
     }
-  }, [open, focusFiles]);
+  }, [open, focusFiles, focusStageColumnId, wsData]);
 
   const task = wsData?.tasks.find((t) => t.id === taskId) ?? null;
   const currentWork =
@@ -157,6 +181,7 @@ export function TaskDetailDrawer({
     void queryClient.invalidateQueries({ queryKey: queryKeys.board });
     void queryClient.invalidateQueries({ queryKey: queryKeys.myTasks });
     void queryClient.invalidateQueries({ queryKey: queryKeys.worksheets });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.stageAssigneeStats });
   };
 
   const patchTaskMutation = useMutation({
@@ -229,6 +254,26 @@ export function TaskDetailDrawer({
   const customCols = wsData?.columns.filter((c) => c.type !== 'stage') ?? [];
   const isFreeTable = wsData?.worksheet.kind === 'free';
 
+  const handleShare = async (focusStageCol?: { id: string; name: string } | null) => {
+    if (!task || !wsData) return;
+    const stages = buildStagesFromTaskDetail(task, wsData.columns, wsData.artifactSummary).map(
+      (s) => {
+        const loadedCount = taskArtifactsData?.stageArtifacts[s.columnId]?.length;
+        return typeof loadedCount === 'number' ? { ...s, artifactCount: loadedCount } : s;
+      },
+    );
+    const { ok, message } = await copyTaskOrStageShare({
+      taskId: task.id,
+      taskTitle: task.title,
+      workName: currentWork?.name ?? null,
+      stages,
+      userMap,
+      focusStageColumnId: focusStageCol?.id ?? null,
+      focusStageName: focusStageCol?.name ?? null,
+    });
+    pushToast({ message, variant: ok ? 'success' : 'error' });
+  };
+
   return (
     <Sheet
       open={open}
@@ -237,19 +282,33 @@ export function TaskDetailDrawer({
       }}
       title="任务详情"
       headerActions={
-        showLocateButton && worksheetId && taskId ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              onClose();
-              navigate(`/worksheets/${worksheetId}?taskId=${taskId}`);
-            }}
-          >
-            <MapPin className="mr-1 h-3.5 w-3.5" />
-            在工作表中定位
-          </Button>
+        task && wsData ? (
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              data-testid="drawer-share-task-btn"
+              onClick={() => void handleShare(null)}
+            >
+              <Share2 className="mr-1 h-3.5 w-3.5" />
+              分享
+            </Button>
+            {showLocateButton && worksheetId && taskId && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  onClose();
+                  navigate(`/worksheets/${worksheetId}?taskId=${taskId}`);
+                }}
+              >
+                <MapPin className="mr-1 h-3.5 w-3.5" />
+                在工作表中定位
+              </Button>
+            )}
+          </div>
         ) : undefined
       }
     >
@@ -534,8 +593,10 @@ export function TaskDetailDrawer({
                         columnName={col.name}
                         cell={cell}
                         artifacts={stageList}
+                        highlighted={highlightedStageId === col.id}
                         users={users}
                         userMap={userMap}
+                        onShare={() => void handleShare({ id: col.id, name: col.name })}
                         onSave={(next) =>
                           patchStageMutation.mutate({
                             columnId: col.id,
@@ -727,8 +788,10 @@ function DetailStageCard({
   columnName,
   cell,
   artifacts,
+  highlighted = false,
   users,
   userMap,
+  onShare,
   onSave,
   onAddArtifact,
 }: {
@@ -736,13 +799,14 @@ function DetailStageCard({
   columnName: string;
   cell: StageCell;
   artifacts: ArtifactDetail[];
+  highlighted?: boolean;
   users: UserListItem[];
   userMap: Map<string, string>;
+  onShare: () => void;
   onSave: (next: { assignees?: Assignee[]; status?: StageStatus; note?: string }) => void;
   onAddArtifact: () => void;
 }) {
   const [note, setNote] = useState(cell.note);
-  const [textName, setTextName] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
@@ -751,21 +815,27 @@ function DetailStageCard({
 
   const statusStyle = STAGE_STATUS_STYLES[cell.status];
 
-  const toggleUser = (userId: string) => {
-    const exists = cell.assignees.some((a) => a.type === 'user' && a.userId === userId);
+  const toggleAssignee = (target: Assignee) => {
+    const exists =
+      target.type === 'user'
+        ? cell.assignees.some((a) => a.type === 'user' && a.userId === target.userId)
+        : cell.assignees.some((a) => a.type === 'text' && a.name === target.name);
     const next = exists
-      ? cell.assignees.filter((a) => !(a.type === 'user' && a.userId === userId))
-      : [...cell.assignees, { type: 'user' as const, userId }];
+      ? target.type === 'user'
+        ? cell.assignees.filter((a) => !(a.type === 'user' && a.userId === target.userId))
+        : cell.assignees.filter((a) => !(a.type === 'text' && a.name === target.name))
+      : [...cell.assignees, target];
     onSave({ assignees: next });
   };
 
-  const addTextAssignee = () => {
-    const name = textName.trim();
-    if (!name) return;
-    if (!cell.assignees.some((a) => a.type === 'text' && a.name === name)) {
-      onSave({ assignees: [...cell.assignees, { type: 'text', name }] });
+  const addAssignee = (target: Assignee) => {
+    const exists =
+      target.type === 'user'
+        ? cell.assignees.some((a) => a.type === 'user' && a.userId === target.userId)
+        : cell.assignees.some((a) => a.type === 'text' && a.name === target.name);
+    if (!exists) {
+      onSave({ assignees: [...cell.assignees, target] });
     }
-    setTextName('');
   };
 
   const removeAssignee = (idx: number) => {
@@ -776,7 +846,10 @@ function DetailStageCard({
   return (
     <div
       data-testid={`drawer-stage-files-${columnId}`}
-      className="overflow-hidden rounded-lg border border-black/[0.08] bg-white"
+      className={cn(
+        'overflow-hidden rounded-lg border border-black/[0.08] bg-white transition-shadow duration-300',
+        highlighted && 'ring-2 ring-zinc-900/30',
+      )}
     >
       {/* 上半部（纯白）：工序分工层 — 工序名 + 负责人 + 状态 + 备注 */}
       <div className="space-y-2 p-2.5">
@@ -817,78 +890,45 @@ function DetailStageCard({
                   {cell.assignees.length === 0 && <span>负责人</span>}
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="start" sideOffset={6} className="w-64 space-y-2.5 p-2.5">
-                <div>
-                  <div className="mb-1.5 text-[11px] font-medium text-zinc-500">选择项目用户</div>
-                  <div className="flex max-h-28 flex-wrap gap-1 overflow-y-auto">
-                    {users.map((u) => {
-                      const checked = cell.assignees.some(
-                        (a) => a.type === 'user' && a.userId === u.id,
-                      );
-                      return (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => toggleUser(u.id)}
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors cursor-pointer',
-                            checked
-                              ? 'border-zinc-900 bg-zinc-900 text-white'
-                              : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
-                          )}
-                        >
-                          {checked && <Check className="h-3 w-3" />}
-                          {u.displayName}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="border-t border-black/[0.06] pt-2">
-                  <div className="mb-1 text-[11px] font-medium text-zinc-500">纯文本负责人</div>
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      value={textName}
-                      onChange={(e) => setTextName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addTextAssignee();
-                        }
-                      }}
-                      placeholder="输入名字回车添加"
-                      className="h-7 min-w-0 flex-1 py-1 text-xs"
-                      maxLength={32}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="h-7 shrink-0 whitespace-nowrap px-2.5 text-xs"
-                      onClick={addTextAssignee}
-                    >
-                      添加
-                    </Button>
-                  </div>
-                </div>
+              <PopoverContent align="start" sideOffset={6} className="w-72 p-2.5">
+                <StageAssigneeInput
+                  columnName={columnName}
+                  assignees={cell.assignees}
+                  users={users}
+                  onToggleAssignee={toggleAssignee}
+                  onAddAssignee={addAssignee}
+                  showCheckIcon
+                />
               </PopoverContent>
             </Popover>
           </div>
 
-          <SelectField
-            aria-label={`${columnName} 状态`}
-            variant="pill"
-            size="sm"
-            align="end"
-            value={cell.status}
-            onValueChange={(val) => onSave({ status: val as StageStatus })}
-            className={statusStyle.cell}
-            options={STAGE_STATUSES.map((s) => ({
-              value: s,
-              label: STAGE_STATUS_LABELS[s],
-              dotClass: STAGE_STATUS_STYLES[s].dot,
-            }))}
-          />
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              data-testid={`drawer-share-stage-${columnId}`}
+              aria-label={`分享 ${columnName} 工序`}
+              title={`复制「${columnName}」工序进度与资源卡片链接`}
+              onClick={onShare}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+            </button>
+            <SelectField
+              aria-label={`${columnName} 状态`}
+              variant="pill"
+              size="sm"
+              align="end"
+              value={cell.status}
+              onValueChange={(val) => onSave({ status: val as StageStatus })}
+              className={statusStyle.cell}
+              options={STAGE_STATUSES.map((s) => ({
+                value: s,
+                label: STAGE_STATUS_LABELS[s],
+                dotClass: STAGE_STATUS_STYLES[s].dot,
+              }))}
+            />
+          </div>
         </div>
 
         {/* 轻量带语义标签的工序备注 */}

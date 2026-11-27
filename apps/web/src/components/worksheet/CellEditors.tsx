@@ -37,6 +37,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/overlays.js';
 import { Button, cn, Input } from '@/components/ui/primitives.js';
 import { SelectField } from '@/components/ui/select.js';
+import { StageAssigneeInput } from '@/components/worksheet/StageAssigneeInput.js';
 
 export interface ActiveCellConflict {
   actorDisplayName: string;
@@ -918,7 +919,6 @@ export function StageCellEditor({
   const [status, setStatus] = useState<StageStatus>(cell.status);
   const [note, setNote] = useState(cell.note);
   const [baseRevision, setBaseRevision] = useState(cell.revision);
-  const [textInput, setTextInput] = useState('');
   const [localConflict, setLocalConflict] = useState<StageCellConflict | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -932,7 +932,6 @@ export function StageCellEditor({
       setStatus(cell.status);
       setNote(cell.note);
       setBaseRevision(cell.revision);
-      setTextInput('');
       setLocalConflict(null);
       setErr(null);
       onClearConflict();
@@ -951,23 +950,29 @@ export function StageCellEditor({
     openPopover(true);
   });
 
-  const toggleUser = (userId: string) => {
-    setAssignees((prev) =>
-      prev.some((a) => a.type === 'user' && a.userId === userId)
-        ? prev.filter((a) => !(a.type === 'user' && a.userId === userId))
-        : [...prev, { type: 'user', userId }],
-    );
+  const toggleAssignee = (target: Assignee) => {
+    setAssignees((prev) => {
+      const exists =
+        target.type === 'user'
+          ? prev.some((a) => a.type === 'user' && a.userId === target.userId)
+          : prev.some((a) => a.type === 'text' && a.name === target.name);
+      if (exists) {
+        return target.type === 'user'
+          ? prev.filter((a) => !(a.type === 'user' && a.userId === target.userId))
+          : prev.filter((a) => !(a.type === 'text' && a.name === target.name));
+      }
+      return [...prev, target];
+    });
   };
 
-  const addTextAssignee = () => {
-    const trimmed = textInput.trim();
-    if (!trimmed) return;
-    setAssignees((prev) =>
-      prev.some((a) => a.type === 'text' && a.name === trimmed)
-        ? prev
-        : [...prev, { type: 'text', name: trimmed }],
-    );
-    setTextInput('');
+  const addAssignee = (target: Assignee) => {
+    setAssignees((prev) => {
+      const exists =
+        target.type === 'user'
+          ? prev.some((a) => a.type === 'user' && a.userId === target.userId)
+          : prev.some((a) => a.type === 'text' && a.name === target.name);
+      return exists ? prev : [...prev, target];
+    });
   };
 
   const handleSave = async (force: boolean) => {
@@ -1186,50 +1191,14 @@ export function StageCellEditor({
           </div>
         </div>
 
-        {/* 项目用户多选 */}
-        <div>
-          <div className="mb-1 text-xs text-slate-500">选择项目用户</div>
-          <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
-            {users.map((u) => {
-              const active = assignees.some((a) => a.type === 'user' && a.userId === u.id);
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => toggleUser(u.id)}
-                  className={cn(
-                    'rounded-full border px-2 py-0.5 text-xs cursor-pointer',
-                    active
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
-                  )}
-                >
-                  {u.displayName}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 纯文本负责人 */}
-        <div className="flex gap-1.5">
-          <Input
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                addTextAssignee();
-              }
-            }}
-            placeholder="输入纯文本名字（如外援小王）"
-            className="h-7 text-xs"
-            maxLength={32}
-          />
-          <Button type="button" size="sm" variant="secondary" onClick={addTextAssignee}>
-            添加
-          </Button>
-        </div>
+        {/* 负责人输入与聚焦弹出频次菜单 */}
+        <StageAssigneeInput
+          columnName={columnName}
+          assignees={assignees}
+          users={users}
+          onToggleAssignee={toggleAssignee}
+          onAddAssignee={addAssignee}
+        />
 
         {/* 工序备注 */}
         <div>

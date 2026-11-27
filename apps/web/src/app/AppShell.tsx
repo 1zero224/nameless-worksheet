@@ -257,12 +257,15 @@ export function AppShell() {
       } else if (ev.type === 'artifact.changed') {
         void queryClient.invalidateQueries({ queryKey: queryKeys.docsAll });
         void queryClient.invalidateQueries({ queryKey: queryKeys.docsChangeLogs });
+      } else if (ev.type === 'board.task_changed') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.stageAssigneeStats });
       }
     },
     onResync: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.worksheets });
       void queryClient.invalidateQueries({ queryKey: queryKeys.boardColumns });
       void queryClient.invalidateQueries({ queryKey: queryKeys.users });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stageAssigneeStats });
     },
   });
 

@@ -372,4 +372,220 @@ describe('阶段 2 T4：任务、排序、工序格、冲突检测、并发认�
     expect(delLogAfter.canRestore).toBe(false);
     expect(delLogAfter.wasRestored).toBe(true);
   });
+
+  it('任务短链定位接口 GET /api/tasks/:taskId/locate 校验鉴权、跨项目隔离与工序存在性', async () => {
+    const createWs = await env.app.inject({
+      method: 'POST',
+      url: '/api/worksheets',
+      headers: headers(projectA.admin.cookie),
+      payload: { name: '分享定位表', color: 'sky', template: 'standard_video' },
+    });
+    expect(createWs.statusCode).toBe(201);
+    const { worksheet, columns } = createWs.json() as {
+      worksheet: { id: string };
+      columns: Array<{ id: string; name: string; type: string }>;
+    };
+    const timingCol = columns.find((c) => c.name === '时轴');
+    const transCol = columns.find((c) => c.name === '翻译');
+    expect(timingCol && transCol).toBeTruthy();
+
+    const task = (
+      await env.app.inject({
+        method: 'POST',
+        url: `/api/worksheets/${worksheet.id}/tasks`,
+        headers: headers(projectA.user.cookie),
+        payload: { title: '短链定位任务', workName: '短链作品' },
+      })
+    ).json() as { id: string };
+
+    // 未登录 -> 401
+    const unauth = await env.app.inject({
+      method: 'GET',
+      url: `/api/tasks/${task.id}/locate`,
+    });
+    expect(unauth.statusCode).toBe(401);
+
+    // 跨项目 -> 404
+    const cross = await env.app.inject({
+      method: 'GET',
+      url: `/api/tasks/${task.id}/locate?stageId=${timingCol!.id}`,
+      headers: headers(projectB.admin.cookie, false),
+    });
+    expect(cross.statusCode).toBe(404);
+
+    // 正常任务级定位
+    const locTask = await env.app.inject({
+      method: 'GET',
+      url: `/api/tasks/${task.id}/locate`,
+      headers: headers(projectA.user.cookie, false),
+    });
+    expect(locTask.statusCode).toBe(200);
+    expect(locTask.json()).toEqual({
+      taskId: task.id,
+      worksheetId: worksheet.id,
+      worksheetKind: 'task',
+      worksheetPlacement: 'topbar',
+      stageColumnId: null,
+      stageExists: false,
+    });
+
+    // 正常工序级定位
+    const locStage = await env.app.inject({
+      method: 'GET',
+      url: `/api/tasks/${task.id}/locate?stageId=${timingCol!.id}`,
+      headers: headers(projectA.user.cookie, false),
+    });
+    expect(locStage.statusCode).toBe(200);
+    expect(locStage.json()).toEqual({
+      taskId: task.id,
+      worksheetId: worksheet.id,
+      worksheetKind: 'task',
+      worksheetPlacement: 'topbar',
+      stageColumnId: timingCol!.id,
+      stageExists: true,
+    });
+
+    // 软删工序列后 stageExists 为 false
+    const delCol = await env.app.inject({
+      method: 'DELETE',
+      url: `/api/worksheets/${worksheet.id}/columns/${transCol!.id}`,
+      headers: headers(projectA.admin.cookie),
+    });
+    expect(delCol.statusCode).toBe(204);
+
+    const locDeletedStage = await env.app.inject({
+      method: 'GET',
+      url: `/api/tasks/${task.id}/locate?stageId=${transCol!.id}`,
+      headers: headers(projectA.user.cookie, false),
+    });
+    expect(locDeletedStage.statusCode).toBe(200);
+    expect(locDeletedStage.json().stageExists).toBe(false);
+
+    // 软删任务后返回 404
+    await env.app.inject({
+      method: 'DELETE',
+      url: `/api/tasks/${task.id}`,
+      headers: headers(projectA.admin.cookie),
+    });
+    const locDeletedTask = await env.app.inject({
+      method: 'GET',
+      url: `/api/tasks/${task.id}/locate`,
+      headers: headers(projectA.user.cookie, false),
+    });
+    expect(locDeletedTask.statusCode).toBe(404);
+  });
+
+  it('GET /api/stages/assignee-stats 按工序名跨工作表统计负责人频次并排除已删除任务与不适用格', async () => {
+    const ws1Data = (
+      await env.app.inject({
+        method: 'POST',
+        url: '/api/worksheets',
+        headers: headers(projectA.admin.cookie),
+        payload: { name: '频次统计表1', color: 'sky', template: 'standard_video' },
+      })
+    ).json<{ worksheet: { id: string }; columns: Array<{ id: string; name: string }> }>();
+    const ws2Data = (
+      await env.app.inject({
+        method: 'POST',
+        url: '/api/worksheets',
+        headers: headers(projectA.admin.cookie),
+        payload: { name: '频次统计表2', color: 'emerald', template: 'standard_video' },
+      })
+    ).json<{ worksheet: { id: string }; columns: Array<{ id: string; name: string }> }>();
+
+    const ws1 = ws1Data.worksheet;
+    const ws2 = ws2Data.worksheet;
+    const timing1 = ws1Data.columns.find((c) => c.name === '时轴')!.id;
+    const timing2 = ws2Data.columns.find((c) => c.name === '时轴')!.id;
+    const trans1 = ws1Data.columns.find((c) => c.name === '翻译')!.id;
+
+    const createTask = async (worksheetId: string, title: string) =>
+      (
+        await env.app.inject({
+          method: 'POST',
+          url: `/api/worksheets/${worksheetId}/tasks`,
+          headers: headers(projectA.user.cookie),
+          payload: { title },
+        })
+      ).json<{ id: string }>();
+
+    const t1 = await createTask(ws1.id, '统计任务1');
+    const t2 = await createTask(ws2.id, '统计任务2');
+    const t3 = await createTask(ws1.id, '已删统计任务');
+
+    // 表1 时轴：user + 频次测试外援
+    await env.app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${t1.id}/stages/${timing1}`,
+      headers: headers(projectA.user.cookie),
+      payload: {
+        assignees: [
+          { type: 'user', userId: projectA.user.id },
+          { type: 'text', name: '频次测试外援' },
+        ],
+        status: 'in_progress',
+        baseRevision: 0,
+      },
+    });
+
+    // 表2 时轴：user + admin
+    await env.app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${t2.id}/stages/${timing2}`,
+      headers: headers(projectA.user.cookie),
+      payload: {
+        assignees: [
+          { type: 'user', userId: projectA.user.id },
+          { type: 'user', userId: projectA.admin.id },
+        ],
+        status: 'done',
+        baseRevision: 0,
+      },
+    });
+
+    // 表1 翻译：标记为 na 不应计入频次
+    await env.app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${t1.id}/stages/${trans1}`,
+      headers: headers(projectA.user.cookie),
+      payload: {
+        assignees: [{ type: 'user', userId: projectA.admin.id }],
+        status: 'na',
+        baseRevision: 0,
+      },
+    });
+
+    // 已删除任务的工序不应计入频次
+    await env.app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${t3.id}/stages/${timing1}`,
+      headers: headers(projectA.user.cookie),
+      payload: {
+        assignees: [{ type: 'text', name: '已删外援' }],
+        status: 'in_progress',
+        baseRevision: 0,
+      },
+    });
+    await env.app.inject({
+      method: 'DELETE',
+      url: `/api/tasks/${t3.id}`,
+      headers: headers(projectA.user.cookie),
+    });
+
+    const statsRes = await env.app.inject({
+      method: 'GET',
+      url: '/api/stages/assignee-stats',
+      headers: headers(projectA.user.cookie, false),
+    });
+    expect(statsRes.statusCode).toBe(200);
+    const body = statsRes.json<{
+      byStageName: Record<string, { users: Record<string, number>; texts: Record<string, number> }>;
+    }>();
+
+    expect(body.byStageName['时轴']?.users[projectA.user.id]).toBeGreaterThanOrEqual(2);
+    expect(body.byStageName['时轴']?.users[projectA.admin.id]).toBeGreaterThanOrEqual(1);
+    expect(body.byStageName['时轴']?.texts['频次测试外援']).toBe(1);
+    expect(body.byStageName['时轴']?.texts['已删外援']).toBeUndefined();
+    expect(body.byStageName['翻译']?.users[projectA.admin.id]).toBeUndefined();
+  });
 });

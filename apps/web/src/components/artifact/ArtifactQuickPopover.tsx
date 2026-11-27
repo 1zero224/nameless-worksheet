@@ -5,7 +5,7 @@ import type {
   WorkArtifactsResponse,
 } from '@nw/shared';
 import { useQuery } from '@tanstack/react-query';
-import { MoreHorizontal, PanelRightOpen, Plus, Upload, X } from 'lucide-react';
+import { MoreHorizontal, PanelRightOpen, Plus, Share2, Upload, X } from 'lucide-react';
 import { apiFetch } from '@/api/client.js';
 import { queryKeys } from '@/api/keys.js';
 import { LocationActionRow, sortVersionLocations } from '@/components/artifact/ArtifactCardList.js';
@@ -62,6 +62,7 @@ export function ArtifactQuickPopoverContent({
   onRequestAttachFile,
   onRequestPreview,
   onOpenTaskDetail,
+  onShare,
 }: {
   target: QuickPopoverTarget;
   onClose: () => void;
@@ -71,6 +72,7 @@ export function ArtifactQuickPopoverContent({
   onRequestAttachFile?: (artifact: ArtifactDetail) => void;
   onRequestPreview?: (preview: FilePreviewTarget) => void;
   onOpenTaskDetail?: (taskId: string) => void;
+  onShare?: () => void;
 }) {
   const workQuery = useQuery<WorkArtifactsResponse>({
     queryKey:
@@ -161,6 +163,18 @@ export function ArtifactQuickPopoverContent({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {target.kind === 'stage' && onShare && (
+            <button
+              type="button"
+              data-testid="quick-popover-share-btn"
+              aria-label={`分享 ${target.stageColumnName} 工序`}
+              title="复制本工序进度与资源卡片直达链接"
+              onClick={onShare}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             type="button"
             data-testid="quick-popover-add-btn"
@@ -331,6 +345,7 @@ export function AnchoredArtifactQuickPopover({
   onRequestAttachFile,
   onRequestPreview,
   onOpenTaskDetail,
+  onShare,
 }: {
   anchorRect: { x: number; y: number; width: number; height: number };
   target: QuickPopoverTarget;
@@ -341,6 +356,7 @@ export function AnchoredArtifactQuickPopover({
   onRequestAttachFile?: (artifact: ArtifactDetail) => void;
   onRequestPreview?: (preview: FilePreviewTarget) => void;
   onOpenTaskDetail?: (taskId: string) => void;
+  onShare?: () => void;
 }) {
   return (
     <Popover
@@ -375,6 +391,7 @@ export function AnchoredArtifactQuickPopover({
           onRequestAttachFile={onRequestAttachFile}
           onRequestPreview={onRequestPreview}
           onOpenTaskDetail={onOpenTaskDetail}
+          onShare={onShare}
         />
       </PopoverContent>
     </Popover>

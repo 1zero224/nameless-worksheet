@@ -6,5 +6,7 @@ export * from './fields.js';
 export * from './permissions.js';
 export * from './realtime.js';
 export * from './share-parser.js';
+export * from './stage-assignees.js';
+export * from './task-share.js';
 export * from './upload.js';
 export * from './worksheet.js';

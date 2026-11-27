@@ -1,5 +1,5 @@
 import { type BoardCard, type BoardColumn, PRIORITY_LABELS, STAGE_STATUS_LABELS } from '@nw/shared';
-import { ChevronDown, Folder, Hand, Minimize2, PanelLeftOpen } from 'lucide-react';
+import { ChevronDown, Folder, Hand, Minimize2, PanelLeftOpen, Share2 } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import {
   type MouseEvent as ReactMouseEvent,
@@ -137,6 +137,7 @@ export interface KanbanBoardProps {
   showWorksheetSource?: boolean;
   onClaim: (taskId: string, columnId: string, stageName: string) => void | Promise<void>;
   onOpenDetail: (target: { worksheetId: string; taskId: string }) => void;
+  onShareCard?: (card: BoardCard) => void;
 }
 
 export function KanbanBoard({
@@ -149,6 +150,7 @@ export function KanbanBoard({
   showWorksheetSource = true,
   onClaim,
   onOpenDetail,
+  onShareCard,
 }: KanbanBoardProps) {
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -642,6 +644,21 @@ export function KanbanBoard({
                                     {renderStageStatusRow(card, stateStyle, mine)}
 
                                     <div className="flex shrink-0 items-center gap-0.5">
+                                      {onShareCard && (
+                                        <button
+                                          type="button"
+                                          data-testid={`card-share-btn-${card.taskId}-${card.stageColumnId}`}
+                                          aria-label={`分享任务 ${card.taskTitle}`}
+                                          title="复制任务进度与直达链接"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onShareCard(card);
+                                          }}
+                                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+                                        >
+                                          <Share2 className="h-3.5 w-3.5" strokeWidth={1.85} />
+                                        </button>
+                                      )}
                                       <TaskResourcesPopover
                                         taskId={card.taskId}
                                         taskTitle={card.taskTitle}
@@ -857,6 +874,24 @@ export function KanbanBoard({
                                                   {renderStageStatusRow(card, stateStyle, mine)}
 
                                                   <div className="pointer-events-auto flex shrink-0 items-center gap-0.5">
+                                                    {onShareCard && (
+                                                      <button
+                                                        type="button"
+                                                        data-testid={`card-share-btn-${card.taskId}-${card.stageColumnId}`}
+                                                        aria-label={`分享任务 ${card.taskTitle}`}
+                                                        title="复制任务进度与直达链接"
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          onShareCard(card);
+                                                        }}
+                                                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+                                                      >
+                                                        <Share2
+                                                          className="h-3.5 w-3.5"
+                                                          strokeWidth={1.85}
+                                                        />
+                                                      </button>
+                                                    )}
                                                     <TaskResourcesPopover
                                                       taskId={card.taskId}
                                                       taskTitle={card.taskTitle}

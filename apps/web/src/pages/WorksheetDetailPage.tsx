@@ -1,6 +1,7 @@
 import {
   type Assignee,
   type ColumnChangedPayload,
+  type ColumnConfig,
   getEffectiveStageCell,
   type PresencePeer,
   type Priority,
@@ -37,6 +38,7 @@ import { queryKeys } from '@/api/keys.js';
 import { TopBarRightSlot } from '@/app/AppShell.js';
 import { useMe } from '@/app/AuthContext.js';
 import { KeywordSearchInput } from '@/components/search/KeywordSearchInput.js';
+import { buildStagesFromTaskDetail, copyTaskOrStageShare } from '@/components/task/share-utils.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import { peerColorForUser } from '@/components/ui/colors.js';
 import { ConfirmDialog, ModalDialog, useToast } from '@/components/ui/overlays.js';
@@ -103,6 +105,12 @@ export function WorksheetDetailPage({
   const [cellHistoryScope, setCellHistoryScope] = useState<CellChangeLogScope | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [detailFocusFiles, setDetailFocusFiles] = useState(false);
+  const [detailFocusStageId, setDetailFocusStageId] = useState<string | null>(null);
+  const [stageResourcesRequest, setStageResourcesRequest] = useState<{
+    taskId: string;
+    stageColumnId: string;
+    nonce: number;
+  } | null>(null);
   const [publishedExpanded, setPublishedExpanded] = useState(false);
   const [shelvedExpanded, setShelvedExpanded] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
@@ -420,10 +428,37 @@ export function WorksheetDetailPage({
   const workMap = useMemo(() => new Map(allWorks.map((w) => [w.id, w])), [allWorks]);
 
   const locateTaskId = searchParams.get('taskId');
+  const locateStageId = searchParams.get('stageId');
+  const locateOpen = searchParams.get('open');
+  const locateStageMissing = searchParams.get('stageMissing') === '1';
+
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+    const timer = setTimeout(() => setHighlightedTaskId(null), 2200);
+    return () => clearTimeout(timer);
+  }, [highlightedTaskId]);
+
   useEffect(() => {
     if (!locateTaskId || !data) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('taskId');
+    nextParams.delete('stageId');
+    nextParams.delete('open');
+    nextParams.delete('stageMissing');
+
     const target = data.tasks.find((t) => t.id === locateTaskId);
-    if (!target) return;
+    if (!target) {
+      pushToast({ message: '该任务不存在或已被删除', variant: 'info' });
+      setSearchParams(nextParams, { replace: true });
+      return;
+    }
+
+    // 清除可能遮挡目标任务的筛选条件
+    setStatusChip('all');
+    setAssigneeFilter('');
+    setWorkFilter('');
+    setKeyword('');
+
     if (target.publishStatus === 'published') {
       setPublishedExpanded(true);
     } else if (target.publishStatus === 'shelved') {
@@ -438,15 +473,80 @@ export function WorksheetDetailPage({
         return next;
       });
     }
-    setDetailTaskId(target.id);
-    setHighlightedTaskId(target.id);
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete('taskId');
-    setSearchParams(nextParams, { replace: true });
 
-    const timer = setTimeout(() => setHighlightedTaskId(null), 2200);
-    return () => clearTimeout(timer);
-  }, [locateTaskId, data, searchParams, setSearchParams]);
+    setHighlightedTaskId(target.id);
+
+    if (locateStageMissing) {
+      pushToast({ message: '原工序列已被移除，已为你打开任务详情', variant: 'info' });
+      setDetailFocusStageId(null);
+      setDetailFocusFiles(true);
+      setDetailTaskId(target.id);
+    } else if (locateStageId && locateOpen === 'resources') {
+      const targetStageCol = data.columns.find((c) => c.id === locateStageId && c.type === 'stage');
+      const isDesktop = typeof window !== 'undefined' ? window.innerWidth >= 640 : true;
+      if (
+        isDesktop &&
+        data.worksheet.kind === 'task' &&
+        target.publishStatus === 'unpublished' &&
+        targetStageCol &&
+        !targetStageCol.hidden
+      ) {
+        setDetailTaskId(null);
+        setDetailFocusStageId(null);
+        setDetailFocusFiles(false);
+        setStageResourcesRequest({
+          taskId: target.id,
+          stageColumnId: targetStageCol.id,
+          nonce: Date.now(),
+        });
+      } else {
+        if (!targetStageCol) {
+          pushToast({ message: '原工序列已被移除，已为你打开任务详情', variant: 'info' });
+        }
+        setDetailFocusStageId(targetStageCol ? targetStageCol.id : null);
+        setDetailFocusFiles(!targetStageCol);
+        setDetailTaskId(target.id);
+      }
+    } else {
+      setDetailFocusStageId(null);
+      setDetailFocusFiles(false);
+      setDetailTaskId(target.id);
+    }
+
+    setSearchParams(nextParams, { replace: true });
+  }, [
+    locateTaskId,
+    locateStageId,
+    locateOpen,
+    locateStageMissing,
+    data,
+    searchParams,
+    setSearchParams,
+    pushToast,
+  ]);
+
+  const consumeStageResourcesRequest = useCallback(() => {
+    setStageResourcesRequest(null);
+  }, []);
+
+  const handleShareTask = useCallback(
+    async (task: TaskDetail, stageCol?: ColumnConfig | null) => {
+      if (!data) return;
+      const stages = buildStagesFromTaskDetail(task, data.columns, data.artifactSummary);
+      const workName = task.workId ? (workMap.get(task.workId)?.name ?? null) : null;
+      const { ok, message } = await copyTaskOrStageShare({
+        taskId: task.id,
+        taskTitle: task.title,
+        workName,
+        stages,
+        userMap,
+        focusStageColumnId: stageCol?.id ?? null,
+        focusStageName: stageCol?.name ?? null,
+      });
+      pushToast({ message, variant: ok ? 'success' : 'error' });
+    },
+    [data, workMap, userMap, pushToast],
+  );
 
   const setEditingFocus = useCallback(
     (taskId: string | null, columnKey: string | null, editing: boolean) => {
@@ -850,6 +950,7 @@ export function WorksheetDetailPage({
       );
       void queryClient.invalidateQueries({ queryKey: queryKeys.board });
       void queryClient.invalidateQueries({ queryKey: queryKeys.myTasks });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stageAssigneeStats });
     },
     [worksheetId, queryClient],
   );
@@ -1535,6 +1636,7 @@ export function WorksheetDetailPage({
           }
         }}
         onOpenDetail={(tid, opts) => {
+          setDetailFocusStageId(null);
           setDetailFocusFiles(Boolean(opts?.focusFiles));
           setDetailTaskId(tid);
         }}
@@ -1542,6 +1644,9 @@ export function WorksheetDetailPage({
           setCellHistoryScope(scope);
           setLogsOpen(true);
         }}
+        onShareTask={(t, stageCol) => void handleShareTask(t, stageCol)}
+        openStageResourcesRequest={stageResourcesRequest}
+        onConsumeStageResourcesRequest={consumeStageResourcesRequest}
         onClearTextConflict={clearTextConflict}
         onClearStageConflict={clearStageConflict}
         onAcceptRemoteField={acceptRemoteField}
@@ -1640,9 +1745,11 @@ export function WorksheetDetailPage({
         taskId={detailTaskId}
         open={Boolean(detailTaskId)}
         focusFiles={detailFocusFiles}
+        focusStageColumnId={detailFocusStageId}
         onClose={() => {
           setDetailTaskId(null);
           setDetailFocusFiles(false);
+          setDetailFocusStageId(null);
         }}
         showLocateButton={false}
       />

@@ -16,6 +16,7 @@ import { LoginPage } from '@/pages/LoginPage.js';
 import { PlaceholderPage } from '@/pages/PlaceholderPage.js';
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage.js';
 import { SettingsPage } from '@/pages/SettingsPage.js';
+import { TaskShortLinkPage } from '@/pages/TaskShortLinkPage.js';
 import { WorksheetDetailPage } from '@/pages/WorksheetDetailPage.js';
 import { WorksheetsPage } from '@/pages/WorksheetsPage.js';
 import { RealtimeClient } from '@/realtime/client.js';
@@ -69,6 +70,8 @@ function AppRoutes() {
             <Route path="/docs" element={<DocsPage />} />
             <Route path="/worksheets" element={<WorksheetsPage />} />
             <Route path="/worksheets/:id" element={<WorksheetDetailPage />} />
+            <Route path="/t/:taskCode" element={<TaskShortLinkPage />} />
+            <Route path="/t/:taskCode/:stageCode" element={<TaskShortLinkPage />} />
             <Route path="/settings" element={<SettingsPage />} />
 
             <Route

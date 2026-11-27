@@ -34,6 +34,7 @@ export interface BoardTaskInput {
   sortOrder: string;
   stageCells: Record<string, StageCell>;
   resourceCount?: number;
+  stageArtifactCounts?: Record<string, number>;
 }
 
 export interface BoardComputeInput {
@@ -160,8 +161,23 @@ export function computeBoardData(input: BoardComputeInput): {
       const cell = getEffectiveStageCell(task, col.id);
       if (cell.status === 'na') continue;
       applicable.push({ col, cell });
+    }
 
-      // 顺便统计首页“我的任务”进行中与已认领待开始
+    const stageProgress: BoardStageSummary[] = applicable.map(({ col, cell }) => {
+      const artCount = task.stageArtifactCounts?.[col.id] ?? 0;
+      return {
+        columnId: col.id,
+        name: col.name,
+        status: cell.status,
+        assignees: cell.assignees,
+        boardColumnId: col.boardColumnId,
+        ...(col.hidden ? { hidden: true } : {}),
+        ...(artCount > 0 ? { artifactCount: artCount } : {}),
+      };
+    });
+
+    // 顺便统计首页“我的任务”进行中与已认领待开始
+    for (const { col, cell } of applicable) {
       if (isUserAssigned(cell.assignees, input.currentUserId)) {
         if (cell.status === 'in_progress' || cell.status === 'not_started') {
           const item: MyTaskItem = {
@@ -182,6 +198,7 @@ export function computeBoardData(input: BoardComputeInput): {
             stageNote: cell.note,
             stageRevision: cell.revision,
             resourceCount: task.resourceCount ?? 0,
+            stageProgress,
           };
           if (cell.status === 'in_progress') {
             myInProgress.push(item);
@@ -209,13 +226,6 @@ export function computeBoardData(input: BoardComputeInput): {
     const missingStages = applicable
       .filter(({ cell }) => cell.status !== 'done' && cell.assignees.length === 0)
       .map(({ col }) => ({ columnId: col.id, name: col.name }));
-
-    const stageProgress: BoardStageSummary[] = applicable.map(({ col, cell }) => ({
-      columnId: col.id,
-      name: col.name,
-      status: cell.status,
-      boardColumnId: col.boardColumnId,
-    }));
 
     // 3. 收集满足条件 A (in_progress) 或条件 B (第一个 status !== done) 的上看板适用工序
     for (const item of boardMapped) {
@@ -306,9 +316,26 @@ export function computeMyTasks(input: Omit<BoardComputeInput, 'boardColumns'>): 
     const work = task.workId ? (workMap.get(task.workId) ?? null) : null;
     const published = isTaskPublished(task);
 
+    const applicable: Array<{ col: ColumnConfig; cell: StageCell }> = [];
     for (const col of wsStages) {
       const cell = getEffectiveStageCell(task, col.id);
       if (cell.status === 'na') continue;
+      applicable.push({ col, cell });
+    }
+    const stageProgress: BoardStageSummary[] = applicable.map(({ col, cell }) => {
+      const artCount = task.stageArtifactCounts?.[col.id] ?? 0;
+      return {
+        columnId: col.id,
+        name: col.name,
+        status: cell.status,
+        assignees: cell.assignees,
+        boardColumnId: col.boardColumnId,
+        ...(col.hidden ? { hidden: true } : {}),
+        ...(artCount > 0 ? { artifactCount: artCount } : {}),
+      };
+    });
+
+    for (const { col, cell } of applicable) {
       if (!isUserAssigned(cell.assignees, input.currentUserId)) continue;
 
       const item: MyTaskItem = {
@@ -329,6 +356,7 @@ export function computeMyTasks(input: Omit<BoardComputeInput, 'boardColumns'>): 
         stageNote: cell.note,
         stageRevision: cell.revision,
         resourceCount: task.resourceCount ?? 0,
+        stageProgress,
       };
 
       if (published || cell.status === 'done') {

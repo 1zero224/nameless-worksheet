@@ -293,7 +293,7 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
       interactionLayerRef.current?.setSelection(selection);
     },
     getRowOffset: (rowIndex: number) => {
-      const { scrollTop } = scrollState;
+      const { scrollTop } = latestScrollRef.current;
       const realRowIndex = real2RowIndex(rowIndex);
       return coordInstance.getRowOffset(realRowIndex) - scrollTop;
     },
@@ -301,9 +301,9 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
     scrollTo,
     scrollToItem,
     setActiveCell,
-    getScrollState: () => scrollState,
+    getScrollState: () => latestScrollRef.current,
     getCellIndicesAtPosition: (x: number, y: number): ICellItem | null => {
-      const { scrollLeft, scrollTop } = scrollState;
+      const { scrollLeft, scrollTop } = latestScrollRef.current;
 
       const rowIndex = coordInstance.getRowStartIndex(scrollTop + y);
       const columnIndex = coordInstance.getColumnStartIndex(scrollLeft + x);
@@ -330,7 +330,7 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
     getCellBounds: (cell: ICellItem) => {
       const [columnIndex, _rowIndex] = cell;
       const rowIndex = real2RowIndex(_rowIndex);
-      const { scrollLeft, scrollTop } = scrollState;
+      const { scrollLeft, scrollTop } = latestScrollRef.current;
 
       const columnOffsetX = coordInstance.getColumnRelativeOffset(columnIndex, scrollLeft);
       const columnWidth = coordInstance.getColumnWidth(columnIndex);
@@ -357,7 +357,7 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
       return interactionLayerRef.current?.isEditing();
     },
     getGroupHeadersLayout: () => {
-      const { scrollTop } = scrollState;
+      const { scrollTop } = latestScrollRef.current;
       const res: Array<{
         id: string;
         y: number;
@@ -381,7 +381,7 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
     },
     getLinearRowAt: (linearIndex: number) => getLinearRow(linearIndex),
     getColumnHeaderBounds: (colIndex: number) => {
-      const { scrollLeft } = scrollState;
+      const { scrollLeft } = latestScrollRef.current;
       const x = coordInstance.getColumnRelativeOffset(colIndex, scrollLeft);
       const colW = coordInstance.getColumnWidth(colIndex);
       if (x == null || colW == null) return null;
@@ -393,7 +393,7 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
       };
     },
     getContentBottomY: () => {
-      const { scrollTop } = scrollState;
+      const { scrollTop } = latestScrollRef.current;
       if (rowCount <= 0) return coordInstance.rowInitSize;
       return coordInstance.totalHeight - scrollTop;
     },
@@ -410,6 +410,22 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
   const [forceRenderFlag, setForceRenderFlag] = useState(uniqueId('grid_'));
   const [mouseState, setMouseState] = useState<IMouseState>(DEFAULT_MOUSE_STATE);
   const [scrollState, setScrollState] = useState<IScrollState>(DEFAULT_SCROLL_STATE);
+  // Keep imperative layout queries (e.g. group banners / overlays in parent) in sync
+  // within the same commit when InfiniteScroller fires onScrollChanged before child re-render.
+  const latestScrollRef = useRef<IScrollState>(scrollState);
+  latestScrollRef.current = scrollState;
+
+  const handleScrollChanged = useCallback(
+    (scrollLeft: number, scrollTop: number) => {
+      latestScrollRef.current = {
+        ...latestScrollRef.current,
+        scrollLeft,
+        scrollTop,
+      };
+      onScrollChanged?.(scrollLeft, scrollTop);
+    },
+    [onScrollChanged]
+  );
   // Plain state, not rAF state: leaving editing and moving the active cell must commit together,
   // otherwise the edited cell is painted for a frame in its expanded non-editing layout.
   const [activeCell, setActiveCell] = useState<ICellItem | null>(null);
@@ -868,7 +884,7 @@ const GridBase: ForwardRefRenderFunction<IGridRef, IGridProps> = (props, forward
         scrollEnable={scrollEnable}
         getLinearRow={getLinearRow}
         setScrollState={setScrollState}
-        onScrollChanged={onScrollChanged}
+        onScrollChanged={handleScrollChanged}
         onVisibleRegionChanged={onVisibleRegionChanged}
       />
 

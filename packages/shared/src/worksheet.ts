@@ -630,7 +630,19 @@ export interface BoardStageSummary {
   columnId: string;
   name: string;
   status: StageStatus;
+  assignees: Assignee[];
   boardColumnId: string | null;
+  hidden?: boolean;
+  artifactCount?: number;
+}
+
+export interface TaskLocateResponse {
+  taskId: string;
+  worksheetId: string;
+  worksheetKind: WorksheetKind;
+  worksheetPlacement: WorksheetPlacement;
+  stageColumnId: string | null;
+  stageExists: boolean;
 }
 
 export interface BoardCard {
@@ -673,6 +685,7 @@ export interface MyTaskItem {
   stageNote: string;
   stageRevision: number;
   resourceCount?: number;
+  stageProgress?: BoardStageSummary[];
 }
 
 export interface BoardResponse {

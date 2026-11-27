@@ -1,4 +1,4 @@
-import type { BoardResponse, MyTaskItem, StageStatus, UserListItem } from '@nw/shared';
+import type { BoardCard, BoardResponse, MyTaskItem, StageStatus, UserListItem } from '@nw/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Columns3, ListTodo, X } from 'lucide-react';
 import { LayoutGroup } from 'motion/react';
@@ -10,6 +10,10 @@ import { BoardColumnsModal } from '@/components/board/BoardColumnsModal.js';
 import { KanbanBoard } from '@/components/board/KanbanBoard.js';
 import { MyTasksListContent, MyTasksRail } from '@/components/board/MyTasksRail.js';
 import { KeywordSearchInput } from '@/components/search/KeywordSearchInput.js';
+import {
+  buildStagesFromBoardSummary,
+  copyTaskOrStageShare,
+} from '@/components/task/share-utils.js';
 import { TaskDetailDrawer } from '@/components/task/TaskDetailDrawer.js';
 import { Sheet, useToast } from '@/components/ui/overlays.js';
 import { cn } from '@/components/ui/primitives.js';
@@ -92,6 +96,41 @@ export function HomePage() {
 
   const userMap = useMemo(() => new Map(users.map((u) => [u.id, u.displayName])), [users]);
 
+  const handleShareBoardCard = useCallback(
+    async (card: BoardCard) => {
+      const stages = buildStagesFromBoardSummary(card.stageProgress);
+      const { ok, message } = await copyTaskOrStageShare({
+        taskId: card.taskId,
+        taskTitle: card.taskTitle,
+        workName: card.workName,
+        stages,
+        userMap,
+      });
+      pushToast({ message, variant: ok ? 'success' : 'error' });
+    },
+    [userMap, pushToast],
+  );
+
+  const handleShareMyTask = useCallback(
+    async (item: MyTaskItem, overrideStatus?: StageStatus) => {
+      const stages = buildStagesFromBoardSummary(
+        item.stageProgress,
+        overrideStatus ? { columnId: item.stageColumnId, status: overrideStatus } : undefined,
+      );
+      const { ok, message } = await copyTaskOrStageShare({
+        taskId: item.taskId,
+        taskTitle: item.taskTitle,
+        workName: item.workName,
+        stages,
+        userMap,
+        focusStageColumnId: item.stageColumnId,
+        focusStageName: item.stageColumnName,
+      });
+      pushToast({ message, variant: ok ? 'success' : 'error' });
+    },
+    [userMap, pushToast],
+  );
+
   const updateMyTaskStatusMutation = useMutation({
     mutationFn: ({ item, status }: { item: MyTaskItem; status: StageStatus }) => {
       setUpdatingMyTaskKey(`${item.taskId}:${item.stageColumnId}`);
@@ -101,10 +140,20 @@ export function HomePage() {
       });
     },
     onSuccess: (_data, variables) => {
-      pushToast({
-        message: variables.status === 'done' ? '已标记为已完成' : '已切换为进行中',
-        variant: 'success',
-      });
+      if (variables.status === 'done') {
+        pushToast({
+          message: '已标记为已完成',
+          variant: 'success',
+          actionLabel: '复制交接分享',
+          durationMs: 8000,
+          onAction: () => handleShareMyTask(variables.item, 'done'),
+        });
+      } else {
+        pushToast({
+          message: '已切换为进行中',
+          variant: 'success',
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: queryKeys.board });
     },
     onError: (err) => {
@@ -346,6 +395,7 @@ export function HomePage() {
               onStart={(item) => updateMyTaskStatusMutation.mutate({ item, status: 'in_progress' })}
               onComplete={(item) => updateMyTaskStatusMutation.mutate({ item, status: 'done' })}
               onOpenDetail={setDetailTarget}
+              onShare={(item) => void handleShareMyTask(item)}
             />
 
             <KanbanBoard
@@ -358,6 +408,7 @@ export function HomePage() {
               showWorksheetSource
               onClaim={handleClaim}
               onOpenDetail={setDetailTarget}
+              onShareCard={(card) => void handleShareBoardCard(card)}
             />
           </div>
         </LayoutGroup>
@@ -379,6 +430,7 @@ export function HomePage() {
             setMobileMyTasksOpen(false);
             setDetailTarget(target);
           }}
+          onShare={(item) => void handleShareMyTask(item)}
         />
       </Sheet>
 

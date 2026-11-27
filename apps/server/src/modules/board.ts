@@ -99,6 +99,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
         .select({
           workId: schema.artifacts.workId,
           taskId: schema.artifacts.taskId,
+          stageColumnId: schema.artifacts.stageColumnId,
         })
         .from(schema.artifacts)
         .where(
@@ -112,11 +113,20 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
 
     const workArtCount = new Map<string, number>();
     const taskArtCount = new Map<string, number>();
+    const stageArtCountsByTask = new Map<string, Record<string, number>>();
     for (const a of artifactRows) {
       if (a.workId !== null && a.taskId === null) {
         workArtCount.set(a.workId, (workArtCount.get(a.workId) ?? 0) + 1);
       } else if (a.taskId !== null) {
         taskArtCount.set(a.taskId, (taskArtCount.get(a.taskId) ?? 0) + 1);
+        if (a.stageColumnId !== null) {
+          let m = stageArtCountsByTask.get(a.taskId);
+          if (!m) {
+            m = {};
+            stageArtCountsByTask.set(a.taskId, m);
+          }
+          m[a.stageColumnId] = (m[a.stageColumnId] ?? 0) + 1;
+        }
       }
     }
     const countForTask = (taskId: string, workId: string | null) =>
@@ -150,6 +160,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
       sortOrder: t.sortOrder,
       stageCells: cellsByTask.get(t.id) ?? {},
       resourceCount: countForTask(t.id, t.workId),
+      stageArtifactCounts: stageArtCountsByTask.get(t.id),
     }));
 
     const computed = computeBoardData({
@@ -232,6 +243,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
         .select({
           workId: schema.artifacts.workId,
           taskId: schema.artifacts.taskId,
+          stageColumnId: schema.artifacts.stageColumnId,
         })
         .from(schema.artifacts)
         .where(
@@ -245,11 +257,20 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
 
     const workArtCount = new Map<string, number>();
     const taskArtCount = new Map<string, number>();
+    const stageArtCountsByTask = new Map<string, Record<string, number>>();
     for (const a of artifactRows) {
       if (a.workId !== null && a.taskId === null) {
         workArtCount.set(a.workId, (workArtCount.get(a.workId) ?? 0) + 1);
       } else if (a.taskId !== null) {
         taskArtCount.set(a.taskId, (taskArtCount.get(a.taskId) ?? 0) + 1);
+        if (a.stageColumnId !== null) {
+          let m = stageArtCountsByTask.get(a.taskId);
+          if (!m) {
+            m = {};
+            stageArtCountsByTask.set(a.taskId, m);
+          }
+          m[a.stageColumnId] = (m[a.stageColumnId] ?? 0) + 1;
+        }
       }
     }
     const countForTask = (taskId: string, workId: string | null) =>
@@ -278,6 +299,7 @@ export function registerBoardRoutes(app: FastifyInstance, deps: { db: Db }): voi
       sortOrder: t.sortOrder,
       stageCells: cellsByTask.get(t.id) ?? {},
       resourceCount: countForTask(t.id, t.workId),
+      stageArtifactCounts: stageArtCountsByTask.get(t.id),
     }));
 
     return computeMyTasks({
