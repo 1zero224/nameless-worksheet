@@ -2008,9 +2008,10 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
     const host = canvasHostRef.current;
     if (!host) return;
     const onOverlayWheel = (e: WheelEvent) => {
+      if (e.defaultPrevented) return;
       const target = e.target as HTMLElement | null;
       if (!target) return;
-      if (target.closest('[data-t-grid-container], [data-t-grid-scrollbar]')) return;
+      if (target.closest('[data-t-grid-scrollbar]')) return;
       if (target.closest('textarea, [role="dialog"], [data-radix-popper-content-wrapper]')) return;
 
       let [dx, dy] = [e.deltaX, e.deltaY];

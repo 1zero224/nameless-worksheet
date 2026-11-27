@@ -5,9 +5,9 @@ import type {
   RefObject,
   UIEvent,
 } from 'react';
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import type { IGridProps } from './Grid';
-import { getHorizontalRangeInfo, getVerticalRangeInfo, useEventListener } from './hooks';
+import { getHorizontalRangeInfo, getVerticalRangeInfo } from './hooks';
 import type { ILinearRow, IScrollState } from './interface';
 import type { CoordinateManager } from './managers';
 import type { ITimeoutID } from './utils';
@@ -243,10 +243,34 @@ const InfiniteScrollerBase: ForwardRefRenderFunction<ScrollerRef, ScrollerProps>
     return res;
   }, [scrollHeight]);
 
-  useEventListener('wheel', onWheel, containerRef.current, false);
-  useEventListener('touchstart', onTouchStart, containerRef.current, true);
-  useEventListener('touchmove', onTouchMove, containerRef.current, true);
-  useEventListener('touchend', onTouchEnd, containerRef.current, true);
+  const wheelHandlerRef = useRef(onWheel);
+  wheelHandlerRef.current = onWheel;
+  const touchStartRef = useRef(onTouchStart);
+  touchStartRef.current = onTouchStart;
+  const touchMoveRef = useRef(onTouchMove);
+  touchMoveRef.current = onTouchMove;
+  const touchEndRef = useRef(onTouchEnd);
+  touchEndRef.current = onTouchEnd;
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleWheel = (ev: WheelEvent) => wheelHandlerRef.current(ev);
+    const handleTouchStart = (ev: TouchEvent) => touchStartRef.current(ev);
+    const handleTouchMove = (ev: TouchEvent) => touchMoveRef.current(ev);
+    const handleTouchEnd = () => touchEndRef.current();
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    el.addEventListener('touchstart', handleTouchStart, { passive: true, capture: true });
+    el.addEventListener('touchmove', handleTouchMove, { passive: true, capture: true });
+    el.addEventListener('touchend', handleTouchEnd, { passive: true, capture: true });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+      el.removeEventListener('touchstart', handleTouchStart, { capture: true });
+      el.removeEventListener('touchmove', handleTouchMove, { capture: true });
+      el.removeEventListener('touchend', handleTouchEnd, { capture: true });
+    };
+  }, [containerRef]);
 
   return (
     <>
