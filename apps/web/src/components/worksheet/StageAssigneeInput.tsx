@@ -123,11 +123,6 @@ export function StageAssigneeInput({
           onMouseDown={(e) => e.preventDefault()}
           className="absolute right-0 left-0 top-full z-50 mt-1.5 rounded-lg border border-black/[0.1] bg-white p-2 shadow-[0_10px_28px_-8px_rgba(0,0,0,0.16),0_2px_6px_-2px_rgba(0,0,0,0.06)]"
         >
-          <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400">
-            <span>选择负责人</span>
-            <span className="truncate">按「{columnName}」频次排序</span>
-          </div>
-
           {options.length > 0 ? (
             <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
               {options.map((opt) => {
@@ -160,17 +155,6 @@ export function StageAssigneeInput({
                         className={cn('text-[10px]', active ? 'text-zinc-300' : 'text-zinc-400')}
                       >
                         我
-                      </span>
-                    )}
-                    {opt.count > 0 && (
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'text-[10px] tabular-nums',
-                          active ? 'text-zinc-300' : 'text-zinc-400',
-                        )}
-                      >
-                        {opt.count}
                       </span>
                     )}
                   </button>
