@@ -25,7 +25,7 @@ export function SelectTrigger({ className, children, ...props }: RadixSelect.Sel
     <RadixSelect.Trigger
       {...props}
       className={cn(
-        'group inline-flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-slate-200/90 bg-white px-3 text-left text-sm text-slate-800 shadow-2xs transition-all duration-150',
+        'group inline-flex w-full cursor-pointer items-center justify-between gap-2 rounded-[3px] border border-slate-200/90 bg-white px-3 text-left text-sm text-slate-800 transition-all duration-150',
         'hover:border-slate-300 hover:bg-slate-50/70',
         'focus-visible:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/10',
         'data-[state=open]:border-slate-400 data-[state=open]:bg-white data-[state=open]:ring-2 data-[state=open]:ring-slate-900/10',
@@ -59,7 +59,7 @@ export function SelectContent({
         collisionPadding={8}
         {...props}
         className={cn(
-          'relative z-[70] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-black/[0.08] bg-white text-zinc-800 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.06)]',
+          'relative z-[70] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[4px] border border-black/[0.08] bg-white text-zinc-800 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.06)]',
           'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-150',
           className,
         )}
@@ -99,7 +99,7 @@ export function SelectItem({ className, children, ...props }: RadixSelect.Select
     <RadixSelect.Item
       {...props}
       className={cn(
-        'relative flex w-full cursor-pointer select-none items-center rounded-lg py-1.5 pr-8 pl-2.5 text-sm text-slate-700 outline-none transition-colors duration-100',
+        'relative flex w-full cursor-pointer select-none items-center rounded-[2px] py-1.5 pr-8 pl-2.5 text-sm text-slate-700 outline-none transition-colors duration-100',
         'data-[highlighted]:bg-slate-100/90 data-[highlighted]:text-slate-950',
         'data-[state=checked]:font-medium data-[state=checked]:text-slate-950',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
@@ -139,7 +139,7 @@ export interface SelectFieldProps {
   disabled?: boolean;
   'aria-label'?: string;
   size?: 'xs' | 'sm' | 'md';
-  variant?: 'default' | 'pill';
+  variant?: 'default' | 'pill' | 'ghost';
   leadingIcon?: ReactNode;
   className?: string;
   contentClassName?: string;
@@ -168,13 +168,19 @@ export function SelectField({
   const sizeClass =
     variant === 'pill'
       ? size === 'xs'
-        ? 'h-6 rounded-full px-2.5 text-xs font-medium gap-1.5'
-        : 'h-7 rounded-full px-2.5 text-xs font-medium gap-1.5'
-      : size === 'xs'
-        ? 'h-7 rounded-md px-2.5 text-xs'
-        : size === 'sm'
-          ? 'h-8 rounded-lg px-2.5 text-xs'
-          : 'h-9 rounded-lg px-3 text-sm';
+        ? 'h-6 rounded-[3px] px-2 text-xs font-medium gap-1.5'
+        : 'h-7 rounded-[3px] px-2.5 text-xs font-medium gap-1.5'
+      : variant === 'ghost'
+        ? size === 'xs'
+          ? 'h-7 rounded-[2px] px-1.5 text-xs gap-1'
+          : size === 'sm'
+            ? 'h-8 rounded-[2px] px-2 text-xs gap-1.5'
+            : 'h-9 rounded-[2px] px-2.5 text-sm gap-1.5'
+        : size === 'xs'
+          ? 'h-7 rounded-[3px] px-2.5 text-xs'
+          : size === 'sm'
+            ? 'h-8 rounded-[3px] px-2.5 text-xs'
+            : 'h-9 rounded-[3px] px-3 text-sm';
 
   // 按 group 保序分组渲染（未设 group 的直接顺序输出）
   const hasGroups = options.some((opt) => Boolean(opt.group));
@@ -203,13 +209,18 @@ export function SelectField({
         id={id}
         aria-label={ariaLabel}
         className={cn(
-          'group inline-flex cursor-pointer items-center justify-between gap-2 border text-left transition-all duration-150 outline-none',
+          'group inline-flex cursor-pointer items-center justify-between gap-1.5 border text-left transition-all duration-150 outline-none',
           variant === 'pill'
-            ? 'w-auto border-transparent shadow-2xs hover:brightness-95 focus-visible:ring-2 focus-visible:ring-zinc-900/15 data-[state=open]:ring-2 data-[state=open]:ring-zinc-900/15 disabled:cursor-not-allowed disabled:opacity-60'
-            : cn(
-                !(className && /\bw-/.test(className)) && 'w-full',
-                'border-black/[0.1] bg-white text-zinc-800 hover:border-black/[0.18] hover:bg-black/[0.02] focus-visible:border-zinc-400 focus-visible:ring-2 focus-visible:ring-zinc-900/10 data-[state=open]:border-zinc-400 data-[state=open]:bg-white data-[state=open]:ring-2 data-[state=open]:ring-zinc-900/10 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 disabled:opacity-60',
-              ),
+            ? 'w-auto border-transparent hover:brightness-95 focus-visible:ring-2 focus-visible:ring-zinc-900/15 data-[state=open]:ring-2 data-[state=open]:ring-zinc-900/15 disabled:cursor-not-allowed disabled:opacity-60'
+            : variant === 'ghost'
+              ? cn(
+                  'w-auto border-transparent bg-transparent hover:bg-black/[0.04] hover:text-zinc-950 focus-visible:bg-black/[0.04] data-[state=open]:bg-black/[0.05] data-[state=open]:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-60',
+                  value ? 'font-medium text-zinc-950' : 'text-zinc-600',
+                )
+              : cn(
+                  !(className && /\bw-/.test(className)) && 'w-full',
+                  'border-black/[0.1] bg-white text-zinc-800 hover:border-black/[0.18] hover:bg-black/[0.02] focus-visible:border-zinc-400 focus-visible:ring-2 focus-visible:ring-zinc-900/10 data-[state=open]:border-zinc-400 data-[state=open]:bg-white data-[state=open]:ring-2 data-[state=open]:ring-zinc-900/10 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 disabled:opacity-60',
+                ),
           sizeClass,
           className,
         )}

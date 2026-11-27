@@ -39,7 +39,7 @@ function CompactArtifactBlock({
         {icon}
         <span className="truncate">{title}</span>
       </div>
-      <div className="divide-y divide-black/[0.06] rounded-lg bg-[#fafafa]/70 px-2">
+      <div className="divide-y divide-black/[0.06] bg-[#fafafa]/50 px-2">
         {artifacts.map((art) => {
           const latest = art.latestVersion;
           return (
@@ -49,7 +49,7 @@ function CompactArtifactBlock({
                   {art.name}
                 </span>
                 {latest && (
-                  <span className="shrink-0 rounded-full bg-zinc-900 px-1.5 py-0 text-[10px] font-medium text-white tabular-nums">
+                  <span className="shrink-0 font-mono text-[10.5px] font-semibold text-zinc-500 tabular-nums">
                     v{latest.versionNumber}
                   </span>
                 )}
@@ -132,7 +132,7 @@ export function TaskResourcesPopover({
             title={resourceCount > 0 ? `快速取用资源（${resourceCount}）` : '快速查看资源'}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              'inline-flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer',
+              'inline-flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-[2px] px-1 text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer',
               resourceCount > 0 && 'text-zinc-800',
               open && 'bg-black/[0.08] text-zinc-950',
               className,
@@ -164,7 +164,7 @@ export function TaskResourcesPopover({
               </div>
             </div>
             {stageColumnName && (
-              <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600">
+              <span className="shrink-0 text-[11px] font-medium text-zinc-500">
                 {stageColumnName}
               </span>
             )}

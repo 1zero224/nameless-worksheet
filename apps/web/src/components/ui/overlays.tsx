@@ -29,7 +29,7 @@ export function PopoverContent({
         collisionPadding={8}
         {...props}
         className={cn(
-          'z-[70] rounded-xl border border-black/[0.08] bg-white p-3 text-zinc-900 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.06)] outline-none',
+          'z-[70] rounded-[4px] border border-black/[0.08] bg-white p-3 text-zinc-900 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.06)] outline-none',
           'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1 duration-150',
           className,
         )}
@@ -61,7 +61,7 @@ export function DropdownMenuContent({
         collisionPadding={8}
         {...props}
         className={cn(
-          'z-[70] min-w-[160px] overflow-hidden rounded-xl border border-black/[0.08] bg-white p-1 text-zinc-800 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.06)] outline-none',
+          'z-[70] min-w-[160px] overflow-hidden rounded-[4px] border border-black/[0.08] bg-white p-1 text-zinc-800 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14),0_2px_8px_-2px_rgba(0,0,0,0.06)] outline-none',
           'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1 duration-150',
           className,
         )}
@@ -81,7 +81,7 @@ export function DropdownMenuItem({
     <RadixDropdown.Item
       {...props}
       className={cn(
-        'relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] outline-none transition-colors duration-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
+        'relative flex cursor-pointer select-none items-center gap-2 rounded-[2px] px-2.5 py-1.5 text-[13px] outline-none transition-colors duration-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
         variant === 'destructive'
           ? 'text-red-600 data-[highlighted]:bg-red-50 data-[highlighted]:text-red-700'
           : 'text-zinc-700 data-[highlighted]:bg-black/[0.04] data-[highlighted]:text-zinc-950',
@@ -100,7 +100,7 @@ export function DropdownMenuCheckboxItem({
     <RadixDropdown.CheckboxItem
       {...props}
       className={cn(
-        'relative flex cursor-pointer select-none items-center gap-2 rounded-lg py-1.5 pr-8 pl-2.5 text-[13px] text-zinc-700 outline-none transition-colors duration-100 data-[highlighted]:bg-black/[0.04] data-[highlighted]:text-zinc-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
+        'relative flex cursor-pointer select-none items-center gap-2 rounded-[2px] py-1.5 pr-8 pl-2.5 text-[13px] text-zinc-700 outline-none transition-colors duration-100 data-[highlighted]:bg-black/[0.04] data-[highlighted]:text-zinc-950 data-[disabled]:pointer-events-none data-[disabled]:opacity-45',
         className,
       )}
     >
@@ -161,7 +161,7 @@ export function ModalDialog({
         <RadixDialog.Overlay className="fixed inset-0 z-[90] bg-black/35 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-150" />
         <RadixDialog.Content
           className={cn(
-            'fixed top-1/2 left-1/2 z-[95] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/[0.08] bg-white p-5 shadow-xl outline-none max-h-[85vh] overflow-y-auto',
+            'fixed top-1/2 left-1/2 z-[95] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-[4px] border border-black/[0.08] bg-white p-5 shadow-xl outline-none max-h-[85vh] overflow-y-auto',
             'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:pointer-events-none data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-150',
             maxWidthClass,
           )}
@@ -179,7 +179,7 @@ export function ModalDialog({
             </div>
             <RadixDialog.Close
               aria-label="关闭"
-              className="rounded-md p-1 text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 cursor-pointer"
+              className="rounded-[2px] p-1 text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 cursor-pointer"
             >
               <X className="h-4 w-4" />
             </RadixDialog.Close>
@@ -278,7 +278,7 @@ export function Sheet({
               {headerActions}
               <RadixDialog.Close
                 aria-label="关闭侧栏"
-                className="rounded-md p-1 text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 cursor-pointer"
+                className="rounded-[2px] p-1 text-zinc-400 hover:bg-black/[0.04] hover:text-zinc-700 cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </RadixDialog.Close>
@@ -336,9 +336,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         toastOptions={{
           classNames: {
             toast:
-              'rounded-xl border border-black/[0.08] bg-white text-zinc-900 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.12)] text-[13px]',
+              'rounded-[4px] border border-black/[0.08] bg-white text-zinc-900 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.12)] text-[13px]',
             actionButton:
-              '!bg-zinc-900 !text-white !rounded-md !px-2.5 !py-1 !text-xs !font-medium hover:!bg-zinc-800',
+              '!bg-zinc-900 !text-white !rounded-[2px] !px-2.5 !py-1 !text-xs !font-medium hover:!bg-zinc-800',
           },
         }}
       />

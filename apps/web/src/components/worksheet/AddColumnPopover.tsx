@@ -130,7 +130,7 @@ export function AddColumnPopover({
             aria-label="新增列"
             title="新增列"
             data-testid="add-column-trigger"
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+            className="inline-flex h-7 items-center gap-1 rounded-[2px] px-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
             <span className="hidden sm:inline">新增列</span>

@@ -70,7 +70,7 @@ export function KeywordSearchInput({
 
   return (
     <div ref={containerRef} className={cn('relative', className)}>
-      <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+      <Search className="pointer-events-none absolute top-1/2 left-1 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
       <Input
         value={value}
         onFocus={() => setFocused(true)}
@@ -85,7 +85,7 @@ export function KeywordSearchInput({
         }}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="h-7 w-full pr-6 pl-7 text-xs"
+        className="h-7 w-full rounded-none border-0 border-b border-black/[0.12] bg-transparent pr-5 pl-6 text-xs focus:border-zinc-900 focus:ring-0"
       />
       {value && (
         <button
@@ -95,7 +95,7 @@ export function KeywordSearchInput({
             setFocused(false);
           }}
           aria-label="清空关键词"
-          className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-700 cursor-pointer"
+          className="absolute top-1/2 right-0.5 -translate-y-1/2 rounded-[2px] p-0.5 text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-700 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>
@@ -105,7 +105,7 @@ export function KeywordSearchInput({
         <div
           data-testid="global-search-dropdown"
           className={cn(
-            'absolute top-full z-[70] mt-1.5 w-[min(420px,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-black/[0.08] bg-white shadow-[0_12px_32px_-8px_rgba(0,0,0,0.16),0_2px_8px_-2px_rgba(0,0,0,0.06)]',
+            'absolute top-full z-[70] mt-1.5 w-[min(420px,calc(100vw-1.5rem))] overflow-hidden rounded-[4px] border border-black/[0.08] bg-white shadow-[0_12px_32px_-8px_rgba(0,0,0,0.16),0_2px_8px_-2px_rgba(0,0,0,0.06)]',
             align === 'right' ? 'right-0' : 'left-0',
           )}
         >

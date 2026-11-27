@@ -259,14 +259,14 @@ export function HomePage() {
           type="button"
           data-testid="mobile-my-tasks-trigger"
           onClick={() => setMobileMyTasksOpen(true)}
-          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.1] bg-white px-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-black/[0.04] cursor-pointer md:hidden"
+          className="inline-flex h-7 items-center gap-1.5 rounded-[2px] px-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-black/[0.04] cursor-pointer md:hidden"
         >
           <ListTodo className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.75} />
           <span>我的任务</span>
           <span
             className={cn(
-              'rounded-full px-1.5 py-0 text-[10px] font-medium tabular-nums',
-              myInProgress.length > 0 ? 'bg-amber-100 text-amber-900' : 'bg-zinc-100 text-zinc-600',
+              'text-[11px] font-semibold tabular-nums',
+              myInProgress.length > 0 ? 'text-amber-700' : 'text-zinc-500',
             )}
           >
             {myTotalCount}
@@ -284,12 +284,13 @@ export function HomePage() {
         <SelectField
           aria-label="按工作表筛选"
           size="xs"
+          variant="ghost"
           value={worksheetFilter}
           onValueChange={(val) => {
             setWorksheetFilter(val);
             setWorkFilter(null);
           }}
-          className="w-32 sm:w-36"
+          className="max-w-[144px]"
           options={[
             { value: '', label: '全部工作表' },
             ...(board?.worksheets ?? []).map((ws) => ({
@@ -302,6 +303,7 @@ export function HomePage() {
         <SelectField
           aria-label="按作品筛选"
           size="xs"
+          variant="ghost"
           value={workFilter ? `${workFilter.worksheetId}:${workFilter.workId}` : ''}
           onValueChange={(val) => {
             if (!val) {
@@ -311,7 +313,7 @@ export function HomePage() {
               if (wsId && wId) setWorkFilter({ worksheetId: wsId, workId: wId });
             }
           }}
-          className="w-32 sm:w-36"
+          className="max-w-[144px]"
           options={[
             { value: '', label: '全部作品' },
             ...availableWorks.map((w) => ({
@@ -321,17 +323,20 @@ export function HomePage() {
           ]}
         />
 
+        <span className="mx-0.5 hidden h-3.5 w-px bg-black/[0.08] sm:inline-block" />
+
         <button
           type="button"
           onClick={() => setOnlyMissing((v) => !v)}
           aria-pressed={onlyMissing}
           className={cn(
-            'inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium cursor-pointer transition-colors',
+            'inline-flex h-7 items-center gap-1.5 rounded-[2px] px-2 text-xs cursor-pointer transition-colors',
             onlyMissing
-              ? 'border-zinc-900 bg-zinc-900 text-white'
-              : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
+              ? 'bg-zinc-900/[0.07] font-semibold text-zinc-950'
+              : 'font-medium text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900',
           )}
         >
+          {onlyMissing && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}
           仅看空缺
         </button>
 
@@ -340,26 +345,27 @@ export function HomePage() {
           onClick={() => setOnlyMine((v) => !v)}
           aria-pressed={onlyMine}
           className={cn(
-            'inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-medium cursor-pointer transition-colors',
+            'inline-flex h-7 items-center gap-1.5 rounded-[2px] px-2 text-xs cursor-pointer transition-colors',
             onlyMine
-              ? 'border-zinc-900 bg-zinc-900 text-white'
-              : 'border-black/[0.1] bg-white text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-900',
+              ? 'bg-zinc-900/[0.07] font-semibold text-zinc-950'
+              : 'font-medium text-zinc-500 hover:bg-black/[0.04] hover:text-zinc-900',
           )}
         >
+          {onlyMine && <span className="h-1.5 w-1.5 rounded-full bg-zinc-900" />}
           仅看与我有关
         </button>
 
         {activeWorkObj && (
           <span
             data-testid="active-work-filter-chip"
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-black/[0.1] bg-zinc-100 px-2 text-xs font-medium text-zinc-800"
+            className="inline-flex h-7 items-center gap-1 rounded-[2px] bg-black/[0.04] px-2 text-xs font-medium text-zinc-800"
           >
             作品：{activeWorkObj.name}
             <button
               type="button"
               onClick={() => setWorkFilter(null)}
               aria-label="清除作品筛选"
-              className="rounded p-0.5 text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+              className="rounded-[2px] p-0.5 text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
             >
               <X className="h-3 w-3" />
             </button>
@@ -370,7 +376,7 @@ export function HomePage() {
           <button
             type="button"
             onClick={() => setBoardColsModalOpen(true)}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.1] bg-white px-2.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
+            className="inline-flex h-7 items-center gap-1.5 rounded-[2px] px-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
           >
             <Columns3 className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
             管理看板列

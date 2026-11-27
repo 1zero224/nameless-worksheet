@@ -187,17 +187,17 @@ export function FieldVisibilityPopover({
           type="button"
           data-testid="field-visibility-trigger"
           className={cn(
-            'inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors cursor-pointer',
+            'inline-flex h-7 items-center gap-1 rounded-[2px] px-1.5 text-xs font-medium transition-colors cursor-pointer',
             hiddenTotal > 0 || open
-              ? 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100/70'
-              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+              ? 'bg-sky-500/[0.08] text-sky-700 hover:bg-sky-500/[0.12]'
+              : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
           )}
         >
           <Columns3 className="h-3.5 w-3.5" />
           <span>字段显隐</span>
           {hiddenTotal > 0 && (
-            <span className="rounded-full bg-sky-600 px-1.5 py-0 text-[10px] text-white">
-              {hiddenTotal}
+            <span className="text-[11px] font-semibold text-sky-600 tabular-nums">
+              ({hiddenTotal})
             </span>
           )}
         </button>

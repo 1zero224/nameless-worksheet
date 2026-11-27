@@ -86,65 +86,79 @@ export function WorkAttachmentSlots({
   return (
     <div
       ref={containerRef}
-      className="flex shrink-0 items-center gap-1"
+      className="flex shrink-0 items-center gap-0.5"
       data-testid="work-attachment-slots"
       data-work-attachment-slots={workId}
     >
-      {visibleCapsules.map((cap) => {
+      {visibleCapsules.map((cap, idx) => {
         // 含 R2 文件的作品胶囊一律弹浮层防大文件误触下载；仅无 R2 且无提取码的单网盘胶囊直跳
         const directUrl = !cap.hasR2File && isSafeExternalUrl(cap.directUrl) ? cap.directUrl : null;
         if (directUrl) {
           return (
-            <a
-              key={cap.artifactId}
-              href={directUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid={`work-capsule-direct-${cap.artifactId}`}
-              onClick={(e) => e.stopPropagation()}
-              title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击直接打开链接`}
-              className="inline-flex h-6 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-zinc-700 ring-1 ring-black/[0.08] transition-colors hover:text-indigo-700 hover:ring-indigo-300"
-            >
-              {cap.directIsFolder ? (
-                <Folder className="h-3 w-3 shrink-0 text-amber-600" />
-              ) : (
-                <Link2 className="h-3 w-3 shrink-0 text-indigo-500" />
+            <span key={cap.artifactId} className="inline-flex items-center">
+              {idx > 0 && (
+                <span aria-hidden="true" className="mx-1 text-indigo-300/80">
+                  ·
+                </span>
               )}
-              <span className="max-w-[92px] truncate">{cap.name}</span>
-            </a>
+              <a
+                href={directUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid={`work-capsule-direct-${cap.artifactId}`}
+                onClick={(e) => e.stopPropagation()}
+                title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击直接打开链接`}
+                className="inline-flex h-6 items-center gap-1 rounded-[2px] px-1.5 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-indigo-950/[0.06] hover:text-indigo-800"
+              >
+                {cap.directIsFolder ? (
+                  <Folder className="h-3 w-3 shrink-0 text-amber-600" />
+                ) : (
+                  <Link2 className="h-3 w-3 shrink-0 text-indigo-500" />
+                )}
+                <span className="max-w-[96px] truncate">{cap.name}</span>
+              </a>
+            </span>
           );
         }
 
         const isActive = openTarget?.key === cap.artifactId;
         return (
-          <button
-            key={cap.artifactId}
-            type="button"
-            data-work-slot-trigger={cap.artifactId}
-            data-testid={`work-capsule-popover-${cap.artifactId}`}
-            aria-expanded={isActive}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleToggleSlot(cap.artifactId, e.currentTarget, cap.artifactId);
-            }}
-            title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击查看文件与多网盘`}
-            className={cn(
-              'inline-flex h-6 items-center gap-1 rounded-md bg-white px-2 text-[11px] font-medium text-zinc-700 ring-1 transition-colors hover:text-indigo-700 hover:ring-indigo-300 cursor-pointer',
-              isActive ? 'text-indigo-700 ring-indigo-400' : 'ring-black/[0.08]',
+          <span key={cap.artifactId} className="inline-flex items-center">
+            {idx > 0 && (
+              <span aria-hidden="true" className="mx-1 text-indigo-300/80">
+                ·
+              </span>
             )}
-          >
-            {cap.hasR2File ? (
-              <FileDown className="h-3 w-3 shrink-0 text-emerald-600" />
-            ) : cap.hasExtractCode ? (
-              <KeyRound className="h-3 w-3 shrink-0 text-amber-600" />
-            ) : (
-              <Link2 className="h-3 w-3 shrink-0 text-indigo-500" />
-            )}
-            <span className="max-w-[92px] truncate">{cap.name}</span>
-            {cap.locationCount > 1 && (
-              <span className="text-[10px] text-zinc-400 tabular-nums">{cap.locationCount}</span>
-            )}
-          </button>
+            <button
+              type="button"
+              data-work-slot-trigger={cap.artifactId}
+              data-testid={`work-capsule-popover-${cap.artifactId}`}
+              aria-expanded={isActive}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleSlot(cap.artifactId, e.currentTarget, cap.artifactId);
+              }}
+              title={`${cap.name}${cap.latestVersionNumber ? ` (v${cap.latestVersionNumber})` : ''} — 点击查看文件与多网盘`}
+              className={cn(
+                'inline-flex h-6 items-center gap-1 rounded-[2px] px-1.5 text-[11px] font-medium transition-colors cursor-pointer',
+                isActive
+                  ? 'bg-indigo-950/[0.08] text-indigo-900'
+                  : 'text-zinc-700 hover:bg-indigo-950/[0.06] hover:text-indigo-800',
+              )}
+            >
+              {cap.hasR2File ? (
+                <FileDown className="h-3 w-3 shrink-0 text-emerald-600" />
+              ) : cap.hasExtractCode ? (
+                <KeyRound className="h-3 w-3 shrink-0 text-amber-600" />
+              ) : (
+                <Link2 className="h-3 w-3 shrink-0 text-indigo-500" />
+              )}
+              <span className="max-w-[96px] truncate">{cap.name}</span>
+              {cap.locationCount > 1 && (
+                <span className="text-[10px] text-zinc-400 tabular-nums">{cap.locationCount}</span>
+              )}
+            </button>
+          </span>
         );
       })}
 
@@ -160,10 +174,10 @@ export function WorkAttachmentSlots({
           handleToggleSlot('manage', e.currentTarget);
         }}
         className={cn(
-          'inline-flex h-6 items-center gap-1 rounded-md border border-dashed bg-white/85 px-1.5 text-[11px] font-medium transition-colors hover:border-indigo-400 hover:bg-white hover:text-indigo-900 cursor-pointer',
+          'inline-flex h-6 items-center gap-1 rounded-[2px] px-1.5 text-[11px] font-medium transition-colors hover:bg-indigo-950/[0.06] hover:text-indigo-950 cursor-pointer',
           openTarget?.key === 'manage'
-            ? 'border-indigo-400 bg-white text-indigo-900'
-            : 'border-indigo-300/90 text-indigo-700/80',
+            ? 'bg-indigo-950/[0.08] text-indigo-950'
+            : 'text-indigo-700/80',
         )}
       >
         <Paperclip className="h-3 w-3" />
@@ -451,16 +465,16 @@ export function WorkBannerRow({
               </button>
             )}
 
-            {/* 进度统计胶囊 */}
+            {/* 进度统计（无框纯文本 + 极简细线进度条） */}
             <span
               data-testid={`work-progress-${work.id}`}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200/80"
+              className="inline-flex shrink-0 items-center gap-1.5 pl-1 text-[11px] font-medium text-slate-500"
             >
               {hasStages && taskCount > 0 && (
-                <span className="hidden h-1.5 w-10 overflow-hidden rounded-full bg-slate-200 sm:inline-block">
+                <span className="hidden h-[3px] w-10 overflow-hidden bg-slate-200/80 sm:inline-block">
                   <span
                     className={cn(
-                      'block h-full rounded-full transition-all',
+                      'block h-full transition-all',
                       progressPct === 100 ? 'bg-emerald-500' : 'bg-sky-500',
                     )}
                     style={{ width: `${progressPct}%` }}
@@ -478,18 +492,20 @@ export function WorkBannerRow({
           </div>
 
           {/* 右侧：作品共用附件槽位 + 添加分段 + 菜单 */}
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             <WorkAttachmentSlots
               worksheetId={work.worksheetId}
               workId={work.id}
               workName={work.name}
             />
 
+            <span aria-hidden="true" className="mx-0.5 h-3.5 w-px bg-slate-200" />
+
             <button
               type="button"
               onClick={onAddSegment}
               aria-label={`在 ${work.name} 下添加分段`}
-              className="inline-flex h-6 items-center gap-1 rounded-md border border-slate-200/90 bg-white px-2 text-[11px] font-medium text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50/70 hover:text-sky-800 cursor-pointer"
+              className="inline-flex h-6 items-center gap-1 rounded-[2px] px-1.5 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-200/60 hover:text-slate-950 cursor-pointer"
             >
               <Plus className="h-3 w-3" />
               <span>添加分段</span>

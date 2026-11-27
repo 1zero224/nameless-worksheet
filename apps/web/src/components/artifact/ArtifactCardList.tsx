@@ -113,8 +113,8 @@ export function LocationActionRow({
         data-testid={`location-row-${location.id}`}
         data-location-type="r2"
         className={cn(
-          'group/loc flex items-center justify-between gap-2 rounded-md transition-colors hover:bg-black/[0.035]',
-          compact ? 'px-1 py-0.5' : 'bg-[#fafafa] px-2 py-1.5 hover:bg-zinc-100/80',
+          'group/loc flex items-center justify-between gap-2 rounded-[2px] transition-colors hover:bg-black/[0.035]',
+          compact ? 'px-1 py-0.5' : 'px-1.5 py-1 hover:bg-zinc-100/70',
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs">
@@ -143,7 +143,7 @@ export function LocationActionRow({
             aria-label="下载文件"
             title={`下载 ${filename}`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950"
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[2px] px-1.5 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-black/[0.05] hover:text-zinc-950"
           >
             <Download className="h-3 w-3" />
             <span>下载</span>
@@ -159,7 +159,7 @@ export function LocationActionRow({
                 e.stopPropagation();
                 onPreview({ artifactName: artifact.name, versionNumber, location });
               }}
-              className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-black/[0.1] bg-white px-2 text-[11px] font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-950 cursor-pointer"
+              className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[2px] px-1.5 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-black/[0.05] hover:text-zinc-950 cursor-pointer"
             >
               <Eye className="h-3 w-3" />
               <span>{canInlinePreview ? '预览' : '详情'}</span>
@@ -224,8 +224,8 @@ export function LocationActionRow({
     <div
       data-testid={`location-row-${location.id}`}
       className={cn(
-        'group/loc flex items-center justify-between gap-2 rounded-md transition-colors hover:bg-black/[0.035]',
-        compact ? 'px-1 py-0.5' : 'bg-[#fafafa] px-2 py-1.5 hover:bg-zinc-100/80',
+        'group/loc flex items-center justify-between gap-2 rounded-[2px] transition-colors hover:bg-black/[0.035]',
+        compact ? 'px-1 py-0.5' : 'px-1.5 py-1 hover:bg-zinc-100/70',
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs">
@@ -269,10 +269,10 @@ export function LocationActionRow({
               void handleCopyCode();
             }}
             className={cn(
-              'inline-flex h-5 shrink-0 items-center gap-1 rounded px-1.5 font-mono text-[11px] transition-colors cursor-pointer',
+              'inline-flex h-5 shrink-0 items-center gap-1 rounded-[2px] px-1 font-mono text-[11px] transition-colors cursor-pointer',
               copiedCode
-                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200/80 hover:text-zinc-950',
+                ? 'text-emerald-700 bg-emerald-500/[0.08]'
+                : 'text-zinc-600 hover:bg-black/[0.05] hover:text-zinc-950',
             )}
           >
             {copiedCode ? (
@@ -503,9 +503,7 @@ export function ArtifactCardList({
       <div
         className={cn(
           'text-center text-xs text-zinc-400',
-          variant === 'list'
-            ? 'py-2'
-            : 'rounded-lg border border-dashed border-black/[0.1] bg-[#fafafa] px-3 py-4',
+          variant === 'list' ? 'py-2' : 'border-y border-black/[0.06] py-6',
         )}
       >
         {emptyText}
@@ -515,7 +513,11 @@ export function ArtifactCardList({
 
   return (
     <div
-      className={cn(variant === 'list' ? 'divide-y divide-black/[0.06]' : 'space-y-2.5')}
+      className={cn(
+        variant === 'list'
+          ? 'divide-y divide-black/[0.06]'
+          : 'divide-y divide-black/[0.07] border-y border-black/[0.08] bg-white',
+      )}
       data-testid="artifact-list"
     >
       {artifacts.map((art) => {
@@ -542,13 +544,13 @@ export function ArtifactCardList({
               'transition-all',
               variant === 'list'
                 ? 'py-1.5 first:pt-1 last:pb-0.5'
-                : cn('rounded-lg border border-black/[0.08] bg-white', compact ? 'p-2.5' : 'p-3.5'),
-              isHighlighted && 'ring-2 ring-zinc-900 bg-zinc-50/70 rounded-md',
+                : cn('bg-white', compact ? 'py-2.5' : 'py-3.5 px-1'),
+              isHighlighted && 'ring-2 ring-zinc-900 bg-zinc-50/70',
             )}
           >
-            {/* 头部：资源名优先 + 紧凑版本更新胶囊 + 精简操作 */}
+            {/* 头部：资源名优先 + 极简版本文字标识 + 精简操作 */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <span
                   className={cn(
                     'truncate',
@@ -561,10 +563,10 @@ export function ArtifactCardList({
                   {art.name}
                 </span>
                 {latest ? (
-                  <span className="inline-flex shrink-0 items-center overflow-hidden rounded-full bg-zinc-900 text-white">
+                  <span className="inline-flex shrink-0 items-center gap-1">
                     <span
                       data-testid={`artifact-latest-badge-${art.id}`}
-                      className="pl-1.5 pr-1 py-0.5 text-[10.5px] font-medium tabular-nums leading-none"
+                      className="font-mono text-[11px] font-semibold text-zinc-600 tabular-nums"
                     >
                       v{latest.versionNumber}
                     </span>
@@ -574,7 +576,7 @@ export function ArtifactCardList({
                       aria-label="更新版本"
                       title="更新版本"
                       onClick={() => setVersionArtifact(art)}
-                      className="group/ver inline-flex items-center gap-0.5 border-l border-white/20 px-1 py-0.5 text-[10.5px] font-medium leading-none text-white/90 transition-colors hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:outline-none cursor-pointer"
+                      className="group/ver inline-flex items-center gap-0.5 rounded-[2px] px-1 py-0.5 text-[10.5px] font-medium leading-none text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 focus-visible:outline-none cursor-pointer"
                     >
                       <Plus className="h-2.5 w-2.5 shrink-0" />
                       <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">
@@ -583,17 +585,15 @@ export function ArtifactCardList({
                     </button>
                   </span>
                 ) : (
-                  <span className="inline-flex shrink-0 items-center overflow-hidden rounded-full bg-zinc-100 text-zinc-600">
-                    <span className="pl-1.5 pr-1 py-0.5 text-[10.5px] font-medium leading-none">
-                      暂无版本
-                    </span>
+                  <span className="inline-flex shrink-0 items-center gap-1">
+                    <span className="text-[11px] text-zinc-400">暂无版本</span>
                     <button
                       type="button"
                       data-testid={`artifact-add-version-${art.id}`}
                       aria-label="更新版本"
                       title="更新版本"
                       onClick={() => setVersionArtifact(art)}
-                      className="group/ver inline-flex items-center gap-0.5 border-l border-black/10 px-1 py-0.5 text-[10.5px] font-medium leading-none text-zinc-700 transition-colors hover:bg-black/[0.06] hover:text-zinc-950 focus-visible:bg-black/[0.06] focus-visible:outline-none cursor-pointer"
+                      className="group/ver inline-flex items-center gap-0.5 rounded-[2px] px-1 py-0.5 text-[10.5px] font-medium leading-none text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-950 focus-visible:outline-none cursor-pointer"
                     >
                       <Plus className="h-2.5 w-2.5 shrink-0" />
                       <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">

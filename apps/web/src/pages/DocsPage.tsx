@@ -143,10 +143,10 @@ export function DocsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white" data-testid="docs-page">
-      {/* 顶部紧凑切换栏：在线表格 Tabs + 公共文件 + 新建表格 */}
+      {/* 顶部紧凑切换栏：极简纯文字 + 底部指示条（去圆角卡片与虚线框） */}
       <div
         data-testid="docs-tabs-bar"
-        className="flex h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-black/[0.08] bg-[#fafafa] px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-black/[0.08] bg-[#fafafa]/60 px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {docsSheets.map((ws) => {
           const isActive = activeSheetId === ws.id;
@@ -155,18 +155,28 @@ export function DocsPage() {
               key={ws.id}
               data-testid={`docs-sheet-tab-${ws.id}`}
               className={cn(
-                'group inline-flex shrink-0 items-center rounded-md border transition-colors',
-                isActive
-                  ? 'border-black/[0.12] bg-white text-zinc-950 shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                  : 'border-transparent text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
+                'group relative inline-flex h-10 shrink-0 items-center transition-colors',
+                isActive ? 'text-zinc-950' : 'text-zinc-500 hover:text-zinc-950',
               )}
             >
+              {isActive && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-1.5 bottom-0 left-1.5 h-[2px] bg-zinc-900"
+                />
+              )}
               <button
                 type="button"
                 onClick={() => selectSheetTab(ws.id)}
-                className="inline-flex h-7 items-center gap-1.5 pl-2.5 pr-1.5 text-xs font-medium whitespace-nowrap cursor-pointer"
+                className={cn(
+                  'inline-flex h-full items-center gap-1.5 pl-2 pr-1 text-xs whitespace-nowrap cursor-pointer',
+                  isActive ? 'font-semibold' : 'font-medium',
+                )}
               >
-                <Table2 className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
+                <Table2
+                  className={cn('h-3.5 w-3.5', isActive ? 'text-zinc-900' : 'text-zinc-400')}
+                  strokeWidth={1.75}
+                />
                 <span className="max-w-[160px] truncate">{ws.name}</span>
               </button>
               <DropdownMenu>
@@ -175,7 +185,7 @@ export function DocsPage() {
                     type="button"
                     aria-label={`更多操作 ${ws.name}`}
                     className={cn(
-                      'mr-1 flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-opacity hover:bg-black/[0.06] hover:text-zinc-800 cursor-pointer',
+                      'mr-0.5 flex h-5 w-5 items-center justify-center rounded-[2px] text-zinc-400 transition-opacity hover:bg-black/[0.06] hover:text-zinc-800 cursor-pointer',
                       isActive ? 'opacity-100' : 'opacity-60 group-hover:opacity-100',
                     )}
                   >
@@ -203,24 +213,36 @@ export function DocsPage() {
           data-testid="docs-files-tab"
           onClick={selectFilesTab}
           className={cn(
-            'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer',
+            'relative inline-flex h-10 shrink-0 items-center gap-1.5 px-2.5 text-xs whitespace-nowrap transition-colors cursor-pointer',
             activeMode === 'files'
-              ? 'border-black/[0.12] bg-white text-zinc-950 shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-              : 'border-transparent text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
+              ? 'font-semibold text-zinc-950'
+              : 'font-medium text-zinc-500 hover:text-zinc-950',
           )}
         >
-          <FileText className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.75} />
+          {activeMode === 'files' && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute right-1.5 bottom-0 left-1.5 h-[2px] bg-zinc-900"
+            />
+          )}
+          <FileText
+            className={cn(
+              'h-3.5 w-3.5',
+              activeMode === 'files' ? 'text-zinc-900' : 'text-zinc-400',
+            )}
+            strokeWidth={1.75}
+          />
           <span>公共文件</span>
-          <span className="rounded-full bg-black/[0.06] px-1.5 py-0 text-[10px] font-medium text-zinc-600 tabular-nums">
-            {docs.length}
-          </span>
+          <span className="text-[11px] font-medium text-zinc-400 tabular-nums">{docs.length}</span>
         </button>
+
+        <span aria-hidden="true" className="mx-1 h-3.5 w-px bg-black/[0.08]" />
 
         <button
           type="button"
           data-testid="docs-create-sheet-btn"
           onClick={() => setCreateSheetOpen(true)}
-          className="ml-1 inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-dashed border-black/[0.15] px-2 text-xs font-medium text-zinc-600 whitespace-nowrap transition-colors hover:border-black/[0.25] hover:bg-white hover:text-zinc-950 cursor-pointer"
+          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-[2px] px-2 text-xs font-medium text-zinc-600 whitespace-nowrap transition-colors hover:bg-black/[0.04] hover:text-zinc-950 cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5" />
           <span>新建表格</span>
@@ -279,20 +301,20 @@ export function DocsPage() {
             </div>
 
             <div className="relative max-w-sm">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+              <Search className="pointer-events-none absolute top-1/2 left-1 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
               <Input
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 placeholder="按资源名称筛选公共文件…"
                 aria-label="筛选通用文档"
-                className="h-8 pr-7 pl-8 text-xs"
+                className="h-8 rounded-none border-0 border-b border-black/[0.12] bg-transparent pr-7 pl-6 text-xs focus:border-zinc-900 focus:ring-0"
               />
               {keyword && (
                 <button
                   type="button"
                   onClick={() => setKeyword('')}
                   aria-label="清空筛选"
-                  className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-700 cursor-pointer"
+                  className="absolute top-1/2 right-1 -translate-y-1/2 rounded-[2px] p-0.5 text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-700 cursor-pointer"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>

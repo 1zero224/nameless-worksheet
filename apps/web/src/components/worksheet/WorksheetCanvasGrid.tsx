@@ -120,20 +120,24 @@ export interface CanvasColumnDef {
 
 const PRIORITY_CANVAS_CHOICES: Record<
   Priority,
-  { id: string; name: string; color: string; backgroundColor: string }
+  { id: string; name: string; color: string; dotColor?: string }
 > = {
   normal: {
     id: 'normal',
     name: PRIORITY_LABELS.normal,
-    color: '#52525B',
-    backgroundColor: '#F4F4F5',
+    color: '#71717A',
   },
-  high: { id: 'high', name: PRIORITY_LABELS.high, color: '#92400E', backgroundColor: '#FEF3C7' },
+  high: {
+    id: 'high',
+    name: PRIORITY_LABELS.high,
+    color: '#B45309',
+    dotColor: '#D97706',
+  },
   urgent: {
     id: 'urgent',
     name: PRIORITY_LABELS.urgent,
     color: '#B91C1C',
-    backgroundColor: '#FEE2E2',
+    dotColor: '#DC2626',
   },
 };
 
@@ -231,17 +235,17 @@ function CanvasWorkBannerOverlay({
       data-testid={`work-banner-${work.id}`}
       data-work-banner={work.id}
       style={{ top, height }}
-      className="pointer-events-auto absolute inset-x-0 z-10 flex items-center justify-start gap-2 overflow-hidden border-y border-indigo-200/80 bg-[#EEF2FF] px-2.5"
+      className="pointer-events-auto absolute inset-x-0 z-10 flex items-center justify-start gap-2 overflow-hidden border-y border-indigo-200/70 bg-[#F4F6FF] px-2.5"
     >
       <div className="flex min-w-0 shrink items-center gap-1.5">
-        <span aria-hidden="true" className="h-4 w-[3px] shrink-0 rounded-full bg-indigo-500" />
+        <span aria-hidden="true" className="h-4 w-[3px] shrink-0 bg-indigo-500" />
 
         <button
           type="button"
           onClick={onToggleCollapse}
           aria-label={collapsed ? `展开作品 ${work.name}` : `折叠作品 ${work.name}`}
           aria-expanded={!collapsed}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-indigo-600/80 transition-colors hover:bg-indigo-200/50 hover:text-indigo-950 cursor-pointer"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-indigo-600/80 transition-colors hover:bg-indigo-200/50 hover:text-indigo-950 cursor-pointer"
         >
           {collapsed ? (
             <ChevronRight className="h-3.5 w-3.5" />
@@ -278,7 +282,7 @@ function CanvasWorkBannerOverlay({
             }}
             aria-label={`重命名作品 ${work.name}`}
             maxLength={80}
-            className="h-6 min-w-[140px] max-w-xs rounded border border-indigo-500 bg-white px-1.5 text-[13px] font-semibold text-zinc-950 outline-none"
+            className="h-6 min-w-[140px] max-w-xs rounded-[2px] border border-indigo-500 bg-white px-1.5 text-[13px] font-semibold text-zinc-950 outline-none"
           />
         ) : (
           <button
@@ -293,13 +297,13 @@ function CanvasWorkBannerOverlay({
 
         <span
           data-testid={`work-progress-${work.id}`}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-indigo-200/80 bg-white/90 px-2 py-0.5 text-[11px] font-medium text-indigo-700"
+          className="inline-flex shrink-0 items-center gap-1.5 pl-1 text-[11px] font-medium text-indigo-700/80"
         >
           {hasStages && taskCount > 0 && (
-            <span className="hidden h-1.5 w-10 overflow-hidden rounded-full bg-indigo-100 sm:inline-block">
+            <span className="hidden h-[3px] w-10 overflow-hidden bg-indigo-200/70 sm:inline-block">
               <span
                 className={cn(
-                  'block h-full rounded-full transition-all',
+                  'block h-full transition-all',
                   progressPct === 100 ? 'bg-emerald-500' : 'bg-indigo-500',
                 )}
                 style={{ width: `${progressPct}%` }}
@@ -310,7 +314,7 @@ function CanvasWorkBannerOverlay({
         </span>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1">
         <WorkAttachmentSlots
           worksheetId={worksheetId}
           worksheetName={worksheetName}
@@ -319,11 +323,13 @@ function CanvasWorkBannerOverlay({
           capsules={capsules}
         />
 
+        <span aria-hidden="true" className="mx-0.5 h-3.5 w-px bg-indigo-200/80" />
+
         <button
           type="button"
           onClick={onAddSegment}
           aria-label={`在 ${work.name} 下添加分段`}
-          className="inline-flex h-6 items-center gap-1 rounded-md border border-indigo-200/90 bg-white/95 px-2 text-[11px] font-medium text-indigo-900 transition-colors hover:bg-indigo-50 hover:text-indigo-950 cursor-pointer"
+          className="inline-flex h-6 items-center gap-1 rounded-[2px] px-1.5 text-[11px] font-medium text-indigo-700/85 transition-colors hover:bg-indigo-950/[0.06] hover:text-indigo-950 cursor-pointer"
         >
           <Plus className="h-3 w-3" />
           <span>添加分段</span>
@@ -334,7 +340,7 @@ function CanvasWorkBannerOverlay({
             <button
               type="button"
               aria-label={`作品操作 ${work.name}`}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-indigo-500/80 transition-colors hover:bg-indigo-200/50 hover:text-indigo-950 cursor-pointer"
+              className="flex h-6 w-6 items-center justify-center rounded-[2px] text-indigo-500/80 transition-colors hover:bg-indigo-200/50 hover:text-indigo-950 cursor-pointer"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
@@ -554,7 +560,7 @@ function CanvasInlineTextOverlay({
         <div
           role="alert"
           data-testid="cell-conflict-bar"
-          className="absolute top-full left-0 z-40 mt-1.5 flex min-w-[270px] flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 shadow-lg"
+          className="absolute top-full left-0 z-40 mt-1.5 flex min-w-[270px] flex-wrap items-center gap-2 rounded-[4px] border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 shadow-lg"
         >
           <span>
             {conflict.actorDisplayName} 刚把此格改为「{conflict.remoteValue || '（空）'}」
@@ -600,7 +606,7 @@ function CanvasInlineTextOverlay({
       {saveError && !conflict && (
         <div
           role="alert"
-          className="absolute top-full left-0 z-40 mt-1.5 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-800 shadow-md"
+          className="absolute top-full left-0 z-40 mt-1.5 flex items-center gap-2 rounded-[4px] border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-800 shadow-md"
         >
           <span>保存失败：{saveError}</span>
           <button
@@ -812,7 +818,7 @@ function AnchoredStagePopover({
                 type="button"
                 onClick={() => setStatus(s)}
                 className={cn(
-                  'rounded-md border py-1 text-xs font-medium cursor-pointer',
+                  'rounded-[3px] border py-1 text-xs font-medium cursor-pointer',
                   status === s
                     ? 'border-zinc-900 bg-zinc-900 text-white'
                     : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
@@ -835,7 +841,7 @@ function AnchoredStagePopover({
                 return (
                   <span
                     key={a.type === 'user' ? `u:${a.userId}` : `t:${a.name}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-800"
+                    className="inline-flex items-center gap-1 rounded-[2px] bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-800"
                   >
                     {label}
                     <button
@@ -976,7 +982,7 @@ function AnchoredPublishPopover({
               type="button"
               onClick={() => setStatus(s)}
               className={cn(
-                'flex-1 rounded-md border py-1.5 text-xs font-medium cursor-pointer',
+                'flex-1 rounded-[3px] border py-1.5 text-xs font-medium cursor-pointer',
                 status === s
                   ? 'border-zinc-900 bg-zinc-900 text-white'
                   : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
@@ -1622,13 +1628,13 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           type: CellType.Select,
           data: w ? [w.name] : [],
           displayData: w ? [w.name] : [],
+          plain: true,
           choiceMap: w
             ? {
                 [w.name]: {
                   id: w.id,
                   name: w.name,
                   color: '#3F3F46',
-                  backgroundColor: '#F4F4F5',
                 },
               }
             : {},
@@ -1643,6 +1649,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           type: CellType.Select,
           data: [choice.name],
           displayData: [choice.name],
+          plain: true,
           choiceMap: { [choice.name]: choice },
           readonly: true,
         };
@@ -1658,13 +1665,14 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
           type: CellType.Select,
           data: [label],
           displayData: [label],
+          plain: true,
           choiceMap: {
             [label]:
               task.publishStatus === 'published'
-                ? { id: label, name: label, color: '#065F46', backgroundColor: '#ECFDF5' }
+                ? { id: label, name: label, color: '#047857', dotColor: '#10B981' }
                 : task.publishStatus === 'shelved'
-                  ? { id: label, name: label, color: '#52525B', backgroundColor: '#E4E4E7' }
-                  : { id: label, name: label, color: '#52525B', backgroundColor: '#F4F4F5' },
+                  ? { id: label, name: label, color: '#52525B', dotColor: '#A1A1AA' }
+                  : { id: label, name: label, color: '#71717A' },
           },
           readonly: true,
         };
@@ -2390,10 +2398,10 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                     data-testid="quick-add-mode-trigger"
                     aria-label="切换新增类型"
                     className={cn(
-                      'mr-2 inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors cursor-pointer',
+                      'mr-2 inline-flex h-7 shrink-0 items-center gap-1 rounded-[2px] border-r border-black/[0.08] pr-2.5 pl-1 text-xs font-medium transition-colors cursor-pointer',
                       createMode === 'work'
-                        ? 'border-indigo-200 bg-[#EEF2FF] text-indigo-800 hover:bg-indigo-100/80'
-                        : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
+                        ? 'text-indigo-700 hover:bg-indigo-50/70'
+                        : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
                     )}
                   >
                     {createMode === 'work' ? (
@@ -2919,7 +2927,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                 ? Math.max(38, Math.min(addingSegmentBannerLayout.y + 42, 420))
                 : 76,
             }}
-            className="absolute right-4 left-4 z-30 flex max-w-xl items-center gap-1.5 rounded-lg border border-black/[0.12] bg-white px-2.5 py-1.5 shadow-lg"
+            className="absolute right-4 left-4 z-30 flex max-w-xl items-center gap-1.5 rounded-[4px] border border-black/[0.12] bg-white px-2.5 py-1.5 shadow-lg"
           >
             <Plus className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
             <form
@@ -2967,7 +2975,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         {insertingAfterId && (
           <div
             data-testid="inline-insert-row"
-            className="absolute right-4 bottom-3 left-4 z-30 flex max-w-xl items-center gap-1.5 rounded-lg border border-black/[0.12] bg-white px-2.5 py-1.5 shadow-lg"
+            className="absolute right-4 bottom-3 left-4 z-30 flex max-w-xl items-center gap-1.5 rounded-[4px] border border-black/[0.12] bg-white px-2.5 py-1.5 shadow-lg"
           >
             <Plus className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
             <form
@@ -3030,10 +3038,10 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                   data-testid="quick-add-mode-trigger"
                   aria-label="切换新增类型"
                   className={cn(
-                    'mr-2 inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors cursor-pointer',
+                    'mr-2 inline-flex h-7 shrink-0 items-center gap-1 rounded-[2px] border-r border-black/[0.08] pr-2.5 pl-1 text-xs font-medium transition-colors cursor-pointer',
                     createMode === 'work'
-                      ? 'border-indigo-200 bg-[#EEF2FF] text-indigo-800 hover:bg-indigo-100/80'
-                      : 'border-black/[0.1] bg-white text-zinc-700 hover:bg-black/[0.04]',
+                      ? 'text-indigo-700 hover:bg-indigo-50/70'
+                      : 'text-zinc-600 hover:bg-black/[0.04] hover:text-zinc-950',
                   )}
                 >
                   {createMode === 'work' ? (
@@ -3123,7 +3131,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
         <div
           role="menu"
           style={{ top: rowContextMenu.y, left: rowContextMenu.x }}
-          className="fixed z-[80] min-w-[168px] rounded-xl border border-black/[0.08] bg-white p-1 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.16)]"
+          className="fixed z-[80] min-w-[168px] rounded-[4px] border border-black/[0.08] bg-white p-1 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.16)]"
         >
           <button
             type="button"
@@ -3133,7 +3141,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
               setRowContextMenu(null);
               onOpenDetail(t.id);
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+            className="flex w-full items-center gap-2 rounded-[2px] px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
           >
             <PanelRightOpen className="h-3.5 w-3.5 text-zinc-400" />
             展开任务详情
@@ -3149,7 +3157,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                   setRowContextMenu(null);
                   onShareTask(t, null);
                 }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+                className="flex w-full items-center gap-2 rounded-[2px] px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
               >
                 <Share2 className="h-3.5 w-3.5 text-zinc-400" />
                 {isFreeTable ? '复制行分享链接' : '分享任务进度'}
@@ -3164,7 +3172,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                     setRowContextMenu(null);
                     onShareTask(t, col?.columnConfig ?? null);
                   }}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+                  className="flex w-full items-center gap-2 rounded-[2px] px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
                 >
                   <Share2 className="h-3.5 w-3.5 text-zinc-400" />
                   分享「{rowContextMenu.col.name}」工序
@@ -3187,7 +3195,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
                 columnName: col?.name ?? null,
               });
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+            className="flex w-full items-center gap-2 rounded-[2px] px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
           >
             <History className="h-3.5 w-3.5 text-zinc-400" />
             {rowContextMenu.col ? '查看单元格修改记录' : '查看本行修改记录'}
@@ -3201,7 +3209,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
               onCloseAddSegment();
               setInsertingAfterId(t.id);
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
+            className="flex w-full items-center gap-2 rounded-[2px] px-2.5 py-1.5 text-xs text-zinc-700 hover:bg-black/[0.04] cursor-pointer"
           >
             <Plus className="h-3.5 w-3.5 text-zinc-400" />
             在下方插入一行
@@ -3215,7 +3223,7 @@ export function WorksheetCanvasGrid(props: WorksheetCanvasGridProps) {
               setRowContextMenu(null);
               onDeleteTask(t);
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 cursor-pointer"
+            className="flex w-full items-center gap-2 rounded-[2px] px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 cursor-pointer"
           >
             <Trash2 className="h-3.5 w-3.5" />
             删除任务

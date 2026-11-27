@@ -179,7 +179,7 @@ export function ArtifactQuickPopoverContent({
             type="button"
             data-testid="quick-popover-add-btn"
             onClick={handleOpenCreate}
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-zinc-900 px-2 text-[11px] font-medium text-white hover:bg-zinc-800 cursor-pointer"
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[2px] bg-zinc-900 px-2 text-[11px] font-medium text-white hover:bg-zinc-800 cursor-pointer"
           >
             <Plus className="h-3 w-3" />
             添加
@@ -189,7 +189,7 @@ export function ArtifactQuickPopoverContent({
             aria-label="关闭资源浮层"
             data-testid="quick-popover-close-btn"
             onClick={onClose}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
+            className="flex h-6 w-6 items-center justify-center rounded-[2px] text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-800 cursor-pointer"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -199,7 +199,7 @@ export function ArtifactQuickPopoverContent({
       {isLoading ? (
         <div className="py-5 text-center text-xs text-zinc-400">正在加载资源…</div>
       ) : artifacts.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-black/[0.1] bg-[#fafafa] px-3 py-4 text-center text-xs text-zinc-400">
+        <div className="px-3 py-4 text-center text-xs text-zinc-400">
           暂无资源，点击右上角「添加」上传文件或粘贴网盘链接
         </div>
       ) : (
@@ -221,8 +221,8 @@ export function ArtifactQuickPopoverContent({
                       {art.name}
                     </span>
                     {latest && (
-                      <span className="inline-flex shrink-0 items-center overflow-hidden rounded-full bg-zinc-900 text-white">
-                        <span className="pl-1.5 pr-1 py-0 text-[10px] font-medium tabular-nums">
+                      <span className="inline-flex shrink-0 items-center gap-1">
+                        <span className="font-mono text-[10.5px] font-semibold text-zinc-500 tabular-nums">
                           v{latest.versionNumber}
                         </span>
                         <button
@@ -233,7 +233,7 @@ export function ArtifactQuickPopoverContent({
                             onClose();
                             onRequestCreateVersion(art);
                           }}
-                          className="group/ver inline-flex items-center gap-0.5 border-l border-white/20 px-1 py-0 text-[10px] font-medium text-white/90 hover:bg-white/15 hover:text-white cursor-pointer"
+                          className="group/ver inline-flex items-center gap-0.5 rounded-[2px] px-1 py-0 text-[10px] font-medium text-zinc-400 hover:bg-black/[0.05] hover:text-zinc-900 cursor-pointer"
                         >
                           <Plus className="h-2.5 w-2.5 shrink-0" />
                           <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[26px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[26px] group-focus-visible/ver:opacity-100">
