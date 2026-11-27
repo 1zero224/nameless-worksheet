@@ -62,9 +62,8 @@ export const BOARD_CARD_STATE_STYLES: Record<
   }
 > = {
   in_progress: {
-    card: 'border-black/[0.08] border-l-2 border-l-amber-400 bg-[#FEFCE8]/70 hover:border-black/[0.14] hover:border-l-amber-500 hover:bg-[#FEFCE8]',
-    subCard:
-      'border-black/[0.07] border-l-2 border-l-amber-400 bg-[#FEFCE8]/65 hover:border-black/[0.13] hover:border-l-amber-500 hover:bg-[#FEFCE8]',
+    card: 'border-amber-200/80 bg-[#FEFCE8] hover:border-amber-300/95 hover:bg-[#FEF9C3]/60',
+    subCard: 'border-amber-200/75 bg-[#FEFCE8] hover:border-amber-300/90 hover:bg-[#FEF9C3]/65',
     title: 'text-zinc-900 group-hover:text-amber-950',
     statusText: 'text-amber-900/90 font-medium',
     dot: 'bg-amber-500/85',
@@ -72,9 +71,8 @@ export const BOARD_CARD_STATE_STYLES: Record<
     meTag: 'text-amber-800/90',
   },
   missing: {
-    card: 'border-black/[0.08] border-l-2 border-l-red-400 bg-[#FEF2F2]/70 hover:border-black/[0.14] hover:border-l-red-500 hover:bg-[#FEF2F2]',
-    subCard:
-      'border-black/[0.07] border-l-2 border-l-red-400 bg-[#FEF2F2]/65 hover:border-black/[0.13] hover:border-l-red-500 hover:bg-[#FEF2F2]',
+    card: 'border-red-200/75 bg-[#FEF2F2] hover:border-red-300/90 hover:bg-[#FEE2E2]/55',
+    subCard: 'border-red-200/70 bg-[#FEF2F2] hover:border-red-300/85 hover:bg-[#FEE2E2]/60',
     title: 'text-zinc-900 group-hover:text-red-950',
     statusText: 'text-red-900/85 font-medium',
     dot: 'bg-red-500/80',
@@ -82,9 +80,8 @@ export const BOARD_CARD_STATE_STYLES: Record<
     meTag: 'text-red-800/90',
   },
   waiting: {
-    card: 'border-black/[0.09] border-l-2 border-l-zinc-300 bg-white hover:border-black/[0.16] hover:bg-[#fafafa]',
-    subCard:
-      'border-black/[0.08] border-l-2 border-l-zinc-300 bg-[#fafafa]/70 hover:border-black/[0.14] hover:bg-zinc-100/65',
+    card: 'border-black/[0.10] bg-white hover:border-black/[0.18] hover:bg-[#fafafa]',
+    subCard: 'border-black/[0.08] bg-[#fafafa]/70 hover:border-black/[0.15] hover:bg-zinc-100/65',
     title: 'text-zinc-900 group-hover:text-zinc-950',
     statusText: 'text-zinc-600',
     dot: 'bg-zinc-300',
@@ -139,9 +136,9 @@ export const STAGE_STATUS_CANVAS_COLORS: Record<
 };
 
 export const PRIORITY_STYLES: Record<Priority, string> = {
-  normal: 'text-zinc-500',
-  high: 'text-amber-700 font-semibold',
-  urgent: 'text-red-600 font-semibold',
+  normal: 'bg-black/[0.04] text-zinc-600 border-black/[0.07]',
+  high: 'bg-amber-500/[0.10] text-amber-900 border-amber-500/[0.22]',
+  urgent: 'bg-red-500/[0.10] text-red-800 border-red-500/[0.22]',
 };
 
 export const PRIORITY_DOT_STYLES: Record<Priority, string> = {

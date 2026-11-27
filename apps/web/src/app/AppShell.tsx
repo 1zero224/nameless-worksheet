@@ -29,8 +29,15 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { LayoutGroup, motion } from 'motion/react';
-import { createContext, type ReactNode, useContext, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { apiFetch } from '@/api/client.js';
@@ -80,8 +87,6 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   },
 ];
 
-const TAB_SPRING = { type: 'spring', stiffness: 520, damping: 38, mass: 0.7 } as const;
-
 interface TopBarSlotsContextValue {
   rightEl: HTMLDivElement | null;
 }
@@ -128,6 +133,7 @@ function SortableTopWorksheetTab({
       }}
       {...attributes}
       {...listeners}
+      data-active-tab={isActive && !isDragging ? 'true' : undefined}
       className={cn(
         'group relative flex h-11 shrink-0 items-center select-none transition-colors duration-150',
         !isActive && 'text-zinc-500 hover:text-zinc-950',
@@ -135,16 +141,6 @@ function SortableTopWorksheetTab({
         isDragging && 'z-30 opacity-90 shadow-md ring-1 ring-black/15 bg-white',
       )}
     >
-      {/* 极简底部指示线：切换工作表与任务看板时平滑滑移，无白底圆角浮块 */}
-      {isActive && !isDragging && (
-        <motion.span
-          layoutId="topbar-active-tab-pill"
-          transition={TAB_SPRING}
-          aria-hidden="true"
-          className="pointer-events-none absolute right-2 bottom-0 left-2 h-[2px] bg-zinc-900"
-        />
-      )}
-
       <NavLink
         to={`/worksheets/${ws.id}`}
         className={cn(
@@ -208,6 +204,12 @@ export function AppShell() {
   const [editingWs, setEditingWs] = useState<WorksheetSummary | null>(null);
   const [deletingWs, setDeletingWs] = useState<WorksheetSummary | null>(null);
   const [rightSlotEl, setRightSlotEl] = useState<HTMLDivElement | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const [indicator, setIndicator] = useState<{ left: number; width: number; ready: boolean }>({
+    left: 0,
+    width: 0,
+    ready: false,
+  });
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -218,6 +220,38 @@ export function AppShell() {
     queryFn: () => apiFetch<WorksheetSummary[]>('/api/worksheets'),
     enabled: Boolean(me),
   });
+
+  const syncIndicator = useCallback(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const activeEl = nav.querySelector<HTMLElement>('[data-active-tab="true"]');
+    if (!activeEl) {
+      setIndicator((prev) => (prev.ready ? { ...prev, ready: false } : prev));
+      return;
+    }
+    const navRect = nav.getBoundingClientRect();
+    const elRect = activeEl.getBoundingClientRect();
+    const inset = 8;
+    const nextLeft = elRect.left - navRect.left + nav.scrollLeft + inset;
+    const nextWidth = Math.max(0, elRect.width - inset * 2);
+    setIndicator((prev) =>
+      prev.ready && Math.abs(prev.left - nextLeft) < 0.5 && Math.abs(prev.width - nextWidth) < 0.5
+        ? prev
+        : { left: nextLeft, width: nextWidth, ready: true },
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    syncIndicator();
+  });
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => syncIndicator());
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [syncIndicator]);
 
   const reorderWsMutation = useMutation({
     mutationFn: (orderedIds: string[]) =>
@@ -315,109 +349,101 @@ export function AppShell() {
 
           <span className="hidden h-4 w-px shrink-0 bg-black/[0.08] lg:inline-block" />
 
-          {/* 左侧主区：任务看板 + 多工作表标签页（共享 layoutId 底部指示条）+ 新建表 */}
-          <LayoutGroup id="topbar-tabs">
-            <nav
-              aria-label="主导航"
-              data-testid="top-nav-tabs"
-              className="no-scrollbar flex h-11 min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+          {/* 左侧主区：任务看板 + 多工作表标签页（GPU translate3d 底部指示条）+ 新建表 */}
+          <nav
+            ref={navRef}
+            aria-label="主导航"
+            data-testid="top-nav-tabs"
+            className="no-scrollbar relative flex h-11 min-w-0 flex-1 items-center gap-0.5 overflow-x-auto"
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                transform: `translate3d(${indicator.left}px, 0, 0)`,
+                width: `${indicator.width}px`,
+              }}
+              className={cn(
+                'pointer-events-none absolute bottom-0 left-0 h-[2px] bg-zinc-900 transition-[transform,width,opacity] duration-150 ease-out will-change-transform',
+                indicator.ready ? 'opacity-100' : 'opacity-0',
+              )}
+            />
+            <NavLink
+              to="/"
+              end
+              data-active-tab={isBoardActive ? 'true' : undefined}
+              className={cn(
+                'relative flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-sm transition-colors duration-150 select-none',
+                isBoardActive ? 'font-semibold text-zinc-950' : 'text-zinc-500 hover:text-zinc-950',
+              )}
             >
-              <NavLink
-                to="/"
-                end
+              <Kanban
                 className={cn(
-                  'relative flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-sm transition-colors duration-150 select-none',
-                  isBoardActive
-                    ? 'font-semibold text-zinc-950'
-                    : 'text-zinc-500 hover:text-zinc-950',
+                  'relative z-10 h-3.5 w-3.5 shrink-0 transition-colors duration-150',
+                  isBoardActive ? 'text-zinc-900' : 'text-zinc-400',
                 )}
-              >
-                {isBoardActive && (
-                  <motion.span
-                    layoutId="topbar-active-tab-pill"
-                    transition={TAB_SPRING}
-                    aria-hidden="true"
-                    className="pointer-events-none absolute right-2 bottom-0 left-2 h-[2px] bg-zinc-900"
-                  />
-                )}
-                <Kanban
-                  className={cn(
-                    'relative z-10 h-3.5 w-3.5 shrink-0 transition-colors duration-150',
-                    isBoardActive ? 'text-zinc-900' : 'text-zinc-400',
-                  )}
-                  strokeWidth={1.75}
-                />
-                <span className="relative z-10">任务看板</span>
-              </NavLink>
+                strokeWidth={1.75}
+              />
+              <span className="relative z-10">任务看板</span>
+            </NavLink>
 
-              <NavLink
-                to="/docs"
-                data-testid="topbar-docs-tab"
+            <NavLink
+              to="/docs"
+              data-testid="topbar-docs-tab"
+              data-active-tab={isDocsActive ? 'true' : undefined}
+              className={cn(
+                'relative flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-sm transition-colors duration-150 select-none',
+                isDocsActive ? 'font-semibold text-zinc-950' : 'text-zinc-500 hover:text-zinc-950',
+              )}
+            >
+              <FileText
                 className={cn(
-                  'relative flex h-11 shrink-0 items-center gap-1.5 px-2.5 text-sm transition-colors duration-150 select-none',
-                  isDocsActive
-                    ? 'font-semibold text-zinc-950'
-                    : 'text-zinc-500 hover:text-zinc-950',
+                  'relative z-10 h-3.5 w-3.5 shrink-0 transition-colors duration-150',
+                  isDocsActive ? 'text-zinc-900' : 'text-zinc-400',
                 )}
-              >
-                {isDocsActive && (
-                  <motion.span
-                    layoutId="topbar-active-tab-pill"
-                    transition={TAB_SPRING}
-                    aria-hidden="true"
-                    className="pointer-events-none absolute right-2 bottom-0 left-2 h-[2px] bg-zinc-900"
-                  />
-                )}
-                <FileText
-                  className={cn(
-                    'relative z-10 h-3.5 w-3.5 shrink-0 transition-colors duration-150',
-                    isDocsActive ? 'text-zinc-900' : 'text-zinc-400',
-                  )}
-                  strokeWidth={1.75}
-                />
-                <span className="relative z-10">通用文档</span>
-              </NavLink>
+                strokeWidth={1.75}
+              />
+              <span className="relative z-10">通用文档</span>
+            </NavLink>
 
-              <span className="mx-1 h-4 w-px shrink-0 bg-black/[0.08]" />
+            <span className="mx-1 h-4 w-px shrink-0 bg-black/[0.08]" />
 
-              <div
-                className="flex h-11 shrink-0 items-center gap-0.5"
-                data-testid="topbar-worksheets"
+            <div
+              className="flex h-11 shrink-0 items-center gap-0.5"
+              data-testid="topbar-worksheets"
+            >
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleTabsDragEnd}
               >
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleTabsDragEnd}
+                <SortableContext
+                  items={topbarWorksheets.map((w) => w.id)}
+                  strategy={horizontalListSortingStrategy}
                 >
-                  <SortableContext
-                    items={topbarWorksheets.map((w) => w.id)}
-                    strategy={horizontalListSortingStrategy}
-                  >
-                    {topbarWorksheets.map((ws) => (
-                      <SortableTopWorksheetTab
-                        key={ws.id}
-                        ws={ws}
-                        isActive={location.pathname === `/worksheets/${ws.id}`}
-                        onEdit={(target) => setEditingWs(target)}
-                        onDelete={(target) => setDeletingWs(target)}
-                      />
-                    ))}
-                  </SortableContext>
-                </DndContext>
-              </div>
+                  {topbarWorksheets.map((ws) => (
+                    <SortableTopWorksheetTab
+                      key={ws.id}
+                      ws={ws}
+                      isActive={location.pathname === `/worksheets/${ws.id}`}
+                      onEdit={(target) => setEditingWs(target)}
+                      onDelete={(target) => setDeletingWs(target)}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                title="新建工作表"
-                aria-label="快速建表"
-                data-testid="topbar-create-worksheet"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[2px] text-zinc-400 transition-all duration-150 hover:bg-black/[0.04] hover:text-zinc-950 active:scale-95 cursor-pointer"
-              >
-                <Plus className="h-4 w-4" strokeWidth={1.75} />
-              </button>
-            </nav>
-          </LayoutGroup>
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              title="新建工作表"
+              aria-label="快速建表"
+              data-testid="topbar-create-worksheet"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[2px] text-zinc-400 transition-all duration-150 hover:bg-black/[0.04] hover:text-zinc-950 active:scale-95 cursor-pointer"
+            >
+              <Plus className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          </nav>
 
           {/* 右侧固定操作区：页面扩展操作（在线状态 / 修改记录等） + 用户头像下拉菜单 */}
           <div className="flex shrink-0 items-center gap-1.5">

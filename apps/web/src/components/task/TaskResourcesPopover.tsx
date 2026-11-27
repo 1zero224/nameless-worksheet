@@ -132,7 +132,7 @@ export function TaskResourcesPopover({
             title={resourceCount > 0 ? `快速取用资源（${resourceCount}）` : '快速查看资源'}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              'inline-flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-[2px] px-1 text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer',
+              'inline-flex h-6 min-w-6 shrink-0 items-center justify-center gap-0.5 rounded-[2px] px-1 text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer',
               resourceCount > 0 && 'text-zinc-800',
               open && 'bg-black/[0.08] text-zinc-950',
               className,

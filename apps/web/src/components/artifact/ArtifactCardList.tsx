@@ -563,44 +563,46 @@ export function ArtifactCardList({
                   {art.name}
                 </span>
                 {latest ? (
-                  <span className="inline-flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    data-testid={`artifact-add-version-${art.id}`}
+                    aria-label="更新版本"
+                    title="更新版本"
+                    onClick={() => setVersionArtifact(art)}
+                    className="group/ver relative inline-flex min-w-[24px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10.5px] font-medium leading-none text-white transition-[min-width,background-color] duration-200 ease-out hover:min-w-[36px] hover:bg-zinc-700 focus-visible:min-w-[36px] focus-visible:bg-zinc-700 focus-visible:outline-none cursor-pointer"
+                  >
                     <span
                       data-testid={`artifact-latest-badge-${art.id}`}
-                      className="font-mono text-[11px] font-semibold text-zinc-600 tabular-nums"
+                      className="whitespace-nowrap tabular-nums opacity-100 transition-opacity duration-75 group-hover/ver:opacity-0 group-focus-visible/ver:opacity-0"
                     >
                       v{latest.versionNumber}
                     </span>
-                    <button
-                      type="button"
-                      data-testid={`artifact-add-version-${art.id}`}
-                      aria-label="更新版本"
-                      title="更新版本"
-                      onClick={() => setVersionArtifact(art)}
-                      className="group/ver inline-flex items-center gap-0.5 rounded-[2px] px-1 py-0.5 text-[10.5px] font-medium leading-none text-zinc-400 transition-colors hover:bg-black/[0.05] hover:text-zinc-900 focus-visible:outline-none cursor-pointer"
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 flex items-center justify-center whitespace-nowrap opacity-0 transition-opacity delay-75 duration-150 group-hover/ver:opacity-100 group-focus-visible/ver:opacity-100"
                     >
-                      <Plus className="h-2.5 w-2.5 shrink-0" />
-                      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">
-                        更新
-                      </span>
-                    </button>
-                  </span>
+                      更新
+                    </span>
+                  </button>
                 ) : (
-                  <span className="inline-flex shrink-0 items-center gap-1">
-                    <span className="text-[11px] text-zinc-400">暂无版本</span>
-                    <button
-                      type="button"
-                      data-testid={`artifact-add-version-${art.id}`}
-                      aria-label="更新版本"
-                      title="更新版本"
-                      onClick={() => setVersionArtifact(art)}
-                      className="group/ver inline-flex items-center gap-0.5 rounded-[2px] px-1 py-0.5 text-[10.5px] font-medium leading-none text-zinc-500 transition-colors hover:bg-black/[0.05] hover:text-zinc-950 focus-visible:outline-none cursor-pointer"
+                  <button
+                    type="button"
+                    data-testid={`artifact-add-version-${art.id}`}
+                    aria-label="更新版本"
+                    title="更新版本"
+                    onClick={() => setVersionArtifact(art)}
+                    className="group/ver relative inline-flex min-w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10.5px] font-medium leading-none text-zinc-600 transition-colors duration-200 ease-out hover:bg-zinc-200 hover:text-zinc-950 focus-visible:bg-zinc-200 focus-visible:outline-none cursor-pointer"
+                  >
+                    <span className="whitespace-nowrap opacity-100 transition-opacity duration-75 group-hover/ver:opacity-0 group-focus-visible/ver:opacity-0">
+                      暂无版本
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 flex items-center justify-center whitespace-nowrap opacity-0 transition-opacity delay-75 duration-150 group-hover/ver:opacity-100 group-focus-visible/ver:opacity-100"
                     >
-                      <Plus className="h-2.5 w-2.5 shrink-0" />
-                      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-150 group-hover/ver:max-w-[28px] group-hover/ver:opacity-100 group-focus-visible/ver:max-w-[28px] group-focus-visible/ver:opacity-100">
-                        更新
-                      </span>
-                    </button>
-                  </span>
+                      更新
+                    </span>
+                  </button>
                 )}
                 {!compact && (
                   <span className="hidden shrink-0 text-[11px] text-zinc-400 sm:inline">

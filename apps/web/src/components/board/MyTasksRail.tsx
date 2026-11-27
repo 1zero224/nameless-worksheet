@@ -122,7 +122,7 @@ export function MyTasksListContent({
                         {item.priority !== 'normal' && (
                           <span
                             className={cn(
-                              'mt-0.5 shrink-0 text-[11px] leading-4',
+                              'mt-0.5 shrink-0 rounded border px-1 py-0 text-[11px] font-medium leading-4',
                               PRIORITY_STYLES[item.priority],
                             )}
                           >
@@ -269,7 +269,7 @@ export function MyTasksListContent({
                         {item.priority !== 'normal' && (
                           <span
                             className={cn(
-                              'mt-0.5 shrink-0 text-[11px] leading-4',
+                              'mt-0.5 shrink-0 rounded border px-1 py-0 text-[11px] font-medium leading-4',
                               PRIORITY_STYLES[item.priority],
                             )}
                           >
@@ -318,7 +318,7 @@ export function MyTasksListContent({
                               e.stopPropagation();
                               onShare(item);
                             }}
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-zinc-400 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] text-zinc-500 transition-colors hover:bg-black/[0.06] hover:text-zinc-900 cursor-pointer"
                           >
                             <Share2 className="h-3.5 w-3.5" strokeWidth={1.85} />
                           </button>
